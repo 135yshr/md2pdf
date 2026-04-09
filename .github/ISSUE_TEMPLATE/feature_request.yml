@@ -1,0 +1,56 @@
+name: Feature Request
+description: Suggest a new feature or improvement for md2pdf
+title: "feat: "
+labels: [enhancement]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature! Please check existing issues first to avoid duplicates.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the motivation. What limitation or friction does this address?
+      placeholder: "Currently, md2pdf cannot … which means I have to …"
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the feature you'd like. Include CLI flags, config options, or behaviour changes.
+      placeholder: "Add a `-theme` flag that accepts …"
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What other approaches did you consider? Why did you prefer this one?
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Area of the codebase
+      options:
+        - CLI / flags
+        - Markdown parsing
+        - Mermaid rendering
+        - HTML / CSS styling
+        - PDF printing
+        - Font handling
+        - Documentation
+        - CI / release pipeline
+        - Other
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Links, screenshots, mockups, or anything else that helps illustrate the request.

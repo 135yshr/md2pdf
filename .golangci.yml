@@ -1,0 +1,58 @@
+# golangci-lint configuration for md2pdf
+# https://golangci-lint.run/usage/configuration/
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  enable:
+    - errcheck        # check for unchecked errors
+    - gosimple        # simplification suggestions
+    - govet           # go vet checks
+    - ineffassign     # detect ineffectual assignments
+    - staticcheck     # comprehensive static analysis
+    - unused          # detect unused code
+    - gofmt           # formatting
+    - goimports       # import ordering
+    - misspell        # catch common English misspellings
+    - godot           # check GoDoc comment endings
+    - gosec           # security checks
+    - noctx           # detect http.Request without context
+    - wrapcheck       # ensure errors are wrapped when returned across packages
+    - exhaustive      # check exhaustiveness of enum switch statements
+
+linters-settings:
+  gofmt:
+    simplify: true
+
+  govet:
+    enable-all: true
+
+  misspell:
+    locale: US
+
+  godot:
+    scope: declarations
+    capital: true
+
+  gosec:
+    excludes:
+      - G204  # subprocess launched with variable — intentional for mmdc/python
+
+  wrapcheck:
+    ignorePackageGlobs:
+      - encoding/*
+      - github.com/135yshr/md2pdf/*
+
+issues:
+  exclude-rules:
+    # Test files have relaxed rules.
+    - path: _test\.go
+      linters:
+        - wrapcheck
+        - gosec
+        - errcheck
+
+  max-issues-per-linter: 0
+  max-same-issues: 0

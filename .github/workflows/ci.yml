@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test (Go ${{ matrix.go }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go: ["1.22", "1.23"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Unit tests
+        run: go test ./internal/converter/ -run 'Test[^C]' -v
+
+  integration:
+    name: Integration Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install mmdc
+        run: npm install -g @mermaid-js/mermaid-cli
+
+      - name: Install Python dependencies
+        run: |
+          pip install playwright
+          playwright install chromium
+
+      - name: Install Noto CJK fonts
+        run: sudo apt-get install -y fonts-noto-cjk
+
+      - name: Integration test
+        run: go test ./... -v -timeout 120s
+
+  build:
+    name: Build cross-platform
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Build Linux amd64
+        run: GOOS=linux GOARCH=amd64 go build -o dist/md2pdf-linux-amd64 ./cmd/md2pdf
+
+      - name: Build macOS amd64
+        run: GOOS=darwin GOARCH=amd64 go build -o dist/md2pdf-darwin-amd64 ./cmd/md2pdf
+
+      - name: Build macOS arm64
+        run: GOOS=darwin GOARCH=arm64 go build -o dist/md2pdf-darwin-arm64 ./cmd/md2pdf
+
+      - name: Build Windows amd64
+        run: GOOS=windows GOARCH=amd64 go build -o dist/md2pdf-windows-amd64.exe ./cmd/md2pdf

@@ -1,0 +1,21 @@
+# Binaries
+md2pdf
+dist/
+
+# Test output
+*.pdf
+*.html
+*.svg
+*.mmd
+
+# Go
+vendor/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/
+*.swp
