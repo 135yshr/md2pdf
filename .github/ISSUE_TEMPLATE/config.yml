@@ -4,3 +4,6 @@ contact_links:
   - name: Question / Discussion
     url: https://github.com/135yshr/md2pdf/discussions
     about: Ask questions and share ideas in GitHub Discussions.
+  - name: Security Vulnerability
+    url: https://github.com/135yshr/md2pdf/security/advisories/new
+    about: Report security vulnerabilities privately (do not use public issues).

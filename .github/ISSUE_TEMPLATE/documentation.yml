@@ -1,0 +1,48 @@
+name: Documentation Improvement
+description: Report unclear, missing, or incorrect documentation
+title: "docs: "
+labels: [documentation]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Help us improve our documentation! Please describe what is unclear or missing.
+
+  - type: dropdown
+    id: doc-type
+    attributes:
+      label: Documentation area
+      options:
+        - README
+        - CONTRIBUTING guide
+        - CLI help / usage
+        - Code comments / GoDoc
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: location
+    attributes:
+      label: Where is the issue?
+      description: Link to the page, section, or file where you found the problem.
+      placeholder: "README.md, section 'Installation'"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What is the problem?
+      description: Is information missing, incorrect, or confusing?
+      placeholder: "The installation instructions don't mention …"
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested improvement
+      description: How would you improve this documentation?
