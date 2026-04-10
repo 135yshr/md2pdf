@@ -52,14 +52,14 @@ func parseFlags(args []string) (*converter.Config, error) {
 	marginLeft := fs.String("margin-left", "14mm", "Left margin")
 	marginRight := fs.String("margin-right", "14mm", "Right margin")
 	verbose := fs.Bool("v", false, "Verbose output")
-	version := fs.Bool("version", false, "Print version and exit")
+	showVersion := fs.Bool("version", false, "Print version and exit")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, err
 	}
 
-	if *version {
-		fmt.Printf("md2pdf version %s\n", converter.Version)
+	if *showVersion {
+		fmt.Printf("md2pdf version %s (commit: %s, built: %s)\n", version, commit, date)
 		os.Exit(0)
 	}
 

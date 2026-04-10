@@ -11,7 +11,7 @@ A CLI tool that converts Markdown files to PDF with GitHub-flavored styling.
 
 | Dependency | Purpose | Install |
 |---|---|---|
-| Go 1.22+ | Build | https://go.dev |
+| Go 1.26+ | Build | https://go.dev |
 | [mmdc](https://github.com/mermaid-js/mermaid-cli) | Mermaid → SVG | `npm install -g @mermaid-js/mermaid-cli` |
 | Python 3 + [playwright](https://playwright.dev/python/) | HTML → PDF | `pip install playwright && playwright install chromium` |
 | Noto Sans CJK JP | Japanese font (optional) | See below |
@@ -30,11 +30,19 @@ brew install font-noto-sans-cjk
 
 ## Installation
 
+### Homebrew (macOS / Linux)
+
+```sh
+brew install 135yshr/tap/md2pdf
+```
+
+### Go install
+
 ```sh
 go install github.com/135yshr/md2pdf/cmd/md2pdf@latest
 ```
 
-Or build from source:
+### Build from source
 
 ```sh
 git clone https://github.com/135yshr/md2pdf.git

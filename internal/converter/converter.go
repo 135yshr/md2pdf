@@ -18,9 +18,6 @@ import (
 	"strings"
 )
 
-// Version is the current release of md2pdf.
-const Version = "0.1.0"
-
 // Config holds all runtime options for the converter.
 type Config struct {
 	// InputFile is the path to the source Markdown file.

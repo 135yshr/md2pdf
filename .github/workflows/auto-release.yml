@@ -1,0 +1,85 @@
+name: Auto Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    name: Record existing tags
+    runs-on: ubuntu-latest
+    outputs:
+      before: ${{ steps.tags.outputs.before }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - id: tags
+        run: echo "before=$(git tag -l 'v*' | sort -V | tail -1)" >> "$GITHUB_OUTPUT"
+
+  release:
+    name: Semantic Release
+    runs-on: ubuntu-latest
+    needs: tag
+    outputs:
+      new_tag: ${{ steps.check.outputs.new_tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install semantic-release
+        run: npm install -g semantic-release@25 semantic-release-gitmoji@1 @semantic-release/changelog @semantic-release/git
+
+      - name: Run semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx semantic-release
+
+      - name: Check for new tag
+        id: check
+        run: |
+          git fetch --tags
+          LATEST=$(git tag -l 'v*' | sort -V | tail -1)
+          BEFORE="${{ needs.tag.outputs.before }}"
+          if [ "$LATEST" != "$BEFORE" ] && [ -n "$LATEST" ]; then
+            echo "new_tag=$LATEST" >> "$GITHUB_OUTPUT"
+            echo "New tag: $LATEST"
+          else
+            echo "new_tag=" >> "$GITHUB_OUTPUT"
+            echo "No new tag"
+          fi
+
+  goreleaser:
+    name: GoReleaser
+    runs-on: ubuntu-latest
+    needs: release
+    if: needs.release.outputs.new_tag != ''
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.release.outputs.new_tag }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}

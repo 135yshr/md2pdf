@@ -1,0 +1,61 @@
+version: 2
+
+builds:
+  - main: ./cmd/md2pdf
+    binary: md2pdf
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.ShortCommit}}
+      - -X main.date={{.Date}}
+    targets:
+      - linux_amd64
+      - linux_arm64
+      - darwin_amd64
+      - darwin_arm64
+      - windows_amd64
+
+archives:
+  - formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+brews:
+  - repository:
+      owner: 135yshr
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: https://github.com/135yshr/md2pdf
+    description: "A CLI tool that converts Markdown files to PDF with GitHub-flavored styling"
+    license: MIT
+    test: |
+      system "#{bin}/md2pdf", "-version"
+
+changelog:
+  sort: asc
+  groups:
+    - title: Added
+      regexp: '^.*?:(sparkles|tada|rocket):.*$'
+      order: 0
+    - title: Fixed
+      regexp: '^.*?:(bug|ambulance):.*$'
+      order: 1
+    - title: Changed
+      regexp: '^.*?:(recycle|art|zap|wrench):.*$'
+      order: 2
+    - title: Removed
+      regexp: '^.*?:(fire|wastebasket):.*$'
+      order: 3
+    - title: Other
+      order: 999
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^Merge"
