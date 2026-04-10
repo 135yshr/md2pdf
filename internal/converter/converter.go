@@ -113,11 +113,19 @@ func (c *Converter) logf(format string, args ...any) {
 // chromiumPath attempts to locate the system Chromium executable.
 // It checks common Linux paths and falls back to whatever Playwright ships.
 func chromiumPath() (string, error) {
-	// Honour CHROME_PATH if set.
+	// Honour CHROME_PATH if set. Fail fast on invalid values.
 	if p := os.Getenv("CHROME_PATH"); p != "" {
-		if _, err := os.Stat(p); err == nil {
-			return p, nil
+		info, err := os.Stat(p)
+		if err != nil {
+			return "", fmt.Errorf("CHROME_PATH is set but invalid: %w", err)
 		}
+		if info.IsDir() {
+			return "", fmt.Errorf("CHROME_PATH points to a directory: %s", p)
+		}
+		if info.Mode()&0o111 == 0 {
+			return "", fmt.Errorf("CHROME_PATH is not executable: %s", p)
+		}
+		return p, nil
 	}
 
 	candidates := []string{
