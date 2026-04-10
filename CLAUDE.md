@@ -32,7 +32,7 @@ Uses golangci-lint with config in `.golangci.yml`. Key enabled linters: errcheck
 
 ## Architecture
 
-The conversion pipeline flows through three stages in `internal/converter/`:
+The conversion pipeline flows through four stages in `internal/converter/`:
 
 1. **parser.go** — goldmark parses Markdown to HTML, extracting fenced Mermaid code blocks into a `parsedDoc` struct with placeholders
 2. **mermaid.go** — each Mermaid block is rendered to SVG via the external `mmdc` CLI
@@ -46,7 +46,7 @@ The conversion pipeline flows through three stages in `internal/converter/`:
 ## External Dependencies
 
 Runtime: `mmdc` (Mermaid CLI via npm), Python 3 + Playwright + Chromium, Noto Sans CJK JP fonts.
-Go modules: `github.com/yuin/goldmark` (Markdown parsing), `github.com/gomarkdown/markdown`.
+Go modules: `github.com/yuin/goldmark` (Markdown parsing).
 
 ## Code Style
 
