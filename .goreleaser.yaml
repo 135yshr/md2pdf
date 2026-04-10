@@ -25,7 +25,7 @@ archives:
         formats:
           - zip
 
-homebrew:
+brews:
   - repository:
       owner: 135yshr
       name: homebrew-tap
