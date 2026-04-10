@@ -21,6 +21,12 @@ import (
 	"github.com/135yshr/md2pdf/internal/converter"
 )
 
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 func main() {
 	cfg, err := parseFlags(os.Args[1:])
 	if err != nil {

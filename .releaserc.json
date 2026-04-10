@@ -1,0 +1,45 @@
+{
+  "branches": ["main"],
+  "plugins": [
+    [
+      "semantic-release-gitmoji",
+      {
+        "releaseRules": {
+          "major": [":boom:"],
+          "minor": [":sparkles:", ":rocket:"],
+          "patch": [
+            ":bug:", ":ambulance:", ":memo:", ":zap:", ":recycle:",
+            ":art:", ":wrench:", ":lock:", ":arrow_up:", ":fire:",
+            ":wastebasket:", ":truck:", ":construction_worker:",
+            ":green_heart:", ":white_check_mark:", ":rotating_light:",
+            ":chart_with_upwards_trend:", ":heavy_plus_sign:",
+            ":heavy_minus_sign:", ":globe_with_meridians:",
+            ":pencil2:", ":rewind:", ":package:", ":alien:",
+            ":bento:", ":wheelchair:", ":speech_balloon:",
+            ":card_file_box:", ":children_crossing:",
+            ":building_construction:", ":iphone:", ":clown_face:",
+            ":egg:", ":see_no_evil:", ":camera_flash:",
+            ":alembic:", ":mag:", ":label:", ":seedling:",
+            ":triangular_flag_on_post:", ":goal_net:",
+            ":dizzy:", ":wastebasket:", ":passport_control:",
+            ":adhesive_bandage:", ":monocle_face:"
+          ]
+        }
+      }
+    ],
+    [
+      "@semantic-release/changelog",
+      {
+        "changelogFile": "CHANGELOG.md"
+      }
+    ],
+    [
+      "@semantic-release/git",
+      {
+        "assets": ["CHANGELOG.md"],
+        "message": ":bookmark: release: v${nextRelease.version}"
+      }
+    ],
+    "@semantic-release/github"
+  ]
+}
