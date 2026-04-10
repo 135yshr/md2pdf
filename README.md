@@ -120,24 +120,14 @@ md2pdf -v document.md
 
 ## How It Works
 
-```
-Markdown (.md)
-     │
-     ▼
-[goldmark parser]  ──── extracts Mermaid blocks
-     │                        │
-     │                        ▼
-     │                  [mmdc CLI]
-     │                  Mermaid → SVG
-     │                        │
-     ▼                        ▼
-[HTML builder] ── injects SVGs + GitHub CSS + @font-face
-     │
-     ▼
-[Playwright / Chromium]
-     │
-     ▼
-   PDF output
+```mermaid
+flowchart TD
+    A["Markdown (.md)"] --> B[goldmark parser]
+    B --> C[HTML builder]
+    B -->|extracts Mermaid blocks| D[mmdc CLI]
+    D -->|SVG| C
+    C -->|"injects SVGs + GitHub CSS + @font-face"| E["Playwright / Chromium"]
+    E --> F[PDF output]
 ```
 
 1. **Parse** — goldmark converts Markdown to HTML (GFM tables, fenced code blocks). Mermaid code blocks are extracted and replaced with placeholders.
