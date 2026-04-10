@@ -7,48 +7,73 @@ A CLI tool that converts Markdown files to PDF with GitHub-flavored styling.
 - **Noto Sans CJK JP** font support for Japanese text
 - Configurable page size and margins
 
-## Requirements
+## Quick Start
 
-| Dependency | Purpose | Install |
-|---|---|---|
-| Go 1.26+ | Build | https://go.dev |
-| [mmdc](https://github.com/mermaid-js/mermaid-cli) | Mermaid → SVG | `npm install -g @mermaid-js/mermaid-cli` |
-| Python 3 + [playwright](https://playwright.dev/python/) | HTML → PDF | `pip install playwright && playwright install chromium` |
-| Noto Sans CJK JP | Japanese font (optional) | See below |
+### 1. Install md2pdf
 
-### Installing Noto Sans CJK JP
-
-**Ubuntu / Debian**
-```sh
-sudo apt install fonts-noto-cjk
-```
-
-**macOS (Homebrew)**
-```sh
-brew install font-noto-sans-cjk
-```
-
-## Installation
-
-### Homebrew (macOS / Linux)
+**Homebrew (macOS / Linux)** — recommended
 
 ```sh
 brew install 135yshr/tap/md2pdf
 ```
 
-### Go install
+**Go install**
 
 ```sh
 go install github.com/135yshr/md2pdf/cmd/md2pdf@latest
 ```
 
-### Build from source
+**Build from source**
 
 ```sh
 git clone https://github.com/135yshr/md2pdf.git
 cd md2pdf
 go build -o md2pdf ./cmd/md2pdf
 ```
+
+### 2. Install runtime dependencies
+
+md2pdf uses external tools for diagram rendering and PDF generation. Install them after installing md2pdf:
+
+```sh
+# Mermaid CLI (diagram rendering)
+npm install -g @mermaid-js/mermaid-cli
+
+# Playwright + Chromium (PDF generation)
+pip install playwright
+playwright install chromium
+```
+
+### 3. Install fonts (optional)
+
+For Japanese text support, install the Noto Sans CJK JP font:
+
+**macOS**
+```sh
+brew install font-noto-sans-cjk
+```
+
+**Ubuntu / Debian**
+```sh
+sudo apt install fonts-noto-cjk
+```
+
+### 4. Convert your first document
+
+```sh
+md2pdf document.md
+```
+
+A `document.pdf` file will be generated in the same directory.
+
+## Requirements Summary
+
+| Dependency | Purpose | Install |
+|---|---|---|
+| [mmdc](https://github.com/mermaid-js/mermaid-cli) | Mermaid → SVG | `npm install -g @mermaid-js/mermaid-cli` |
+| Python 3 + [Playwright](https://playwright.dev/python/) | HTML → PDF | `pip install playwright && playwright install chromium` |
+| Noto Sans CJK JP | Japanese font (optional) | See above |
+| Go 1.26+ | Build from source only | https://go.dev |
 
 ## Usage
 
@@ -95,24 +120,14 @@ md2pdf -v document.md
 
 ## How It Works
 
-```
-Markdown (.md)
-     │
-     ▼
-[goldmark parser]  ──── extracts Mermaid blocks
-     │                        │
-     │                        ▼
-     │                  [mmdc CLI]
-     │                  Mermaid → SVG
-     │                        │
-     ▼                        ▼
-[HTML builder] ── injects SVGs + GitHub CSS + @font-face
-     │
-     ▼
-[Playwright / Chromium]
-     │
-     ▼
-   PDF output
+```mermaid
+flowchart TD
+    A["Markdown (.md)"] --> B[goldmark parser]
+    B --> C[HTML builder]
+    B -->|extracts Mermaid blocks| D[mmdc CLI]
+    D -->|SVG| C
+    C -->|"injects SVGs + GitHub CSS + @font-face"| E["Playwright / Chromium"]
+    E --> F[PDF output]
 ```
 
 1. **Parse** — goldmark converts Markdown to HTML (GFM tables, fenced code blocks). Mermaid code blocks are extracted and replaced with placeholders.
