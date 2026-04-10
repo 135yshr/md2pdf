@@ -150,8 +150,18 @@ func (c *Converter) copyImages(html, srcDir string) error {
 			continue
 		}
 
-		origPath := filepath.Join(srcDir, decoded)
-		destPath := filepath.Join(c.workDir, decoded)
+		origPath := filepath.Clean(filepath.Join(srcDir, decoded))
+		destPath := filepath.Clean(filepath.Join(c.workDir, decoded))
+
+		// Prevent path traversal outside the source or working directory.
+		if !strings.HasPrefix(origPath+string(os.PathSeparator), srcDir+string(os.PathSeparator)) {
+			c.logf("  warning: image path escapes source directory: %s", decoded)
+			continue
+		}
+		if !strings.HasPrefix(destPath+string(os.PathSeparator), c.workDir+string(os.PathSeparator)) {
+			c.logf("  warning: image path escapes work directory: %s", decoded)
+			continue
+		}
 
 		if _, err := os.Stat(origPath); err != nil {
 			c.logf("  warning: image not found: %s", origPath)
