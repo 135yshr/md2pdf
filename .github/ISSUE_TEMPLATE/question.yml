@@ -1,0 +1,34 @@
+name: Question
+description: Ask a question about usage or development
+title: "question: "
+labels: [question]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before asking, please check:
+        - [README](https://github.com/135yshr/md2pdf#readme)
+        - [Existing issues](https://github.com/135yshr/md2pdf/issues?q=is%3Aissue)
+        - [Discussions](https://github.com/135yshr/md2pdf/discussions)
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+      description: What would you like to know?
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What are you trying to achieve? Include any relevant details.
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What have you tried?
+      description: Describe any steps you've already taken.
