@@ -113,23 +113,55 @@ func (c *Converter) logf(format string, args ...any) {
 // chromiumPath attempts to locate the system Chromium executable.
 // It checks common Linux paths and falls back to whatever Playwright ships.
 func chromiumPath() (string, error) {
+	// Honour CHROME_PATH if set.
+	if p := os.Getenv("CHROME_PATH"); p != "" {
+		if _, err := os.Stat(p); err == nil {
+			return p, nil
+		}
+	}
+
 	candidates := []string{
+		// Linux (CI / Playwright)
 		"/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
 		"/usr/bin/chromium-browser",
 		"/usr/bin/chromium",
 		"/usr/bin/google-chrome",
 	}
+
+	// macOS: Playwright cache.
+	if home, err := os.UserHomeDir(); err == nil {
+		cacheDir := filepath.Join(home, "Library", "Caches", "ms-playwright")
+		if entries, err := os.ReadDir(cacheDir); err == nil {
+			for _, e := range entries {
+				if !e.IsDir() {
+					continue
+				}
+				macBin := filepath.Join(cacheDir, e.Name(), "chrome-mac", "Chromium.app", "Contents", "MacOS", "Chromium")
+				if _, err := os.Stat(macBin); err == nil {
+					candidates = append([]string{macBin}, candidates...)
+					break
+				}
+			}
+		}
+	}
+
+	// macOS: common install locations.
+	candidates = append(candidates,
+		"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+		"/Applications/Chromium.app/Contents/MacOS/Chromium",
+	)
+
 	for _, p := range candidates {
 		if _, err := os.Stat(p); err == nil {
 			return p, nil
 		}
 	}
-	// Last resort: ask `which`
-	if out, err := exec.LookPath("chromium-browser"); err == nil {
-		return out, nil
-	}
-	if out, err := exec.LookPath("chromium"); err == nil {
-		return out, nil
+
+	// Last resort: ask the shell.
+	for _, name := range []string{"chromium-browser", "chromium", "google-chrome"} {
+		if out, err := exec.LookPath(name); err == nil {
+			return out, nil
+		}
 	}
 	return "", fmt.Errorf("no Chromium executable found; install chromium-browser or set CHROME_PATH")
 }
