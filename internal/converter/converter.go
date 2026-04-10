@@ -9,9 +9,13 @@ package converter
 
 import (
 	"fmt"
+	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strings"
 )
 
 // Version is the current release of md2pdf.
@@ -91,6 +95,15 @@ func (c *Converter) Convert(inputPath, outputPath string) error {
 		return fmt.Errorf("build html: %w", err)
 	}
 
+	c.logf("Copying images to working directory...")
+	srcDir, err := filepath.Abs(filepath.Dir(inputPath))
+	if err != nil {
+		return fmt.Errorf("resolve input dir: %w", err)
+	}
+	if err := c.copyImages(doc.HTML, srcDir); err != nil {
+		return fmt.Errorf("copy images: %w", err)
+	}
+
 	c.logf("Printing PDF with headless Chromium...")
 	absOut, err := filepath.Abs(outputPath)
 	if err != nil {
@@ -108,6 +121,72 @@ func (c *Converter) logf(format string, args ...any) {
 	if c.cfg.Verbose {
 		fmt.Printf("  "+format+"\n", args...)
 	}
+}
+
+// imgSrcRe matches src attributes in <img> tags.
+var imgSrcRe = regexp.MustCompile(`<img\s[^>]*?\bsrc=["']([^"']+)["']`)
+
+// copyImages scans rendered HTML for <img> tags with relative paths and copies
+// the referenced files from srcDir into the working directory, preserving the
+// relative directory structure so that the HTML can reference them as-is.
+func (c *Converter) copyImages(html, srcDir string) error {
+	matches := imgSrcRe.FindAllStringSubmatch(html, -1)
+	for _, m := range matches {
+		src := m[1]
+
+		// Skip absolute URLs and data URIs.
+		if strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://") || strings.HasPrefix(src, "data:") {
+			continue
+		}
+
+		// Decode percent-encoded paths (e.g. spaces as %20).
+		decoded, err := url.PathUnescape(src)
+		if err != nil {
+			decoded = src
+		}
+
+		// Skip absolute file paths.
+		if filepath.IsAbs(decoded) {
+			continue
+		}
+
+		origPath := filepath.Join(srcDir, decoded)
+		destPath := filepath.Join(c.workDir, decoded)
+
+		if _, err := os.Stat(origPath); err != nil {
+			c.logf("  warning: image not found: %s", origPath)
+			continue
+		}
+
+		if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
+			return fmt.Errorf("create image dir: %w", err)
+		}
+		if err := copyFile(origPath, destPath); err != nil {
+			return fmt.Errorf("copy %s: %w", decoded, err)
+		}
+		c.logf("  copied image: %s", decoded)
+	}
+	return nil
+}
+
+// copyFile copies the file at src to dst.
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
+	return out.Close()
 }
 
 // chromiumPath attempts to locate the system Chromium executable.
