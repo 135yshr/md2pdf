@@ -1,5 +1,5 @@
 # Binaries
-md2pdf
+/md2pdf
 dist/
 
 # Test output
