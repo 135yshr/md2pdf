@@ -1,3 +1,8 @@
+# [v0.1.1](https://github.com/135yshr/md2pdf/compare/v0.1.0...v0.1.1) (2026-04-10)
+
+## 🐛 Bug Fixes
+- [`45460c9`](https://github.com/135yshr/md2pdf/commit/45460c9)  fix: revert homebrew back to brews in goreleaser config
+
 # [v0.1.0](https://github.com/135yshr/md2pdf/compare/v0.0.0...v0.1.0) (2026-04-10)
 
 ## ✨ New Features
