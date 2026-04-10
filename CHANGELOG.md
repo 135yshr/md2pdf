@@ -1,3 +1,8 @@
+# [v1.0.1](https://github.com/135yshr/md2pdf/compare/v1.0.0...v1.0.1) (2026-04-10)
+
+## 🐛 Bug Fixes
+- [`5bfddf3`](https://github.com/135yshr/md2pdf/commit/5bfddf3)  fix: prevent release conflict between semantic-release and GoReleaser
+
 # v1.0.0 (2026-04-10)
 
 ## ✨ New Features
