@@ -39,7 +39,6 @@
         "assets": ["CHANGELOG.md"],
         "message": ":bookmark: release: v${nextRelease.version}"
       }
-    ],
-    "@semantic-release/github"
+    ]
   ]
 }
