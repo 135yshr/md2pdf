@@ -1,5 +1,5 @@
 baseURL = "https://135yshr.github.io/md2pdf/"
-languageCode = "ja"
+languageCode = "en"
 title = "md2pdf"
 enableGitInfo = true
 enableRobotsTXT = true
