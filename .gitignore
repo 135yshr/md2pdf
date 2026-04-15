@@ -2,10 +2,8 @@
 /md2pdf
 dist/
 
-# Test output
+# Test output (converter temp files)
 *.pdf
-*.html
-*.svg
 *.mmd
 
 # Go
@@ -14,6 +12,11 @@ vendor/
 # OS
 .DS_Store
 Thumbs.db
+
+# Hugo
+website/public/
+website/.hugo_build.lock
+website/resources/
 
 # Editor
 .idea/

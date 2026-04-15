@@ -1,0 +1,43 @@
+baseURL = "https://135yshr.github.io/md2pdf/"
+languageCode = "en"
+title = "md2pdf"
+enableGitInfo = true
+enableRobotsTXT = true
+
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
+  [markup.highlight]
+    style = "dracula"
+    lineNos = false
+    noClasses = false
+
+[sitemap]
+  changeFreq = "weekly"
+  priority = 0.5
+
+[params]
+  description = "Markdown to PDF converter with GitHub-flavored styling, Mermaid diagrams, and Japanese text support"
+  repository = "https://github.com/135yshr/md2pdf"
+
+[menus]
+  [[menus.main]]
+    name = "Docs"
+    url = "/doc/"
+    weight = 10
+  [[menus.main]]
+    name = "Blog"
+    url = "/blog/"
+    weight = 20
+  [[menus.main]]
+    name = "GitHub"
+    url = "https://github.com/135yshr/md2pdf"
+    weight = 30
+    [menus.main.params]
+      external = true
+
+[minify]
+  [minify.tdewolff]
+    [minify.tdewolff.html]
+      keepQuotes = true

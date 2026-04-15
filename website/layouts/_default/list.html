@@ -1,0 +1,22 @@
+{{ define "main" }}
+<div class="content-page">
+  <div class="container">
+    {{ partial "sidebar.html" . }}
+    <article class="content">
+      <h1>{{ .Title }}</h1>
+      {{ .Content }}
+      {{ $pages := .Pages }}
+      {{ if $pages }}
+      <ul class="page-list">
+        {{ range $pages.ByWeight }}
+        <li>
+          <a href="{{ .RelPermalink }}">{{ .Title }}</a>
+          {{ with .Description }}<p>{{ . }}</p>{{ end }}
+        </li>
+        {{ end }}
+      </ul>
+      {{ end }}
+    </article>
+  </div>
+</div>
+{{ end }}
