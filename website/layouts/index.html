@@ -1,0 +1,87 @@
+{{ define "main" }}
+<section class="hero">
+  <div class="hero-inner">
+    <h1>md2pdf</h1>
+    <p class="hero-tagline">Markdown to PDF converter with GitHub-flavored styling</p>
+    <div class="hero-features">
+      <span class="feature-badge">Mermaid Diagrams</span>
+      <span class="feature-badge">GitHub CSS</span>
+      <span class="feature-badge">Japanese Text</span>
+    </div>
+    <div class="hero-actions">
+      <a href="{{ "doc/getting-started/" | relURL }}" class="btn btn-primary">Get Started</a>
+      <a href="{{ .Site.Params.repository }}" class="btn btn-secondary" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</section>
+
+<section class="demo">
+  <div class="demo-inner">
+    <div class="terminal-window">
+      <div class="terminal-header">
+        <span class="terminal-dot red"></span>
+        <span class="terminal-dot yellow"></span>
+        <span class="terminal-dot green"></span>
+        <span class="terminal-title">Terminal</span>
+      </div>
+      <div class="terminal-body">
+        <pre><code><span class="prompt">$</span> brew install 135yshr/tap/md2pdf
+<span class="prompt">$</span> md2pdf document.md
+<span class="output">Converting document.md → document.pdf ... done</span></code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="features-section">
+  <div class="features-inner">
+    <div class="feature-card">
+      <h3>Mermaid Diagrams</h3>
+      <p>Flowcharts, sequence diagrams, and more — rendered as inline SVG via the mmdc CLI.</p>
+    </div>
+    <div class="feature-card">
+      <h3>GitHub Styling</h3>
+      <p>Tables, fenced code blocks, strikethrough, and all GFM features with familiar GitHub CSS.</p>
+    </div>
+    <div class="feature-card">
+      <h3>Japanese Support</h3>
+      <p>Noto Sans CJK JP fonts are auto-detected and embedded for beautiful Japanese typography.</p>
+    </div>
+    <div class="feature-card">
+      <h3>Configurable Output</h3>
+      <p>A4, Letter, A3 page sizes with customizable margins. Output to any path.</p>
+    </div>
+  </div>
+</section>
+
+<section class="pipeline-section">
+  <div class="pipeline-inner">
+    <h2>How It Works</h2>
+    <div class="pipeline">
+      <div class="pipeline-step">
+        <div class="step-number">1</div>
+        <h4>Parse</h4>
+        <p>goldmark converts Markdown to HTML with GFM extensions</p>
+      </div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step">
+        <div class="step-number">2</div>
+        <h4>Render Diagrams</h4>
+        <p>Mermaid blocks are rendered to SVG via mmdc</p>
+      </div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step">
+        <div class="step-number">3</div>
+        <h4>Build HTML</h4>
+        <p>GitHub CSS + fonts + SVGs assembled into one HTML file</p>
+      </div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step">
+        <div class="step-number">4</div>
+        <h4>Print PDF</h4>
+        <p>Headless Chromium via Playwright prints to PDF</p>
+      </div>
+    </div>
+  </div>
+</section>
+{{ end }}

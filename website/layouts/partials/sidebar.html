@@ -1,0 +1,20 @@
+{{ $section := .FirstSection }}
+{{ with $section }}
+{{ if .Sections | or .Pages }}
+<aside class="sidebar">
+  <nav class="sidebar-nav">
+    {{ range .Sections }}
+    <div class="sidebar-group">
+      <h4><a href="{{ .RelPermalink }}">{{ .Title }}</a></h4>
+      {{ range .Pages.ByWeight }}
+      <a href="{{ .RelPermalink }}" {{ if eq $.RelPermalink .RelPermalink }}class="active"{{ end }}>{{ .Title }}</a>
+      {{ end }}
+    </div>
+    {{ end }}
+    {{ range .Pages.ByWeight }}
+    <a href="{{ .RelPermalink }}" class="sidebar-link{{ if eq $.RelPermalink .RelPermalink }} active{{ end }}">{{ .Title }}</a>
+    {{ end }}
+  </nav>
+</aside>
+{{ end }}
+{{ end }}

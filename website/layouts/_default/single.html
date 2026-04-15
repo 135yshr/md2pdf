@@ -1,0 +1,16 @@
+{{ define "main" }}
+<div class="content-page">
+  <div class="container">
+    {{ partial "sidebar.html" . }}
+    <article class="content">
+      <h1>{{ .Title }}</h1>
+      {{ .Content }}
+      {{ if .GitInfo }}
+      <div class="last-updated">
+        Last updated: {{ .GitInfo.AuthorDate.Format "2006-01-02" }}
+      </div>
+      {{ end }}
+    </article>
+  </div>
+</div>
+{{ end }}
