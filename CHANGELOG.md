@@ -1,3 +1,8 @@
+# [v0.2.0](https://github.com/135yshr/md2pdf/compare/v0.1.1...v0.2.0) (2026-04-15)
+
+## ✨ New Features
+- [`54b9934`](https://github.com/135yshr/md2pdf/commit/54b9934)  feat: add Hugo website with GitHub Pages deployment
+
 # [v0.1.1](https://github.com/135yshr/md2pdf/compare/v0.1.0...v0.1.1) (2026-04-10)
 
 ## 🐛 Bug Fixes
