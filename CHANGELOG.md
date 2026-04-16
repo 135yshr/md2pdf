@@ -1,3 +1,8 @@
+# [v0.2.2](https://github.com/135yshr/md2pdf/compare/v0.2.1...v0.2.2) (2026-04-16)
+
+## 🐛 Bug Fixes
+- [`5044082`](https://github.com/135yshr/md2pdf/commit/5044082)  fix: remove enablement param from configure-pages
+
 # [v0.2.1](https://github.com/135yshr/md2pdf/compare/v0.2.0...v0.2.1) (2026-04-16)
 
 ## 🐛 Bug Fixes
