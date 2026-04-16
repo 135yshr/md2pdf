@@ -1,3 +1,8 @@
+# [v0.2.1](https://github.com/135yshr/md2pdf/compare/v0.2.0...v0.2.1) (2026-04-16)
+
+## 🐛 Bug Fixes
+- [`6085cc7`](https://github.com/135yshr/md2pdf/commit/6085cc7)  fix: enable GitHub Pages automatically in workflow
+
 # [v0.2.0](https://github.com/135yshr/md2pdf/compare/v0.1.1...v0.2.0) (2026-04-15)
 
 ## ✨ New Features
