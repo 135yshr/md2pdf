@@ -11,6 +11,18 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="{{ "css/style.css" | relURL }}">
   {{ partial "ogp.html" . }}
+  {{ if hugo.IsProduction }}
+  <link rel="stylesheet" href="{{ "css/consent.css" | relURL }}" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="{{ "css/consent.css" | relURL }}"></noscript>
+  <script defer src="{{ "js/consent.js" | relURL }}"></script>
+  <script defer src="https://www.googletagmanager.com/gtag/js?id={{ site.Config.Services.GoogleAnalytics.ID }}"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', '{{ site.Config.Services.GoogleAnalytics.ID }}', { send_page_view: false });
+  </script>
+  {{ end }}
 </head>
 <body>
   {{ partial "header.html" . }}
@@ -18,6 +30,9 @@
     {{ block "main" . }}{{ end }}
   </main>
   {{ partial "footer.html" . }}
+  {{ if hugo.IsProduction }}
+  {{ partial "consent-banner.html" . }}
+  {{ end }}
   <script src="{{ "js/main.js" | relURL }}"></script>
 </body>
 </html>
