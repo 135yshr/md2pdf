@@ -37,6 +37,10 @@ enableRobotsTXT = true
     [menus.main.params]
       external = true
 
+[services]
+  [services.googleAnalytics]
+    ID = "G-MHFWHJFGP6"
+
 [minify]
   [minify.tdewolff]
     [minify.tdewolff.html]
