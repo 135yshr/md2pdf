@@ -1,0 +1,26 @@
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--color-bg:#fff;--color-text:#24292f;--color-text-muted:#57606a;--color-primary:#0969da;--color-primary-hover:#0550ae;--color-border:#d0d7de;--color-surface:#f6f8fa;--color-hero-bg:#0d1117;--color-hero-text:#f0f6fc;--font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;--font-mono:"JetBrains Mono","SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;--radius:8px;--max-width:1200px}
+html{font-size:16px}
+body{font-family:var(--font-sans);color:var(--color-text);background:var(--color-bg);line-height:1.6;-webkit-font-smoothing:antialiased}
+a{color:var(--color-primary);text-decoration:none}
+.site-header{position:sticky;top:0;z-index:100;background:var(--color-bg);border-bottom:1px solid var(--color-border)}
+.nav-inner{max-width:var(--max-width);margin:0 auto;padding:0 1.5rem;height:56px;display:flex;align-items:center;justify-content:space-between}
+.nav-brand{display:flex;align-items:center;gap:.5rem;font-weight:700;font-size:1.125rem;color:var(--color-text);text-decoration:none}
+.nav-logo{color:var(--color-primary)}
+.nav-links{display:flex;list-style:none;gap:.25rem}
+.nav-links a{display:inline-flex;align-items:center;gap:.25rem;padding:.375rem .75rem;border-radius:var(--radius);color:var(--color-text-muted);font-size:.875rem;font-weight:500;text-decoration:none}
+.nav-toggle{display:none;background:none;border:none;cursor:pointer;padding:.5rem;flex-direction:column;gap:4px}
+.nav-toggle span{display:block;width:20px;height:2px;background:var(--color-text);border-radius:1px}
+.hero{background:var(--color-hero-bg);color:var(--color-hero-text);padding:5rem 1.5rem;text-align:center}
+.hero-inner{max-width:680px;margin:0 auto}
+.hero h1{font-size:3.5rem;font-weight:800;letter-spacing:-.03em;margin-bottom:1rem}
+.hero-tagline{font-size:1.25rem;color:#8b949e;margin-bottom:1.5rem}
+.hero-features{display:flex;justify-content:center;gap:.75rem;flex-wrap:wrap;margin-bottom:2rem}
+.feature-badge{display:inline-block;padding:.25rem .75rem;border:1px solid #30363d;border-radius:999px;font-size:.8125rem;color:#8b949e}
+.hero-actions{display:flex;justify-content:center;gap:.75rem}
+.btn{display:inline-flex;align-items:center;padding:.625rem 1.5rem;border-radius:var(--radius);font-weight:600;font-size:.9375rem;text-decoration:none}
+.btn-primary{background:var(--color-primary);color:#fff}
+.btn-secondary{background:#21262d;color:#c9d1d9;border:1px solid #30363d}
+@media(max-width:768px){.hero h1{font-size:2.5rem}.hero-tagline{font-size:1.1rem}.nav-toggle{display:flex}.nav-links{display:none;position:absolute;top:56px;left:0;right:0;background:var(--color-bg);border-bottom:1px solid var(--color-border);flex-direction:column;padding:.5rem}.nav-links.open{display:flex}}
+</style>
