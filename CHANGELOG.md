@@ -1,3 +1,5 @@
+# [v0.2.4](https://github.com/135yshr/md2pdf/compare/v0.2.3...v0.2.4) (2026-05-06)
+
 # [v0.2.3](https://github.com/135yshr/md2pdf/compare/v0.2.2...v0.2.3) (2026-05-06)
 
 ## 🐛 Bug Fixes
