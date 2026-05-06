@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.5.1",
+  "checkpoint_id": "7594b4493d92",
+  "session_id": "50911164-2121-4054-babb-32eb19f240c7",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-06T15:30:56.167553Z",
+  "branch": "docs/comparison-images",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "README.md",
+    "docs/images/comparison/after-md2pdf-japanese.png",
+    "docs/images/comparison/before-md-to-pdf-japanese.png",
+    "docs/images/comparison/before-pandoc-japanese.png"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "dccf7faf497c",
+  "checkpoint_transcript_start": 22,
+  "transcript_lines_at_start": 22,
+  "token_usage": {
+    "input_tokens": 20,
+    "cache_creation_tokens": 4978,
+    "cache_read_tokens": 543603,
+    "output_tokens": 2093,
+    "api_call_count": 11
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-06T15:30:56.119994Z",
+    "agent_lines": 27,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 27,
+    "agent_percentage": 100
+  }
+}
