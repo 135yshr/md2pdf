@@ -169,11 +169,27 @@ The screenshots below show what happens when you convert the same Japanese
 PRD document (`examples/06-japanese-document/input.md`) with each tool out of
 the box.
 
-| Tool | What you get out of the box |
-|---|---|
-| Pandoc (with `xelatex`) | ![Pandoc output](docs/images/comparison/before-pandoc-japanese.png) <br> Japanese characters are missing because no CJK font is configured. |
-| md-to-pdf | ![md-to-pdf output](docs/images/comparison/before-md-to-pdf-japanese.png) <br> Japanese is fine, but Mermaid blocks remain as raw source code. |
-| **md2pdf** | ![md2pdf output](docs/images/comparison/after-md2pdf-japanese.png) <br> Japanese renders correctly **and** Mermaid is embedded as inline SVG. |
+<table>
+<tr>
+<td align="center" width="33%">
+<b>Pandoc</b> (with <code>xelatex</code>)<br>
+<img src="docs/images/comparison/before-pandoc-japanese.png" alt="Pandoc output" width="280">
+</td>
+<td align="center" width="33%">
+<b>md-to-pdf</b><br>
+<img src="docs/images/comparison/before-md-to-pdf-japanese.png" alt="md-to-pdf output" width="280">
+</td>
+<td align="center" width="33%">
+<b>md2pdf</b><br>
+<img src="docs/images/comparison/after-md2pdf-japanese.png" alt="md2pdf output" width="280">
+</td>
+</tr>
+<tr>
+<td valign="top">Japanese characters are missing because no CJK font is configured.</td>
+<td valign="top">Japanese is fine, but Mermaid blocks remain as raw source code.</td>
+<td valign="top">Japanese renders correctly <b>and</b> Mermaid is embedded as inline SVG.</td>
+</tr>
+</table>
 
 These are not bugs in Pandoc or md-to-pdf — both can produce great results
 once you configure CJK fonts and Mermaid plugins. md2pdf is just preconfigured
