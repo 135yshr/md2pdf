@@ -119,6 +119,7 @@ func TestHTMLEscape(t *testing.T) {
 	}{
 		{"<b>", "&lt;b&gt;"},
 		{"a & b", "a &amp; b"},
+		{`say "hi"`, "say &quot;hi&quot;"},
 		{"normal text", "normal text"},
 	}
 	for _, tc := range tests {
@@ -126,5 +127,29 @@ func TestHTMLEscape(t *testing.T) {
 		if got != tc.expected {
 			t.Errorf("htmlEscape(%q) = %q, want %q", tc.input, got, tc.expected)
 		}
+	}
+}
+
+// TestParseMarkdown_MermaidWithQuotes ensures that Mermaid blocks containing
+// double quotes (common in flowchart node labels) are still matched and
+// replaced by their placeholder. goldmark escapes " as &quot; in rendered
+// HTML, so the matcher must use the same escape set.
+func TestParseMarkdown_MermaidWithQuotes(t *testing.T) {
+	src := []byte("# Diagram\n\n```mermaid\nflowchart TD\n  A[\"label with quotes\"] --> B[\"another\"]\n```\n")
+	doc, err := parseMarkdown(src)
+	if err != nil {
+		t.Fatalf("parseMarkdown() error: %v", err)
+	}
+	if len(doc.mermaidBlocks) != 1 {
+		t.Fatalf("expected 1 mermaid block, got %d", len(doc.mermaidBlocks))
+	}
+	block := doc.mermaidBlocks[0]
+	placeholder := "<!--" + block.Placeholder + "-->"
+	if !strings.Contains(doc.HTML, placeholder) {
+		t.Errorf("placeholder %q not found in HTML; quoted block was not replaced.\nHTML: %s",
+			placeholder, doc.HTML)
+	}
+	if strings.Contains(doc.HTML, "language-mermaid") {
+		t.Errorf("raw <pre><code class=\"language-mermaid\"> survived in HTML: %s", doc.HTML)
 	}
 }

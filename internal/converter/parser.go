@@ -141,10 +141,13 @@ func replaceMermaidBlock(html, src, placeholder string) string {
 	return html
 }
 
-// htmlEscape escapes special HTML characters in s.
+// htmlEscape escapes special HTML characters in s. The escape set must match
+// goldmark's HTML renderer so that fenced code-block content can be located in
+// the rendered output for placeholder substitution.
 func htmlEscape(s string) string {
 	s = strings.ReplaceAll(s, "&", "&amp;")
 	s = strings.ReplaceAll(s, "<", "&lt;")
 	s = strings.ReplaceAll(s, ">", "&gt;")
+	s = strings.ReplaceAll(s, "\"", "&quot;")
 	return s
 }
