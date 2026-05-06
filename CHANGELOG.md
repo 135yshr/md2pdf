@@ -1,3 +1,8 @@
+# [v0.3.0](https://github.com/135yshr/md2pdf/compare/v0.2.4...v0.3.0) (2026-05-06)
+
+## ✨ New Features
+- [`fd93c04`](https://github.com/135yshr/md2pdf/commit/fd93c04)  feat: add design doc example showcasing mixed EN/JA (#26) (Issues: [`#26`](https://github.com/135yshr/md2pdf/issues/26))
+
 # [v0.2.4](https://github.com/135yshr/md2pdf/compare/v0.2.3...v0.2.4) (2026-05-06)
 
 # [v0.2.3](https://github.com/135yshr/md2pdf/compare/v0.2.2...v0.2.3) (2026-05-06)
