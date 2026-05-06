@@ -1,11 +1,22 @@
 # md2pdf
 
-A CLI tool that converts Markdown files to PDF with GitHub-flavored styling.
+> **Write in Markdown. Track in Git. Ship as PDF.**
 
-- Renders **Mermaid diagrams** (flowchart, sequence, etc.) as inline SVG
-- GitHub-flavored Markdown: tables, fenced code blocks, strikethrough
-- **Noto Sans CJK JP** font support for Japanese text
-- Configurable page size and margins
+md2pdf is a CLI for turning the technical Markdown you already write — design
+docs, runbooks, security reports — into clean, deliverable PDFs. Mermaid
+diagrams render as inline SVG. Japanese (and other CJK) text renders without
+font breakage. Single Go binary, drop-in for CI.
+
+<!-- TODO(#2): docs/images/before-after.png を追加したらここに掲載 -->
+<!-- ![Before / After](docs/images/before-after.png) -->
+
+## Features
+
+- 📐 **Mermaid diagrams as inline SVG** — vector-clean, no rasterization
+- 🇯🇵 **Japanese / CJK text out of the box** — Noto Sans CJK JP preconfigured
+- 📝 **GitHub-flavored Markdown** — tables, fenced code blocks, strikethrough
+- 🤖 **CI-friendly single binary** — `go install` and you're done
+- 📄 **Configurable** — page size, margins, fonts
 
 ## Quick Start
 
@@ -117,6 +128,14 @@ md2pdf -page-size Letter -margin-left 20mm -margin-right 20mm document.md
 # Verbose output
 md2pdf -v document.md
 ```
+
+## Who is this for?
+
+- Engineers writing design docs, runbooks, or technical specs in Markdown
+- Teams using Mermaid diagrams (flowcharts, sequence diagrams) in their documents
+- Consultants and security teams delivering reports as PDFs to clients
+- Japanese-speaking developers tired of fighting font breakage in Markdown-to-PDF tools
+- Anyone who manages docs in Git and needs to ship them as PDF artifacts
 
 ## How It Works
 
