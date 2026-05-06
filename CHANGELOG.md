@@ -1,3 +1,8 @@
+# [v0.4.0](https://github.com/135yshr/md2pdf/compare/v0.3.0...v0.4.0) (2026-05-06)
+
+## ✨ New Features
+- [`239cf0c`](https://github.com/135yshr/md2pdf/commit/239cf0c)  feat: add full-Japanese PRD example (06-japanese-document) (#27) (Issues: [`#27`](https://github.com/135yshr/md2pdf/issues/27))
+
 # [v0.3.0](https://github.com/135yshr/md2pdf/compare/v0.2.4...v0.3.0) (2026-05-06)
 
 ## ✨ New Features
