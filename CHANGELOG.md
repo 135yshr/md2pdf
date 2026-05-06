@@ -1,3 +1,8 @@
+# [v0.2.3](https://github.com/135yshr/md2pdf/compare/v0.2.2...v0.2.3) (2026-05-06)
+
+## 🐛 Bug Fixes
+- [`6db028e`](https://github.com/135yshr/md2pdf/commit/6db028e)  fix: escape quotes in Mermaid block matcher (#24) (Issues: [`#24`](https://github.com/135yshr/md2pdf/issues/24))
+
 # [v0.2.2](https://github.com/135yshr/md2pdf/compare/v0.2.1...v0.2.2) (2026-04-16)
 
 ## 🐛 Bug Fixes
