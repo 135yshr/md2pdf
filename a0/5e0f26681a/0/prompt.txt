@@ -1,0 +1,4 @@
+/Users/135yshr/go/src/github.com/SecureCycle/ai-services-doc/customer/ai-monitoring/security_architecture_overview.md を pdf に変換したのですが、作成されたPDFを確認するとmermaid記法で書かれた図が正しく表示されていません。
+原因を調査して修正してください。
+
+作成したPDFは、/Users/135yshr/go/src/github.com/SecureCycle/ai-services-doc/customer/ai-monitoring/security_architecture_overview.pdf です。

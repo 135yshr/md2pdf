@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.5.1",
+  "checkpoint_id": "a05e0f26681a",
+  "strategy": "manual-commit",
+  "branch": "fix/mermaid-quoted-block-replacement",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "internal/converter/parser.go",
+    "internal/converter/parser_test.go"
+  ],
+  "sessions": [
+    {
+      "metadata": "/a0/5e0f26681a/0/metadata.json",
+      "transcript": "/a0/5e0f26681a/0/full.jsonl",
+      "content_hash": "/a0/5e0f26681a/0/content_hash.txt",
+      "prompt": "/a0/5e0f26681a/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 437,
+    "cache_creation_tokens": 59744,
+    "cache_read_tokens": 1081189,
+    "output_tokens": 11307,
+    "api_call_count": 18
+  }
+}

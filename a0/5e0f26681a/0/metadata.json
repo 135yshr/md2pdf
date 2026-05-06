@@ -1,0 +1,35 @@
+{
+  "cli_version": "0.5.1",
+  "checkpoint_id": "a05e0f26681a",
+  "session_id": "6e25ef05-da36-4b56-a9e4-85dbf2b01311",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-06T12:41:54.2977Z",
+  "branch": "fix/mermaid-quoted-block-replacement",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "internal/converter/parser.go",
+    "internal/converter/parser_test.go"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-7[1m]",
+  "turn_id": "dccc3be5c681",
+  "token_usage": {
+    "input_tokens": 437,
+    "cache_creation_tokens": 59744,
+    "cache_read_tokens": 1081189,
+    "output_tokens": 11307,
+    "api_call_count": 18
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-06T12:41:54.237389Z",
+    "agent_lines": 29,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 29,
+    "agent_percentage": 100
+  }
+}
