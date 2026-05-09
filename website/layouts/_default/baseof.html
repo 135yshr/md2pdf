@@ -17,14 +17,19 @@
   {{ if hugo.IsProduction }}
   <link rel="stylesheet" href="{{ "css/consent.css" | relURL }}" media="print" onload="this.media='all'">
   <noscript><link rel="stylesheet" href="{{ "css/consent.css" | relURL }}"></noscript>
-  <script defer src="{{ "js/consent.js" | relURL }}"></script>
+  {{/*
+    Consent Mode v2 requires the default consent state to be set BEFORE
+    any gtag('config', ...) call. consent.js installs that default, so it
+    must run synchronously before the inline GA bootstrap below — do NOT
+    add `defer` here.
+  */}}
+  <script src="{{ "js/consent.js" | relURL }}"></script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id={{ site.Config.Services.GoogleAnalytics.ID }}"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
-    gtag('config', '{{ site.Config.Services.GoogleAnalytics.ID }}', { send_page_view: false });
-    (function(){var s=document.createElement('script');s.src='https://www.googletagmanager.com/gtag/js?id={{ site.Config.Services.GoogleAnalytics.ID }}';s.async=true;
-    if('requestIdleCallback' in window){requestIdleCallback(function(){document.head.appendChild(s)})}else{window.addEventListener('load',function(){document.head.appendChild(s)})}})();
+    gtag('config', '{{ site.Config.Services.GoogleAnalytics.ID }}');
   </script>
   {{ end }}
 </head>

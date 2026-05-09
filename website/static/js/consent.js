@@ -44,11 +44,13 @@
   try { stored = localStorage.getItem(STORAGE_KEY); } catch (e) { /* ignore */ }
 
   if (stored === 'granted') {
+    // GA4 sends page_view automatically when analytics_storage flips to granted,
+    // so we deliberately do NOT call gtag('event', 'page_view') here.
     gtag('consent', 'update', GRANTED);
-    gtag('event', 'page_view');
     return;
   }
   if (stored === 'denied') {
+    // Cookieless pings still flow with denied consent — no further action needed.
     return;
   }
 
@@ -64,8 +66,8 @@
 
     acceptBtn.addEventListener('click', function () {
       try { localStorage.setItem(STORAGE_KEY, 'granted'); } catch (e) { /* ignore */ }
+      // page_view is sent automatically by GA4 once analytics_storage is granted.
       gtag('consent', 'update', GRANTED);
-      gtag('event', 'page_view');
       banner.hidden = true;
     });
 
