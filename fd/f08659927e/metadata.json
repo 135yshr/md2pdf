@@ -3,7 +3,7 @@
   "checkpoint_id": "fdf08659927e",
   "strategy": "manual-commit",
   "branch": "fix/ga-consent-mode-ordering",
-  "checkpoints_count": 0,
+  "checkpoints_count": 4,
   "files_touched": [
     "website/layouts/_default/baseof.html",
     "website/static/js/consent.js"
@@ -14,13 +14,19 @@
       "transcript": "/fd/f08659927e/0/full.jsonl",
       "content_hash": "/fd/f08659927e/0/content_hash.txt",
       "prompt": "/fd/f08659927e/0/prompt.txt"
+    },
+    {
+      "metadata": "/fd/f08659927e/1/metadata.json",
+      "transcript": "/fd/f08659927e/1/full.jsonl",
+      "content_hash": "/fd/f08659927e/1/content_hash.txt",
+      "prompt": "/fd/f08659927e/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 8,
-    "cache_creation_tokens": 41308,
-    "cache_read_tokens": 79558,
-    "output_tokens": 1056,
-    "api_call_count": 3
+    "input_tokens": 342,
+    "cache_creation_tokens": 226465,
+    "cache_read_tokens": 5923549,
+    "output_tokens": 70346,
+    "api_call_count": 67
   }
 }
