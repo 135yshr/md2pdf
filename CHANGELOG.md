@@ -1,3 +1,8 @@
+# [v0.4.2](https://github.com/135yshr/md2pdf/compare/v0.4.1...v0.4.2) (2026-05-09)
+
+## 🐛 Bug Fixes
+- [`6378510`](https://github.com/135yshr/md2pdf/commit/6378510)  fix: detect Python interpreter that has playwright (#31) (Issues: [`#31`](https://github.com/135yshr/md2pdf/issues/31) [`#29`](https://github.com/135yshr/md2pdf/issues/29))
+
 # [v0.4.1](https://github.com/135yshr/md2pdf/compare/v0.4.0...v0.4.1) (2026-05-06)
 
 # [v0.4.0](https://github.com/135yshr/md2pdf/compare/v0.3.0...v0.4.0) (2026-05-06)
