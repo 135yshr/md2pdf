@@ -32,6 +32,10 @@ type Config struct {
 	FontMedium string
 	// MmdcPath is the path to the mmdc (Mermaid CLI) binary.
 	MmdcPath string
+	// PythonPath is the path to the Python 3 interpreter used to drive Playwright.
+	// When empty, md2pdf auto-detects an interpreter on PATH that can import the
+	// playwright package.
+	PythonPath string
 	// PuppeteerConfig is an optional path to a Puppeteer JSON config file
 	// passed to mmdc via its -p flag. When empty the converter auto-generates
 	// a temporary config pointing at the system Chromium.

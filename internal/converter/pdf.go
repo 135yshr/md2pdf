@@ -1,12 +1,13 @@
 package converter
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"text/template"
 	"strings"
+	"text/template"
 )
 
 // playwrightScript is the Python script template executed to print a PDF.
@@ -72,7 +73,7 @@ func (c *Converter) printPDF(htmlPath, pdfPath string) error {
 	}
 
 	// Execute the script.
-	python, err := findPython()
+	python, err := c.findPython()
 	if err != nil {
 		return err
 	}
@@ -122,12 +123,73 @@ func (c *Converter) writePrintScript(path, htmlPath, pdfPath string) error {
 	return nil
 }
 
-// findPython returns the path to the Python 3 interpreter.
-func findPython() (string, error) {
+// findPython returns a Python 3 interpreter that can import the playwright
+// package. When c.cfg.PythonPath is set (via the -python flag or the
+// MD2PDF_PYTHON env var), it is used directly after a precheck. Otherwise
+// "python3" and "python" are probed on PATH and the first interpreter that
+// passes `python -c "import playwright"` is selected. Returning an error
+// before invoking the print script lets the caller surface which interpreter
+// failed, instead of a generic ModuleNotFoundError from deep inside the
+// Playwright script.
+func (c *Converter) findPython() (string, error) {
+	if explicit := c.cfg.PythonPath; explicit != "" {
+		if err := canImportPlaywright(explicit); err != nil {
+			return "", fmt.Errorf("python at %q cannot import playwright: %w", explicit, err)
+		}
+		c.logf("  python: %s (user-specified)", explicit)
+		return explicit, nil
+	}
+
+	var failures []string
 	for _, name := range []string{"python3", "python"} {
-		if p, err := exec.LookPath(name); err == nil {
-			return p, nil
+		p, err := exec.LookPath(name)
+		if err != nil {
+			continue
+		}
+		if perr := canImportPlaywright(p); perr != nil {
+			failures = append(failures, fmt.Sprintf("%s (%v)", p, perr))
+			continue
+		}
+		c.logf("  python: %s (auto-detected)", p)
+		return p, nil
+	}
+
+	if len(failures) == 0 {
+		return "", errors.New("python3 not found in PATH; install Python 3 with the playwright package")
+	}
+	return "", fmt.Errorf(
+		"no Python interpreter on PATH can import playwright: %s; "+
+			"install playwright (`pip install playwright`) for the right interpreter, "+
+			"or pass -python / set MD2PDF_PYTHON to the interpreter that has it",
+		strings.Join(failures, "; "),
+	)
+}
+
+// canImportPlaywright runs `python -c "import playwright"` against the given
+// interpreter and returns nil only when the import succeeds. On failure the
+// returned error carries the last non-empty line of the interpreter's output,
+// which is typically the ModuleNotFoundError or other concrete reason.
+func canImportPlaywright(python string) error {
+	cmd := exec.Command(python, "-c", "import playwright") //nolint:gosec
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return nil
+	}
+	if msg := lastNonEmptyLine(string(out)); msg != "" {
+		return errors.New(msg)
+	}
+	return fmt.Errorf("execute python: %w", err)
+}
+
+// lastNonEmptyLine returns the last non-empty trimmed line of s, or "" when s
+// contains no such line. Used to extract the salient final line of a Python
+// traceback (e.g. "ModuleNotFoundError: No module named 'playwright'").
+func lastNonEmptyLine(s string) string {
+	lines := strings.Split(s, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if line := strings.TrimSpace(lines[i]); line != "" {
+			return line
 		}
 	}
-	return "", fmt.Errorf("python3 not found in PATH; install Python 3 with the playwright package")
+	return ""
 }
