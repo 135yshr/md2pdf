@@ -1,0 +1,144 @@
+md2pdf リポジトリに対して、以下の2件の GitHub issue を `gh` CLI で作成してください。
+
+## 前提
+
+- カレントディレクトリは `135yshr/md2pdf` のローカルクローン、もしくは `--repo 135yshr/md2pdf` を明示してください
+- `gh auth status` で認証済みであることを先に確認してください
+- 既存の同名 issue がないか `gh issue list --search "<title>"` で念のためチェックしてください
+- 各 issue 本文は heredoc またはファイル経由で渡し、改行・コードブロック・日本語が壊れないようにしてください
+
+## 背景（参考リンク、本文に含める）
+
+- ユーザーフィードバック元: https://zenn.dev/link/comments/18e8c67d0561bd
+- 報告者: ppbb さん
+- OS: macOS（エラーパスの `/var/folders/...` から確定）
+
+---
+
+## Issue 1（バグ）
+
+**Title:**
+playwright module not found when invoked from md2pdf, but works when print_pdf.py is run directly
+
+**Labels:** `bug`
+
+**Body:**
+
+```markdown
+## Description
+
+A user reported that running `md2pdf` fails with `ModuleNotFoundError: No module named 'playwright'`, even though `playwright` is installed and `print_pdf.py` works correctly when copied out and executed directly with `python`.
+
+Reported via Zenn comment: https://zenn.dev/link/comments/18e8c67d0561bd
+
+## Reproduction
+
+```
+$ md2pdf <input>.md
+md2pdf: conversion failed: print pdf: playwright script failed: exit status 1
+output: Traceback (most recent call last):
+  File "/var/folders/t5/qjlms9tx4mg9j_m5106w3g280000gn/T/md2pdf-2994288070/print_pdf.py", line 2, in <module>
+    from playwright.sync_api import sync_playwright
+ModuleNotFoundError: No module named 'playwright'
+```
+
+Workaround that works for the user:
+- Copy the temp `print_pdf.py` elsewhere and run it directly with `python` → succeeds.
+
+## Suspected Cause
+
+The Python interpreter spawned by md2pdf is not the same one where `playwright` was installed via `pip install playwright`. Likely scenarios:
+
+- pyenv shim / Homebrew Python / system Python mismatch on macOS
+- `os/exec` not inheriting the user's interactive shell PATH
+- venv `VIRTUAL_ENV` not propagated to the subprocess
+
+## Proposed Fix
+
+1. Add a `-python <path>` flag (mirroring `-mmdc <path>`) so users can pin the interpreter explicitly.
+2. Add `PYTHON` / `MD2PDF_PYTHON` environment variable as a fallback.
+3. Improve auto-detection: try `python3`, `python`, verify `playwright` importability before invocation and emit a clear error pointing at the specific interpreter being used.
+4. In verbose mode (`-v`), log the actual Python executable path being used and the result of `python -c "import playwright"` precheck.
+5. Update README troubleshooting section with this scenario.
+
+## Environment
+
+- OS: macOS (path `/var/folders/...` confirms)
+- md2pdf: version unknown (need to ask reporter)
+```
+
+---
+
+## Issue 2（機能要望）
+
+**Title:**
+Support custom CSS styling and HTML output
+
+**Labels:** `enhancement`
+
+**Body:**
+
+```markdown
+## Background
+
+Requested via Zenn comment: https://zenn.dev/link/comments/18e8c67d0561bd
+
+> カスタムcssでの修飾機能があるといいなと思いました（そのためにはHTML出力もあると便利？）
+
+## Proposal
+
+Two related capabilities:
+
+### 1. Custom CSS injection
+
+Add a `-css <path>` flag (or `-css <path>...` to allow multiple) that injects user CSS after the built-in GitHub-flavored stylesheet so users can override or extend it.
+
+```
+md2pdf -css custom.css document.md
+```
+
+Use cases: corporate branding (logo colors, fonts), client-specific deliverable formatting, presentation-mode tweaks.
+
+### 2. HTML output mode
+
+Add a `-html` flag (or `-format html`) that stops the pipeline at step 3 (Build HTML) and emits the self-contained HTML instead of running Playwright.
+
+```
+md2pdf -html document.md   # produces document.html
+```
+
+Benefits:
+- Lets users iterate on custom CSS quickly in a browser without spinning up Chromium each time.
+- Useful for users who only want HTML (e.g. publishing to a static site).
+- Removes the Playwright dependency for HTML-only workflows.
+
+## Design considerations
+
+- Both flags should be composable: `-html -css custom.css` should produce HTML with the custom CSS applied.
+- Custom CSS should be embedded inline in the `<style>` tag (not linked) to keep the HTML self-contained, matching md2pdf's current philosophy.
+- Document precedence clearly: built-in CSS → custom CSS (latter wins).
+```
+
+---
+
+## 実行手順
+
+1. `gh auth status` で認証確認
+2. `gh label list --repo 135yshr/md2pdf` でラベル `bug` `enhancement` の存在を確認、なければ作成
+3. 各 issue を `gh issue create --repo 135yshr/md2pdf --title "..." --label "..." --body-file <一時ファイル>` で作成
+4. 作成後、両方の issue URL を出力
+
+ラベルが付かなくても作成自体は止めないでください。
+
+---
+
+#29のissueに問題が発生する原因を教えてください。
+調査が終わっていない場合は、先に調査をしてください
+
+---
+
+報告があった問題を再現することは可能ですか？
+
+---
+
+それでは修正を開始してください

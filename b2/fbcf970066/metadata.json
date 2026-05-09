@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.5.1",
+  "checkpoint_id": "b2fbcf970066",
+  "strategy": "manual-commit",
+  "branch": "fix/issue-29-python-playwright",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "README.md",
+    "cmd/md2pdf/flags.go",
+    "internal/converter/converter.go",
+    "internal/converter/pdf.go",
+    "internal/converter/pdf_test.go"
+  ],
+  "sessions": [
+    {
+      "metadata": "/b2/fbcf970066/0/metadata.json",
+      "transcript": "/b2/fbcf970066/0/full.jsonl",
+      "content_hash": "/b2/fbcf970066/0/content_hash.txt",
+      "prompt": "/b2/fbcf970066/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 281,
+    "cache_creation_tokens": 150963,
+    "cache_read_tokens": 2979911,
+    "output_tokens": 36885,
+    "api_call_count": 41
+  }
+}
