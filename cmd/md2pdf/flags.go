@@ -45,6 +45,7 @@ func parseFlags(args []string) (*converter.Config, error) {
 	fontBold := fs.String("font-bold", "", "Path to Noto Sans CJK JP Bold .ttc/.ttf font file")
 	fontMedium := fs.String("font-medium", "", "Path to Noto Sans CJK JP Medium .ttc/.ttf font file")
 	mmdcPath := fs.String("mmdc", "", "Path to mmdc binary (Mermaid CLI)")
+	pythonPath := fs.String("python", "", "Path to Python 3 interpreter with the playwright package (overrides MD2PDF_PYTHON)")
 	puppeteerCfg := fs.String("puppeteer-config", "", "Path to Puppeteer JSON config file for mmdc (auto-created if omitted)")
 	pageSize := fs.String("page-size", "A4", "PDF page size: A4, Letter, A3")
 	marginTop := fs.String("margin-top", "18mm", "Top margin (e.g. 18mm, 1in)")
@@ -109,6 +110,13 @@ func parseFlags(args []string) (*converter.Config, error) {
 		mmdc = findFirst(mmdcDefaultPaths)
 	}
 
+	// Resolve Python interpreter. The flag wins; otherwise MD2PDF_PYTHON.
+	// An empty result triggers auto-detection inside the converter.
+	python := *pythonPath
+	if python == "" {
+		python = os.Getenv("MD2PDF_PYTHON")
+	}
+
 	return &converter.Config{
 		InputFile:      input,
 		OutputFile:     out,
@@ -116,6 +124,7 @@ func parseFlags(args []string) (*converter.Config, error) {
 		FontBold:       bold,
 		FontMedium:     medium,
 		MmdcPath:       mmdc,
+		PythonPath:     python,
 		PuppeteerConfig: *puppeteerCfg,
 		PageSize:       *pageSize,
 		MarginTop:      *marginTop,
@@ -152,6 +161,8 @@ Options:
   -font-bold <path>       Noto Sans CJK JP Bold font
   -font-medium <path>     Noto Sans CJK JP Medium font
   -mmdc <path>            Path to mmdc (Mermaid CLI) binary
+  -python <path>          Path to Python 3 interpreter with the playwright
+                          package (env: MD2PDF_PYTHON)
   -puppeteer-config <f>   Path to Puppeteer JSON config for mmdc
   -page-size <size>       PDF page size: A4 (default), Letter, A3
   -margin-top <m>         Top margin    (default: 18mm)

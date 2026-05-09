@@ -1,12 +1,13 @@
 package converter
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"text/template"
 	"strings"
+	"text/template"
 )
 
 // playwrightScript is the Python script template executed to print a PDF.
@@ -72,7 +73,7 @@ func (c *Converter) printPDF(htmlPath, pdfPath string) error {
 	}
 
 	// Execute the script.
-	python, err := findPython()
+	python, err := c.findPython()
 	if err != nil {
 		return err
 	}
@@ -122,12 +123,129 @@ func (c *Converter) writePrintScript(path, htmlPath, pdfPath string) error {
 	return nil
 }
 
-// findPython returns the path to the Python 3 interpreter.
-func findPython() (string, error) {
+// findPython returns a Python 3 interpreter that can import the playwright
+// package. When c.cfg.PythonPath is set (via the -python flag or the
+// MD2PDF_PYTHON env var), it is used directly after a precheck. Otherwise
+// candidates are probed in order — first "python3" and "python" on PATH,
+// then well-known absolute locations (active virtualenv, pyenv shims,
+// Homebrew, system Python) — and the first interpreter that passes
+// `python -c "import playwright"` is selected. Probing absolute paths in
+// addition to PATH covers the common case where md2pdf is launched from a
+// context (GUI, minimal shell) that does not inherit the user's interactive
+// shell PATH and would otherwise fall back to a Python without playwright.
+func (c *Converter) findPython() (string, error) {
+	if explicit := c.cfg.PythonPath; explicit != "" {
+		if err := canImportPlaywright(explicit); err != nil {
+			return "", fmt.Errorf("python at %q cannot import playwright: %w", explicit, err)
+		}
+		c.logf("  python: %s (user-specified)", explicit)
+		return explicit, nil
+	}
+
+	var failures []string
+	seen := make(map[string]bool)
+	for _, p := range pythonCandidates() {
+		if p == "" || seen[p] {
+			continue
+		}
+		seen[p] = true
+		// Skip nonexistent paths silently so unrelated absent locations
+		// (e.g. pyenv shim on a Homebrew-only machine) don't pollute the
+		// failure list returned to the user.
+		if _, err := os.Stat(p); err != nil {
+			continue
+		}
+		if perr := canImportPlaywright(p); perr != nil {
+			failures = append(failures, fmt.Sprintf("%s (%v)", p, perr))
+			continue
+		}
+		c.logf("  python: %s (auto-detected)", p)
+		return p, nil
+	}
+
+	if len(failures) == 0 {
+		return "", errors.New("no Python 3 interpreter found; install Python 3 with the playwright package, or pass -python / set MD2PDF_PYTHON")
+	}
+	return "", fmt.Errorf(
+		"no Python interpreter can import playwright: %s; "+
+			"install playwright (`pip install playwright`) for the right interpreter, "+
+			"or pass -python / set MD2PDF_PYTHON to the interpreter that has it",
+		strings.Join(failures, "; "),
+	)
+}
+
+// pythonCandidates returns the ordered list of interpreter paths findPython
+// probes during auto-detection. PATH-resolved interpreters come first to
+// preserve the fast path for normal shell invocations; well-known absolute
+// locations follow as a safety net for contexts where PATH is minimal.
+func pythonCandidates() []string {
+	var out []string
 	for _, name := range []string{"python3", "python"} {
 		if p, err := exec.LookPath(name); err == nil {
-			return p, nil
+			out = append(out, p)
 		}
 	}
-	return "", fmt.Errorf("python3 not found in PATH; install Python 3 with the playwright package")
+	return append(out, extraPythonCandidatesFn()...)
+}
+
+// extraPythonCandidatesFn produces the absolute-path candidate list. It is a
+// var rather than a function literal so tests can swap it without exporting
+// internal layout.
+var extraPythonCandidatesFn = defaultExtraPythonCandidates
+
+// defaultExtraPythonCandidates returns absolute interpreter paths that exist
+// on common macOS / Linux developer setups. The list is ordered from "most
+// likely to reflect user intent" (active virtualenv) to "system fallback".
+func defaultExtraPythonCandidates() []string {
+	var paths []string
+	// Active virtualenv: strongest signal of where pip just installed things.
+	if v := os.Getenv("VIRTUAL_ENV"); v != "" {
+		paths = append(paths,
+			filepath.Join(v, "bin", "python3"),
+			filepath.Join(v, "bin", "python"),
+		)
+	}
+	// pyenv shims, including anyenv-managed pyenv.
+	if home, err := os.UserHomeDir(); err == nil {
+		paths = append(paths,
+			filepath.Join(home, ".pyenv", "shims", "python3"),
+			filepath.Join(home, ".anyenv", "envs", "pyenv", "shims", "python3"),
+		)
+	}
+	// Homebrew (Apple Silicon, Intel/Linux) and system Python.
+	paths = append(paths,
+		"/opt/homebrew/bin/python3",
+		"/usr/local/bin/python3",
+		"/usr/bin/python3",
+	)
+	return paths
+}
+
+// canImportPlaywright runs `python -c "import playwright"` against the given
+// interpreter and returns nil only when the import succeeds. On failure the
+// returned error carries the last non-empty line of the interpreter's output,
+// which is typically the ModuleNotFoundError or other concrete reason.
+func canImportPlaywright(python string) error {
+	cmd := exec.Command(python, "-c", "import playwright") //nolint:gosec
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return nil
+	}
+	if msg := lastNonEmptyLine(string(out)); msg != "" {
+		return errors.New(msg)
+	}
+	return fmt.Errorf("execute python: %w", err)
+}
+
+// lastNonEmptyLine returns the last non-empty trimmed line of s, or "" when s
+// contains no such line. Used to extract the salient final line of a Python
+// traceback (e.g. "ModuleNotFoundError: No module named 'playwright'").
+func lastNonEmptyLine(s string) string {
+	lines := strings.Split(s, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if line := strings.TrimSpace(lines[i]); line != "" {
+			return line
+		}
+	}
+	return ""
 }

@@ -106,6 +106,7 @@ md2pdf [options] <input.md>
 | `-font-bold <path>` | auto-detected | Noto Sans CJK JP Bold font |
 | `-font-medium <path>` | auto-detected | Noto Sans CJK JP Medium font |
 | `-mmdc <path>` | auto-detected | Path to `mmdc` binary |
+| `-python <path>` | auto-detected | Python 3 interpreter with `playwright` installed (env: `MD2PDF_PYTHON`) |
 | `-puppeteer-config <f>` | auto-generated | Puppeteer JSON config for mmdc |
 | `-page-size <size>` | `A4` | `A4`, `Letter`, or `A3` |
 | `-margin-top <m>` | `18mm` | Top margin |
@@ -194,6 +195,28 @@ the box.
 These are not bugs in Pandoc or md-to-pdf — both can produce great results
 once you configure CJK fonts and Mermaid plugins. md2pdf is just preconfigured
 for this exact combination, so it works without any extra setup.
+
+## Troubleshooting
+
+### `ModuleNotFoundError: No module named 'playwright'`
+
+If md2pdf fails with this error even though `pip install playwright` succeeded,
+the Python interpreter md2pdf picked up does not match the one where
+`playwright` is installed. This is common on macOS when multiple Pythons
+coexist (system `/usr/bin/python3`, Homebrew, pyenv, venv).
+
+Fix it by pointing md2pdf at the correct interpreter:
+
+```sh
+# One-off
+md2pdf -python "$(which python3)" document.md
+
+# Persistent
+export MD2PDF_PYTHON="$(which python3)"
+md2pdf document.md
+```
+
+Use `-v` to confirm which interpreter md2pdf is using.
 
 ## Running Tests
 
