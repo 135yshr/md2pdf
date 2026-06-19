@@ -40,11 +40,13 @@ func parseFlags(args []string) (*converter.Config, error) {
 	fs := flag.NewFlagSet("md2pdf", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 
-	output := fs.String("o", "", "Output PDF file path (default: <input>.pdf)")
+	output := fs.String("o", "", "Output file path (default: <input>.pdf, or .docx with -format docx)")
+	format := fs.String("format", "", "Output format: pdf (default) or docx (inferred from -o extension when omitted)")
 	fontRegular := fs.String("font", "", "Path to Noto Sans CJK JP Regular .ttc/.ttf font file")
 	fontBold := fs.String("font-bold", "", "Path to Noto Sans CJK JP Bold .ttc/.ttf font file")
 	fontMedium := fs.String("font-medium", "", "Path to Noto Sans CJK JP Medium .ttc/.ttf font file")
 	mmdcPath := fs.String("mmdc", "", "Path to mmdc binary (Mermaid CLI)")
+	pandocPath := fs.String("pandoc", "", "Path to pandoc binary (used for -format docx)")
 	pythonPath := fs.String("python", "", "Path to Python 3 interpreter with the playwright package (overrides MD2PDF_PYTHON)")
 	puppeteerCfg := fs.String("puppeteer-config", "", "Path to Puppeteer JSON config file for mmdc (auto-created if omitted)")
 	pageSize := fs.String("page-size", "A4", "PDF page size: A4, Letter, A3")
@@ -76,11 +78,18 @@ func parseFlags(args []string) (*converter.Config, error) {
 		return nil, fmt.Errorf("input file must have a .md extension: %s", input)
 	}
 
-	// Resolve output path.
+	// Resolve output format. An explicit -format flag wins; otherwise it is
+	// inferred from the -o extension, defaulting to pdf.
+	outFormat, err := resolveFormat(*format, *output)
+	if err != nil {
+		return nil, err
+	}
+
+	// Resolve output path, defaulting the extension to the chosen format.
 	out := *output
 	if out == "" {
 		base := strings.TrimSuffix(input, filepath.Ext(input))
-		out = base + ".pdf"
+		out = base + "." + outFormat
 	}
 
 	// Resolve font paths.
@@ -118,21 +127,53 @@ func parseFlags(args []string) (*converter.Config, error) {
 	}
 
 	return &converter.Config{
-		InputFile:      input,
-		OutputFile:     out,
-		FontRegular:    regular,
-		FontBold:       bold,
-		FontMedium:     medium,
-		MmdcPath:       mmdc,
-		PythonPath:     python,
+		InputFile:       input,
+		OutputFile:      out,
+		Format:          outFormat,
+		FontRegular:     regular,
+		FontBold:        bold,
+		FontMedium:      medium,
+		MmdcPath:        mmdc,
+		PandocPath:      *pandocPath,
+		PythonPath:      python,
 		PuppeteerConfig: *puppeteerCfg,
-		PageSize:       *pageSize,
-		MarginTop:      *marginTop,
-		MarginBottom:   *marginBottom,
-		MarginLeft:     *marginLeft,
-		MarginRight:    *marginRight,
-		Verbose:        *verbose,
+		PageSize:        *pageSize,
+		MarginTop:       *marginTop,
+		MarginBottom:    *marginBottom,
+		MarginLeft:      *marginLeft,
+		MarginRight:     *marginRight,
+		Verbose:         *verbose,
 	}, nil
+}
+
+// resolveFormat determines the output format from the explicit -format flag and
+// the -o path. The flag takes precedence; otherwise the format is inferred from
+// the output file extension, defaulting to pdf. It returns an error when the two
+// disagree or when an unsupported format is requested.
+func resolveFormat(format, output string) (string, error) {
+	fromExt := ""
+	switch strings.ToLower(filepath.Ext(output)) {
+	case ".pdf":
+		fromExt = "pdf"
+	case ".docx":
+		fromExt = "docx"
+	}
+
+	if format == "" {
+		if fromExt != "" {
+			return fromExt, nil
+		}
+		return "pdf", nil
+	}
+
+	normalized := strings.ToLower(format)
+	if normalized != "pdf" && normalized != "docx" {
+		return "", fmt.Errorf("unsupported output format %q: must be pdf or docx", format)
+	}
+	if fromExt != "" && fromExt != normalized {
+		return "", fmt.Errorf("output extension .%s conflicts with -format %s", fromExt, normalized)
+	}
+	return normalized, nil
 }
 
 // findFirst returns the first path from the list that exists on disk,
@@ -156,11 +197,14 @@ Usage:
   md2pdf [options] <input.md>
 
 Options:
-  -o <path>               Output PDF path (default: <input>.pdf)
+  -o <path>               Output path (default: <input>.pdf, or .docx with -format docx)
+  -format <fmt>           Output format: pdf (default) or docx
+                          (inferred from -o extension when omitted)
   -font <path>            Noto Sans CJK JP Regular font (.ttc/.ttf)
   -font-bold <path>       Noto Sans CJK JP Bold font
   -font-medium <path>     Noto Sans CJK JP Medium font
   -mmdc <path>            Path to mmdc (Mermaid CLI) binary
+  -pandoc <path>          Path to pandoc binary (used for -format docx)
   -python <path>          Path to Python 3 interpreter with the playwright
                           package (env: MD2PDF_PYTHON)
   -puppeteer-config <f>   Path to Puppeteer JSON config for mmdc
@@ -175,6 +219,8 @@ Options:
 Examples:
   md2pdf document.md
   md2pdf -o report.pdf document.md
+  md2pdf -format docx document.md
+  md2pdf -o report.docx document.md
   md2pdf -font /path/to/NotoSansCJK-Regular.ttc document.md
 `)
 }

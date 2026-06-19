@@ -18,8 +18,12 @@ import (
 type mermaidBlock struct {
 	// Source is the raw Mermaid diagram definition.
 	Source string
-	// SVGContent is populated after mmdc renders the diagram.
+	// SVGContent is populated after mmdc renders the diagram to SVG (PDF output).
 	SVGContent string
+	// ImagePath is the working-directory-relative path to a rendered raster
+	// image (DOCX output). When set, the HTML builder emits an <img> tag
+	// instead of inlining the SVG.
+	ImagePath string
 	// Placeholder is the unique HTML comment used to locate the block in the
 	// rendered HTML so it can be swapped with the inline SVG.
 	Placeholder string

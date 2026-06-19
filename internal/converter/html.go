@@ -37,7 +37,13 @@ func (c *Converter) buildHTML(doc *parsedDoc, destPath string) error {
 
 	body := doc.HTML
 	for _, block := range doc.mermaidBlocks {
-		wrapped := `<div class="diagram-wrapper">` + "\n" + block.SVGContent + "\n</div>"
+		var inner string
+		if block.ImagePath != "" {
+			inner = `<img src="` + block.ImagePath + `" alt="diagram" />`
+		} else {
+			inner = block.SVGContent
+		}
+		wrapped := `<div class="diagram-wrapper">` + "\n" + inner + "\n</div>"
 		comment := "<!--" + block.Placeholder + "-->"
 		body = strings.ReplaceAll(body, comment, wrapped)
 	}

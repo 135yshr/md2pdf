@@ -22,8 +22,11 @@ import (
 type Config struct {
 	// InputFile is the path to the source Markdown file.
 	InputFile string
-	// OutputFile is the destination PDF path.
+	// OutputFile is the destination output path (PDF or DOCX).
 	OutputFile string
+	// Format selects the output format: "pdf" (default) or "docx".
+	// An empty value is treated as "pdf".
+	Format string
 	// FontRegular is the file path to the Noto Sans CJK JP Regular font.
 	FontRegular string
 	// FontBold is the file path to the Noto Sans CJK JP Bold font.
@@ -32,6 +35,9 @@ type Config struct {
 	FontMedium string
 	// MmdcPath is the path to the mmdc (Mermaid CLI) binary.
 	MmdcPath string
+	// PandocPath is the path to the pandoc binary used for DOCX output.
+	// When empty, md2pdf auto-detects pandoc on PATH and in common locations.
+	PandocPath string
 	// PythonPath is the path to the Python 3 interpreter used to drive Playwright.
 	// When empty, md2pdf auto-detects an interpreter on PATH that can import the
 	// playwright package.
@@ -105,13 +111,22 @@ func (c *Converter) Convert(inputPath, outputPath string) error {
 		return fmt.Errorf("copy images: %w", err)
 	}
 
-	c.logf("Printing PDF with headless Chromium...")
 	absOut, err := filepath.Abs(outputPath)
 	if err != nil {
 		return fmt.Errorf("resolve output path: %w", err)
 	}
-	if err := c.printPDF(htmlPath, absOut); err != nil {
-		return fmt.Errorf("print pdf: %w", err)
+
+	switch strings.ToLower(c.cfg.Format) {
+	case "docx":
+		c.logf("Converting to DOCX with pandoc...")
+		if err := c.convertDOCX(htmlPath, absOut); err != nil {
+			return fmt.Errorf("convert docx: %w", err)
+		}
+	default:
+		c.logf("Printing PDF with headless Chromium...")
+		if err := c.printPDF(htmlPath, absOut); err != nil {
+			return fmt.Errorf("print pdf: %w", err)
+		}
 	}
 
 	return nil
@@ -137,6 +152,12 @@ func (c *Converter) copyImages(html, srcDir string) error {
 
 		// Skip absolute URLs and data URIs.
 		if strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://") || strings.HasPrefix(src, "data:") {
+			continue
+		}
+
+		// Skip diagrams md2pdf generated itself; they already live in the
+		// working directory and have no counterpart in the source tree.
+		if strings.HasPrefix(src, mermaidImageSubdir+"/") {
 			continue
 		}
 

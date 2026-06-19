@@ -39,6 +39,15 @@ pip install playwright
 playwright install chromium
 ```
 
+### pandoc (optional — for DOCX output)
+
+Only required when exporting Word documents with `-format docx`:
+
+```sh
+brew install pandoc          # macOS / Linux (Homebrew)
+# sudo apt install pandoc    # Ubuntu / Debian
+```
+
 ## Install fonts (optional)
 
 For Japanese text support, install the Noto Sans CJK JP font:
@@ -59,4 +68,5 @@ sudo apt install fonts-noto-cjk
 md2pdf document.md
 ```
 
-A `document.pdf` file will be generated in the same directory.
+A `document.pdf` file will be generated in the same directory. To export a Word
+document instead, run `md2pdf -format docx document.md` (requires pandoc).

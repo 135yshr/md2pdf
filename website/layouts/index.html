@@ -7,6 +7,7 @@
       <span class="feature-badge">Mermaid Diagrams</span>
       <span class="feature-badge">GitHub CSS</span>
       <span class="feature-badge">Japanese Text</span>
+      <span class="feature-badge">PDF &amp; DOCX</span>
     </div>
     <div class="hero-actions">
       <a href="{{ "doc/getting-started/" | relURL }}" class="btn btn-primary">Get Started</a>
@@ -48,8 +49,8 @@
       <p>Noto Sans CJK JP fonts are auto-detected and embedded for beautiful Japanese typography.</p>
     </div>
     <div class="feature-card">
-      <h2>Configurable Output</h2>
-      <p>A4, Letter, A3 page sizes with customizable margins. Output to any path.</p>
+      <h2>PDF or DOCX Output</h2>
+      <p>Export polished PDFs, or editable Word documents with <code>-format docx</code> (via pandoc). A4, Letter, A3 page sizes with customizable margins.</p>
     </div>
   </div>
 </section>
@@ -67,19 +68,19 @@
       <div class="pipeline-step">
         <div class="step-number">2</div>
         <h3>Render Diagrams</h3>
-        <p>Mermaid blocks are rendered to SVG via mmdc</p>
+        <p>Mermaid blocks are rendered via mmdc — SVG for PDF, PNG for DOCX</p>
       </div>
       <div class="pipeline-arrow">&rarr;</div>
       <div class="pipeline-step">
         <div class="step-number">3</div>
         <h3>Build HTML</h3>
-        <p>GitHub CSS + fonts + SVGs assembled into one HTML file</p>
+        <p>GitHub CSS + fonts + diagrams assembled into one HTML file</p>
       </div>
       <div class="pipeline-arrow">&rarr;</div>
       <div class="pipeline-step">
         <div class="step-number">4</div>
-        <h3>Print PDF</h3>
-        <p>Headless Chromium via Playwright prints to PDF</p>
+        <h3>Print PDF / DOCX</h3>
+        <p>Chromium (via Playwright) prints PDF, or pandoc exports DOCX</p>
       </div>
     </div>
   </div>

@@ -104,3 +104,35 @@ func TestBuildHTML_InjectsSVG(t *testing.T) {
 		t.Error("placeholder should have been replaced")
 	}
 }
+
+func TestBuildHTML_InjectsImageWhenImagePathSet(t *testing.T) {
+	dir := t.TempDir()
+	dest := dir + "/out.html"
+
+	c := &Converter{cfg: &Config{}, workDir: dir}
+	block := &mermaidBlock{
+		Source:      "flowchart TD\n  A --> B\n",
+		ImagePath:   "diagram_0.png",
+		Placeholder: "MERMAID_PLACEHOLDER_0",
+	}
+	doc := &parsedDoc{
+		HTML:          "<h1>Flow</h1><!--MERMAID_PLACEHOLDER_0-->",
+		mermaidBlocks: []*mermaidBlock{block},
+	}
+
+	if err := c.buildHTML(doc, dest); err != nil {
+		t.Fatalf("buildHTML() error: %v", err)
+	}
+
+	data, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatalf("ReadFile() error: %v", err)
+	}
+	html := string(data)
+	if !strings.Contains(html, `<img src="diagram_0.png"`) {
+		t.Errorf("expected <img> referencing the PNG, got: %s", html)
+	}
+	if strings.Contains(html, "MERMAID_PLACEHOLDER_0") {
+		t.Error("placeholder should have been replaced")
+	}
+}
