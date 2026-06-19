@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.5.1",
+  "checkpoint_id": "ff0225ce25ea",
+  "strategy": "manual-commit",
+  "branch": "feat/docx-output",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "CLAUDE.md",
+    "internal/converter/docx.go",
+    "internal/converter/docx_test.go",
+    "internal/converter/html.go",
+    "internal/converter/html_test.go",
+    "internal/converter/mermaid.go",
+    "internal/converter/parser.go"
+  ],
+  "sessions": [
+    {
+      "metadata": "/ff/0225ce25ea/0/metadata.json",
+      "transcript": "/ff/0225ce25ea/0/full.jsonl",
+      "content_hash": "/ff/0225ce25ea/0/content_hash.txt",
+      "prompt": "/ff/0225ce25ea/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 1137,
+    "cache_creation_tokens": 38290,
+    "cache_read_tokens": 3538541,
+    "output_tokens": 27067,
+    "api_call_count": 29
+  }
+}
