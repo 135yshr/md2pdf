@@ -14,6 +14,13 @@ import (
 // colliding with user-supplied images copied by copyImages.
 const mermaidImageSubdir = "_md2pdf_mermaid"
 
+// mermaidBackground is the background colour passed to mmdc for rendered diagrams.
+const mermaidBackground = "white"
+
+// mermaidPNGScale scales raster (PNG) diagram output up so it stays sharp when
+// embedded in a document.
+const mermaidPNGScale = "2"
+
 // puppeteerConfig is the JSON structure written for mmdc's -p flag.
 type puppeteerConfig struct {
 	ExecutablePath string   `json:"executablePath"`
@@ -74,26 +81,9 @@ func (c *Converter) renderSingleDiagramPNG(idx int, source, puppeteerCfgPath str
 	pngRel := filepath.ToSlash(filepath.Join(mermaidImageSubdir, fmt.Sprintf("diagram_%d.png", idx)))
 	pngFile := filepath.Join(c.workDir, filepath.FromSlash(pngRel))
 
-	if err := os.WriteFile(mmdFile, []byte(source), 0o644); err != nil {
-		return "", fmt.Errorf("write .mmd file: %w", err)
-	}
-
-	mmdcBin := c.resolveMmdc()
-	args := []string{
-		"-i", mmdFile,
-		"-o", pngFile,
-		"-b", "white",
-		// Scale up so the raster diagram stays sharp in the document.
-		"-s", "2",
-	}
-	if puppeteerCfgPath != "" {
-		args = append(args, "-p", puppeteerCfgPath)
-	}
-
-	cmd := exec.Command(mmdcBin, args...) //nolint:gosec
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("mmdc failed: %w\noutput: %s", err, out)
+	// Scale up so the raster diagram stays sharp in the document.
+	if err := c.runMmdc(mmdFile, pngFile, source, puppeteerCfgPath, "-s", mermaidPNGScale); err != nil {
+		return "", err
 	}
 	if _, err := os.Stat(pngFile); err != nil {
 		return "", fmt.Errorf("mmdc did not produce PNG output: %w", err)
@@ -107,25 +97,8 @@ func (c *Converter) renderSingleDiagram(idx int, source, puppeteerCfgPath string
 	mmdFile := filepath.Join(c.workDir, fmt.Sprintf("diagram_%d.mmd", idx))
 	svgFile := filepath.Join(c.workDir, fmt.Sprintf("diagram_%d.svg", idx))
 
-	if err := os.WriteFile(mmdFile, []byte(source), 0o644); err != nil {
-		return "", fmt.Errorf("write .mmd file: %w", err)
-	}
-
-	mmdcBin := c.resolveMmdc()
-
-	args := []string{
-		"-i", mmdFile,
-		"-o", svgFile,
-		"-b", "white",
-	}
-	if puppeteerCfgPath != "" {
-		args = append(args, "-p", puppeteerCfgPath)
-	}
-
-	cmd := exec.Command(mmdcBin, args...) //nolint:gosec
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("mmdc failed: %w\noutput: %s", err, out)
+	if err := c.runMmdc(mmdFile, svgFile, source, puppeteerCfgPath); err != nil {
+		return "", err
 	}
 
 	svgBytes, err := os.ReadFile(svgFile)
@@ -133,6 +106,28 @@ func (c *Converter) renderSingleDiagram(idx int, source, puppeteerCfgPath string
 		return "", fmt.Errorf("read SVG output: %w", err)
 	}
 	return string(svgBytes), nil
+}
+
+// runMmdc writes the Mermaid source to mmdFile and invokes mmdc to render it to
+// outFile. extraArgs are appended after the standard flags (e.g. PNG scaling),
+// and the Puppeteer config is passed when non-empty.
+func (c *Converter) runMmdc(mmdFile, outFile, source, puppeteerCfgPath string, extraArgs ...string) error {
+	if err := os.WriteFile(mmdFile, []byte(source), 0o644); err != nil {
+		return fmt.Errorf("write .mmd file: %w", err)
+	}
+
+	args := []string{"-i", mmdFile, "-o", outFile, "-b", mermaidBackground}
+	args = append(args, extraArgs...)
+	if puppeteerCfgPath != "" {
+		args = append(args, "-p", puppeteerCfgPath)
+	}
+
+	cmd := exec.Command(c.resolveMmdc(), args...) //nolint:gosec
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("mmdc failed: %w\noutput: %s", err, out)
+	}
+	return nil
 }
 
 // resolveMmdc returns the mmdc binary to invoke, honouring the configured path
