@@ -1,3 +1,8 @@
+# [v0.5.0](https://github.com/135yshr/md2pdf/compare/v0.4.3...v0.5.0) (2026-06-19)
+
+## ✨ New Features
+- [`847c51a`](https://github.com/135yshr/md2pdf/commit/847c51a)  feat: add DOCX output via pandoc (#33) (Issues: [`#33`](https://github.com/135yshr/md2pdf/issues/33))
+
 # [v0.4.3](https://github.com/135yshr/md2pdf/compare/v0.4.2...v0.4.3) (2026-06-19)
 
 ## 🐛 Bug Fixes
