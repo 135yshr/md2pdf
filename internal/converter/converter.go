@@ -38,6 +38,9 @@ type Config struct {
 	// PandocPath is the path to the pandoc binary used for DOCX output.
 	// When empty, md2pdf auto-detects pandoc on PATH and in common locations.
 	PandocPath string
+	// DOCXFont is the font family applied to DOCX output for both Latin and
+	// East Asian text. When empty, a Japanese-friendly default is used.
+	DOCXFont string
 	// PythonPath is the path to the Python 3 interpreter used to drive Playwright.
 	// When empty, md2pdf auto-detects an interpreter on PATH that can import the
 	// playwright package.
@@ -77,12 +80,32 @@ func (c *Converter) Close() {
 	_ = os.RemoveAll(c.workDir)
 }
 
-// Convert runs the full Markdown → PDF pipeline for the given input file,
-// writing the result to outputPath.
+// Convert runs the conversion pipeline for the given input file, writing the
+// result to outputPath. PDF output flows through the Markdown → HTML → Chromium
+// stages; DOCX output is produced directly from Markdown by pandoc so the result
+// uses clean, Word-native styling instead of HTML-derived markup.
 func (c *Converter) Convert(inputPath, outputPath string) error {
 	mdBytes, err := os.ReadFile(inputPath)
 	if err != nil {
 		return fmt.Errorf("read input: %w", err)
+	}
+
+	srcDir, err := filepath.Abs(filepath.Dir(inputPath))
+	if err != nil {
+		return fmt.Errorf("resolve input dir: %w", err)
+	}
+
+	absOut, err := filepath.Abs(outputPath)
+	if err != nil {
+		return fmt.Errorf("resolve output path: %w", err)
+	}
+
+	if strings.EqualFold(c.cfg.Format, "docx") {
+		c.logf("Converting Markdown to DOCX with pandoc...")
+		if err := c.convertMarkdownDOCX(mdBytes, srcDir, absOut); err != nil {
+			return fmt.Errorf("convert docx: %w", err)
+		}
+		return nil
 	}
 
 	c.logf("Parsing Markdown and extracting Mermaid blocks...")
@@ -103,30 +126,13 @@ func (c *Converter) Convert(inputPath, outputPath string) error {
 	}
 
 	c.logf("Copying images to working directory...")
-	srcDir, err := filepath.Abs(filepath.Dir(inputPath))
-	if err != nil {
-		return fmt.Errorf("resolve input dir: %w", err)
-	}
 	if err := c.copyImages(doc.HTML, srcDir); err != nil {
 		return fmt.Errorf("copy images: %w", err)
 	}
 
-	absOut, err := filepath.Abs(outputPath)
-	if err != nil {
-		return fmt.Errorf("resolve output path: %w", err)
-	}
-
-	switch strings.ToLower(c.cfg.Format) {
-	case "docx":
-		c.logf("Converting to DOCX with pandoc...")
-		if err := c.convertDOCX(htmlPath, absOut); err != nil {
-			return fmt.Errorf("convert docx: %w", err)
-		}
-	default:
-		c.logf("Printing PDF with headless Chromium...")
-		if err := c.printPDF(htmlPath, absOut); err != nil {
-			return fmt.Errorf("print pdf: %w", err)
-		}
+	c.logf("Printing PDF with headless Chromium...")
+	if err := c.printPDF(htmlPath, absOut); err != nil {
+		return fmt.Errorf("print pdf: %w", err)
 	}
 
 	return nil

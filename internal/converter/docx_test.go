@@ -53,21 +53,18 @@ func TestFindPandoc_AutoDetectFromPath(t *testing.T) {
 	}
 }
 
-func TestConvertDOCX_InvokesPandocWithExpectedArgs(t *testing.T) {
+func TestConvertMarkdownDOCX_InvokesPandocWithExpectedArgs(t *testing.T) {
 	skipOnWindows(t)
 	workDir := t.TempDir()
 	argsFile := filepath.Join(workDir, "args.txt")
 	bin := makeArgsRecordingPandoc(t, argsFile)
 
-	htmlPath := filepath.Join(workDir, "document.html")
-	if err := os.WriteFile(htmlPath, []byte("<h1>hi</h1>"), 0o644); err != nil {
-		t.Fatalf("write html: %v", err)
-	}
+	srcDir := t.TempDir()
 	docxPath := filepath.Join(workDir, "out.docx")
 
 	c := &Converter{cfg: &Config{PandocPath: bin}, workDir: workDir}
-	if err := c.convertDOCX(htmlPath, docxPath); err != nil {
-		t.Fatalf("convertDOCX: %v", err)
+	if err := c.convertMarkdownDOCX([]byte("# hi\n"), srcDir, docxPath); err != nil {
+		t.Fatalf("convertMarkdownDOCX: %v", err)
 	}
 
 	recorded, err := os.ReadFile(argsFile)
@@ -75,26 +72,27 @@ func TestConvertDOCX_InvokesPandocWithExpectedArgs(t *testing.T) {
 		t.Fatalf("read recorded args: %v", err)
 	}
 	args := string(recorded)
-	for _, want := range []string{htmlPath, "-f", "html", "-o", docxPath} {
+	mdPath := filepath.Join(workDir, "document.md")
+	for _, want := range []string{mdPath, "-f", "gfm", "-o", docxPath, "--resource-path", srcDir} {
 		if !strings.Contains(args, want) {
 			t.Errorf("pandoc args missing %q; got: %s", want, args)
 		}
 	}
+
+	// The Markdown must have been written to the working directory for pandoc.
+	if _, err := os.Stat(mdPath); err != nil {
+		t.Errorf("expected document.md to be written: %v", err)
+	}
 }
 
-func TestConvertDOCX_PropagatesPandocFailure(t *testing.T) {
+func TestConvertMarkdownDOCX_PropagatesPandocFailure(t *testing.T) {
 	skipOnWindows(t)
 	workDir := t.TempDir()
 	bin := filepath.Join(t.TempDir(), "pandoc")
 	writeShellScript(t, bin, 1, "pandoc: boom")
 
-	htmlPath := filepath.Join(workDir, "document.html")
-	if err := os.WriteFile(htmlPath, []byte("<h1>hi</h1>"), 0o644); err != nil {
-		t.Fatalf("write html: %v", err)
-	}
-
 	c := &Converter{cfg: &Config{PandocPath: bin}, workDir: workDir}
-	err := c.convertDOCX(htmlPath, filepath.Join(workDir, "out.docx"))
+	err := c.convertMarkdownDOCX([]byte("# hi\n"), t.TempDir(), filepath.Join(workDir, "out.docx"))
 	if err == nil {
 		t.Fatal("expected error when pandoc exits non-zero")
 	}
@@ -160,6 +158,56 @@ func TestAddTableBorders_PatchesStylesXMLOnly(t *testing.T) {
 	}
 	if entries["word/document.xml"] != other {
 		t.Errorf("document.xml should be untouched, got: %s", entries["word/document.xml"])
+	}
+}
+
+func TestSetThemeFonts_ReplacesLatinAndEastAsia(t *testing.T) {
+	const theme = `<a:majorFont><a:latin typeface="Aptos Display"/><a:ea typeface=""/></a:majorFont>` +
+		`<a:minorFont><a:latin typeface="Aptos"/><a:ea typeface=""/></a:minorFont>`
+
+	got := setThemeFonts(theme, "Yu Gothic")
+
+	if strings.Contains(got, `typeface=""`) {
+		t.Errorf("empty East Asian typeface should be filled, got: %s", got)
+	}
+	if strings.Contains(got, "Aptos") {
+		t.Errorf("Latin typeface should be replaced, got: %s", got)
+	}
+	if n := strings.Count(got, `typeface="Yu Gothic"`); n != 4 {
+		t.Errorf("expected 4 Yu Gothic typefaces, got %d: %s", n, got)
+	}
+}
+
+func TestSetBodyFontSize_OnlyTouchesDocDefaults(t *testing.T) {
+	const styles = `<w:docDefaults><w:rPrDefault><w:rPr>` +
+		`<w:sz w:val="24" /><w:szCs w:val="24" /></w:rPr></w:rPrDefault></w:docDefaults>` +
+		`<w:style w:styleId="Heading1"><w:rPr><w:sz w:val="40" /></w:rPr></w:style>`
+
+	got := setBodyFontSize(styles, "21")
+
+	if !strings.Contains(got, `<w:sz w:val="21" />`) || !strings.Contains(got, `<w:szCs w:val="21" />`) {
+		t.Errorf("docDefaults size should become 21, got: %s", got)
+	}
+	if !strings.Contains(got, `<w:sz w:val="40" />`) {
+		t.Errorf("heading size outside docDefaults must be untouched, got: %s", got)
+	}
+}
+
+func TestShrinkHeadings_ResizesHeadingsNotTitle(t *testing.T) {
+	const styles = `<w:style w:styleId="Heading1"><w:rPr><w:sz w:val="40" /><w:szCs w:val="40" /></w:rPr></w:style>` +
+		`<w:style w:styleId="Heading2"><w:rPr><w:sz w:val="32" /></w:rPr></w:style>` +
+		`<w:style w:styleId="Title"><w:rPr><w:sz w:val="56" /></w:rPr></w:style>`
+
+	got := shrinkHeadings(styles)
+
+	if !strings.Contains(got, `<w:style w:styleId="Heading1"><w:rPr><w:sz w:val="32" /><w:szCs w:val="32" />`) {
+		t.Errorf("Heading1 should shrink to 32, got: %s", got)
+	}
+	if !strings.Contains(got, `<w:style w:styleId="Heading2"><w:rPr><w:sz w:val="26" />`) {
+		t.Errorf("Heading2 should shrink to 26, got: %s", got)
+	}
+	if !strings.Contains(got, `<w:sz w:val="56" />`) {
+		t.Errorf("Title must keep its size, got: %s", got)
 	}
 }
 

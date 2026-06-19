@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 )
 
 // mermaidImageSubdir is the working-directory subdirectory that holds PNGs
@@ -17,9 +16,10 @@ const mermaidImageSubdir = "_md2pdf_mermaid"
 // mermaidBackground is the background colour passed to mmdc for rendered diagrams.
 const mermaidBackground = "white"
 
-// mermaidPNGScale scales raster (PNG) diagram output up so it stays sharp when
-// embedded in a document.
-const mermaidPNGScale = "2"
+// mermaidPNGScale is the mmdc device-pixel-ratio passed via -s. It scales raster
+// (PNG) diagram output up so it stays sharp when embedded in a document or
+// enlarged for print.
+const mermaidPNGScale = "4"
 
 // puppeteerConfig is the JSON structure written for mmdc's -p flag.
 type puppeteerConfig struct {
@@ -29,7 +29,8 @@ type puppeteerConfig struct {
 
 // renderMermaid iterates over all Mermaid blocks in doc, writes each source to
 // a .mmd temp file, invokes mmdc to produce an SVG, and stores the SVG content
-// back into the block's SVGContent field.
+// back into the block's SVGContent field. It is used for PDF output, which
+// inlines the crisp SVG; DOCX output renders rasterised PNGs separately.
 func (c *Converter) renderMermaid(doc *parsedDoc) error {
 	if len(doc.mermaidBlocks) == 0 {
 		return nil
@@ -38,21 +39,6 @@ func (c *Converter) renderMermaid(doc *parsedDoc) error {
 	pcfgPath, err := c.ensurePuppeteerConfig()
 	if err != nil {
 		return fmt.Errorf("puppeteer config: %w", err)
-	}
-
-	// DOCX output embeds raster images, since Word cannot reliably display the
-	// inline/standalone SVG that pandoc produces from HTML. PDF output keeps the
-	// crisp inline SVG.
-	if strings.EqualFold(c.cfg.Format, "docx") {
-		for i, block := range doc.mermaidBlocks {
-			name, err := c.renderSingleDiagramPNG(i, block.Source, pcfgPath)
-			if err != nil {
-				return fmt.Errorf("diagram %d: %w", i, err)
-			}
-			block.ImagePath = name
-			c.logf("  diagram %d rendered to PNG (%s)", i, name)
-		}
-		return nil
 	}
 
 	for i, block := range doc.mermaidBlocks {
