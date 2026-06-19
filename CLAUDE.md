@@ -37,15 +37,17 @@ The conversion pipeline flows through four stages in `internal/converter/`:
 1. **parser.go** — goldmark parses Markdown to HTML, extracting fenced Mermaid code blocks into a `parsedDoc` struct with placeholders
 2. **mermaid.go** — each Mermaid block is rendered to SVG via the external `mmdc` CLI
 3. **html.go** — assembles a self-contained HTML file with GitHub CSS, `@font-face` declarations, and inlined SVGs
-4. **pdf.go** — headless Chromium (via Playwright Python driver) prints the HTML to PDF
+4. Final stage — selected by `Config.Format`:
+   - **pdf.go** (default) — headless Chromium (via Playwright Python driver) prints the HTML to PDF
+   - **docx.go** — the external `pandoc` CLI converts the assembled HTML to DOCX (run with the working directory set so relative image paths resolve). Note: pandoc's HTML→DOCX path does not reliably embed Mermaid SVGs, so diagrams may be dropped in DOCX output.
 
-**converter.go** orchestrates the pipeline and manages a temporary working directory for intermediate files. **Config** struct holds all runtime options.
+**converter.go** orchestrates the pipeline and manages a temporary working directory for intermediate files. **Config** struct holds all runtime options including `Format` ("pdf"|"docx").
 
-**cmd/md2pdf/** — CLI entry point. `flags.go` handles argument parsing and auto-detection of font/mmdc paths. `main.go` wires flags to the converter.
+**cmd/md2pdf/** — CLI entry point. `flags.go` handles argument parsing and auto-detection of font/mmdc/pandoc paths; `resolveFormat` derives the output format from `-format` or the `-o` extension. `main.go` wires flags to the converter.
 
 ## External Dependencies
 
-Runtime: `mmdc` (Mermaid CLI via npm), Python 3 + Playwright + Chromium, Noto Sans CJK JP fonts.
+Runtime: `mmdc` (Mermaid CLI via npm), Python 3 + Playwright + Chromium, Noto Sans CJK JP fonts. DOCX output additionally requires `pandoc`.
 Go modules: `github.com/yuin/goldmark` (Markdown parsing).
 
 ## Code Style

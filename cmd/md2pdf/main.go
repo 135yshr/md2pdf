@@ -17,6 +17,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/135yshr/md2pdf/internal/converter"
 )
@@ -48,5 +49,5 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("PDF saved to %s\n", cfg.OutputFile)
+	fmt.Printf("%s saved to %s\n", strings.ToUpper(cfg.Format), cfg.OutputFile)
 }
