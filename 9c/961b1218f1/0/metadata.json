@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.5.1",
+  "checkpoint_id": "9c961b1218f1",
+  "session_id": "ccf2e70a-0589-4254-9311-8a6072186b57",
+  "strategy": "manual-commit",
+  "created_at": "2026-06-19T06:13:58.756233Z",
+  "branch": "refactor/converter-cleanup",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "internal/converter/mermaid.go"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-8[1m]",
+  "turn_id": "e96f258a14a5",
+  "checkpoint_transcript_start": 580,
+  "transcript_lines_at_start": 580,
+  "token_usage": {
+    "input_tokens": 794,
+    "cache_creation_tokens": 37555,
+    "cache_read_tokens": 4989167,
+    "output_tokens": 23953,
+    "api_call_count": 25
+  },
+  "session_metrics": {
+    "turn_count": 9
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-06-19T06:13:58.587973Z",
+    "agent_lines": 30,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 30,
+    "agent_percentage": 100
+  }
+}
