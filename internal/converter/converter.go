@@ -155,6 +155,12 @@ func (c *Converter) copyImages(html, srcDir string) error {
 			continue
 		}
 
+		// Skip diagrams md2pdf generated itself; they already live in the
+		// working directory and have no counterpart in the source tree.
+		if strings.HasPrefix(src, mermaidImageSubdir+"/") {
+			continue
+		}
+
 		// Decode percent-encoded paths (e.g. spaces as %20).
 		decoded, err := url.PathUnescape(src)
 		if err != nil {

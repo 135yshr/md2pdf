@@ -43,7 +43,7 @@ The conversion pipeline flows through four stages in `internal/converter/`:
 
 **converter.go** orchestrates the pipeline and manages a temporary working directory for intermediate files. **Config** struct holds all runtime options including `Format` ("pdf"|"docx").
 
-**cmd/md2pdf/** — CLI entry point. `flags.go` handles argument parsing and auto-detection of font/mmdc/pandoc paths; `resolveFormat` derives the output format from `-format` or the `-o` extension. `main.go` wires flags to the converter.
+**cmd/md2pdf/** — CLI entry point. `flags.go` handles argument parsing and auto-detection of font/mmdc paths; `resolveFormat` derives the output format from `-format` or the `-o` extension. Pandoc is resolved in `docx.go` (`findPandoc`) unless `-pandoc` is provided. `main.go` wires flags to the converter.
 
 ## External Dependencies
 

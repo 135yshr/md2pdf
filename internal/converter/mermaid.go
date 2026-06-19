@@ -9,6 +9,11 @@ import (
 	"strings"
 )
 
+// mermaidImageSubdir is the working-directory subdirectory that holds PNGs
+// rendered for DOCX output. The unusual name keeps generated diagrams from
+// colliding with user-supplied images copied by copyImages.
+const mermaidImageSubdir = "_md2pdf_mermaid"
+
 // puppeteerConfig is the JSON structure written for mmdc's -p flag.
 type puppeteerConfig struct {
 	ExecutablePath string   `json:"executablePath"`
@@ -58,9 +63,16 @@ func (c *Converter) renderMermaid(doc *parsedDoc) error {
 // produce a PNG inside the working directory, and returns the PNG's filename
 // (relative to the working directory) for embedding as an <img>.
 func (c *Converter) renderSingleDiagramPNG(idx int, source, puppeteerCfgPath string) (string, error) {
-	mmdFile := filepath.Join(c.workDir, fmt.Sprintf("diagram_%d.mmd", idx))
-	pngName := fmt.Sprintf("diagram_%d.png", idx)
-	pngFile := filepath.Join(c.workDir, pngName)
+	// Isolate generated diagrams in a dedicated subdirectory so they cannot be
+	// overwritten by user-supplied images that copyImages later copies into the
+	// working directory (e.g. a Markdown <img> referencing "diagram_0.png").
+	if err := os.MkdirAll(filepath.Join(c.workDir, mermaidImageSubdir), 0o755); err != nil {
+		return "", fmt.Errorf("create mermaid image dir: %w", err)
+	}
+
+	mmdFile := filepath.Join(c.workDir, mermaidImageSubdir, fmt.Sprintf("diagram_%d.mmd", idx))
+	pngRel := filepath.ToSlash(filepath.Join(mermaidImageSubdir, fmt.Sprintf("diagram_%d.png", idx)))
+	pngFile := filepath.Join(c.workDir, filepath.FromSlash(pngRel))
 
 	if err := os.WriteFile(mmdFile, []byte(source), 0o644); err != nil {
 		return "", fmt.Errorf("write .mmd file: %w", err)
@@ -86,7 +98,7 @@ func (c *Converter) renderSingleDiagramPNG(idx int, source, puppeteerCfgPath str
 	if _, err := os.Stat(pngFile); err != nil {
 		return "", fmt.Errorf("mmdc did not produce PNG output: %w", err)
 	}
-	return pngName, nil
+	return pngRel, nil
 }
 
 // renderSingleDiagram writes the Mermaid source to a temp file, runs mmdc, and

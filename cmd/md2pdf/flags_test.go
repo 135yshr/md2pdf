@@ -90,4 +90,14 @@ func TestParseFlags_DefaultOutputExtensionFollowsFormat(t *testing.T) {
 			t.Errorf("OutputFile = %q, want %q", cfg.OutputFile, out)
 		}
 	})
+
+	t.Run("pandoc path passthrough", func(t *testing.T) {
+		cfg, err := parseFlags([]string{"-format", "docx", "-pandoc", "/custom/pandoc", input})
+		if err != nil {
+			t.Fatalf("parseFlags: %v", err)
+		}
+		if cfg.PandocPath != "/custom/pandoc" {
+			t.Errorf("PandocPath = %q, want %q", cfg.PandocPath, "/custom/pandoc")
+		}
+	})
 }
