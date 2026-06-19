@@ -1,3 +1,8 @@
+# [v0.4.3](https://github.com/135yshr/md2pdf/compare/v0.4.2...v0.4.3) (2026-06-19)
+
+## 🐛 Bug Fixes
+- [`2521fe0`](https://github.com/135yshr/md2pdf/commit/2521fe0)  fix: ensure Consent Mode v2 default runs before gtag config (#32) (Issues: [`#32`](https://github.com/135yshr/md2pdf/issues/32))
+
 # [v0.4.2](https://github.com/135yshr/md2pdf/compare/v0.4.1...v0.4.2) (2026-05-09)
 
 ## 🐛 Bug Fixes
