@@ -3,9 +3,9 @@
 > **Write in Markdown. Track in Git. Ship as PDF.**
 
 md2pdf is a CLI for turning the technical Markdown you already write — design
-docs, runbooks, security reports — into clean, deliverable PDFs. Mermaid
-diagrams render as inline SVG. Japanese (and other CJK) text renders without
-font breakage. Single Go binary, drop-in for CI.
+docs, runbooks, security reports — into clean, deliverable PDFs (or Word/DOCX).
+Mermaid diagrams render as inline SVG. Japanese (and other CJK) text renders
+without font breakage. Single Go binary, drop-in for CI.
 
 <p align="center">
   <img src="docs/images/comparison/after-md2pdf-japanese.png"
@@ -20,6 +20,7 @@ font breakage. Single Go binary, drop-in for CI.
 - 📐 **Mermaid diagrams as inline SVG** — vector-clean, no rasterization
 - 🇯🇵 **Japanese / CJK text out of the box** — Noto Sans CJK JP preconfigured
 - 📝 **GitHub-flavored Markdown** — tables, fenced code blocks, strikethrough
+- 📃 **PDF or DOCX output** — `-format docx` exports editable Word documents (via pandoc)
 - 🤖 **CI-friendly single binary** — `go install` and you're done
 - 📄 **Configurable** — page size, margins, fonts
 
@@ -58,6 +59,10 @@ npm install -g @mermaid-js/mermaid-cli
 # Playwright + Chromium (PDF generation)
 pip install playwright
 playwright install chromium
+
+# pandoc — only needed for DOCX output (-format docx)
+brew install pandoc          # macOS / Linux (Homebrew)
+# sudo apt install pandoc    # Ubuntu / Debian
 ```
 
 ### 3. Install fonts (optional)
@@ -80,14 +85,16 @@ sudo apt install fonts-noto-cjk
 md2pdf document.md
 ```
 
-A `document.pdf` file will be generated in the same directory.
+A `document.pdf` file will be generated in the same directory. To export Word
+instead, run `md2pdf -format docx document.md`.
 
 ## Requirements Summary
 
 | Dependency | Purpose | Install |
 |---|---|---|
-| [mmdc](https://github.com/mermaid-js/mermaid-cli) | Mermaid → SVG | `npm install -g @mermaid-js/mermaid-cli` |
+| [mmdc](https://github.com/mermaid-js/mermaid-cli) | Mermaid → SVG/PNG | `npm install -g @mermaid-js/mermaid-cli` |
 | Python 3 + [Playwright](https://playwright.dev/python/) | HTML → PDF | `pip install playwright && playwright install chromium` |
+| [pandoc](https://pandoc.org/) | HTML → DOCX (only for `-format docx`) | `brew install pandoc` / `apt install pandoc` |
 | Noto Sans CJK JP | Japanese font (optional) | See above |
 | Go 1.26+ | Build from source only | https://go.dev |
 
@@ -101,11 +108,13 @@ md2pdf [options] <input.md>
 
 | Flag | Default | Description |
 |---|---|---|
-| `-o <path>` | `<input>.pdf` | Output PDF path |
+| `-o <path>` | `<input>.pdf` | Output path (`.docx` extension implies `-format docx`) |
+| `-format <fmt>` | `pdf` | Output format: `pdf` or `docx` (inferred from `-o` extension when omitted) |
 | `-font <path>` | auto-detected | Noto Sans CJK JP Regular font |
 | `-font-bold <path>` | auto-detected | Noto Sans CJK JP Bold font |
 | `-font-medium <path>` | auto-detected | Noto Sans CJK JP Medium font |
 | `-mmdc <path>` | auto-detected | Path to `mmdc` binary |
+| `-pandoc <path>` | auto-detected | Path to `pandoc` binary (used for `-format docx`) |
 | `-python <path>` | auto-detected | Python 3 interpreter with `playwright` installed (env: `MD2PDF_PYTHON`) |
 | `-puppeteer-config <f>` | auto-generated | Puppeteer JSON config for mmdc |
 | `-page-size <size>` | `A4` | `A4`, `Letter`, or `A3` |
@@ -124,6 +133,10 @@ md2pdf document.md
 
 # Custom output path
 md2pdf -o report.pdf document.md
+
+# Export to Word (DOCX)
+md2pdf -format docx document.md
+md2pdf -o report.docx document.md   # format inferred from extension
 
 # Explicit font path
 md2pdf -font /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc document.md
@@ -150,15 +163,20 @@ flowchart TD
     A["Markdown (.md)"] --> B[goldmark parser]
     B --> C[HTML builder]
     B -->|extracts Mermaid blocks| D[mmdc CLI]
-    D -->|SVG| C
-    C -->|"injects SVGs + GitHub CSS + @font-face"| E["Playwright / Chromium"]
-    E --> F[PDF output]
+    D -->|SVG / PNG| C
+    C --> E{format?}
+    E -->|pdf| F["Playwright / Chromium"]
+    F --> G[PDF output]
+    E -->|docx| H[pandoc]
+    H --> I[DOCX output]
 ```
 
 1. **Parse** — goldmark converts Markdown to HTML (GFM tables, fenced code blocks). Mermaid code blocks are extracted and replaced with placeholders.
-2. **Render diagrams** — each Mermaid block is rendered to SVG via the `mmdc` CLI.
-3. **Build HTML** — a self-contained HTML file is assembled with GitHub-flavored CSS, `@font-face` declarations for Noto Sans CJK JP, and the rendered SVGs injected inline.
-4. **Print PDF** — a headless Chromium browser (via Playwright) loads the HTML and prints it to PDF.
+2. **Render diagrams** — each Mermaid block is rendered via the `mmdc` CLI: to inline SVG for PDF, or to a PNG image for DOCX (Word cannot reliably display pandoc-embedded SVG).
+3. **Build HTML** — a self-contained HTML file is assembled with GitHub-flavored CSS, `@font-face` declarations for Noto Sans CJK JP, and the rendered diagrams injected inline.
+4. **Render output**:
+   - **PDF** (default) — a headless Chromium browser (via Playwright) loads the HTML and prints it to PDF.
+   - **DOCX** — `pandoc` converts the HTML to a Word document, using a generated reference document so GFM tables render with visible borders.
 
 ## Comparison with other tools
 
