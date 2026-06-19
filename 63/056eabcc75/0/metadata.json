@@ -1,0 +1,40 @@
+{
+  "cli_version": "0.5.1",
+  "checkpoint_id": "63056eabcc75",
+  "session_id": "ccf2e70a-0589-4254-9311-8a6072186b57",
+  "strategy": "manual-commit",
+  "created_at": "2026-06-19T05:50:46.54594Z",
+  "branch": "feat/docx-output",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "README.md",
+    "website/content/doc/usage.md",
+    "website/content/doc/getting-started.md",
+    "website/content/doc/architecture.md",
+    "website/layouts/index.html"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-8[1m]",
+  "turn_id": "771cb62c6ce1",
+  "checkpoint_transcript_start": 341,
+  "transcript_lines_at_start": 341,
+  "token_usage": {
+    "input_tokens": 715,
+    "cache_creation_tokens": 28158,
+    "cache_read_tokens": 5398857,
+    "output_tokens": 15684,
+    "api_call_count": 35
+  },
+  "session_metrics": {
+    "turn_count": 5
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-06-19T05:50:46.377968Z",
+    "agent_lines": 81,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 81,
+    "agent_percentage": 100
+  }
+}
