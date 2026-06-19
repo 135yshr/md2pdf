@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.5.1",
+  "checkpoint_id": "87ea4e680115",
+  "strategy": "manual-commit",
+  "branch": "feat/docx-markdown-native",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "CLAUDE.md",
+    "README.md",
+    "cmd/md2pdf/flags.go",
+    "internal/converter/converter.go",
+    "internal/converter/docx.go",
+    "internal/converter/docx_test.go",
+    "internal/converter/mermaid.go",
+    "internal/converter/mermaid_markdown.go",
+    "internal/converter/mermaid_markdown_test.go"
+  ],
+  "sessions": [
+    {
+      "metadata": "/87/ea4e680115/0/metadata.json",
+      "transcript": "/87/ea4e680115/0/full.jsonl",
+      "content_hash": "/87/ea4e680115/0/content_hash.txt",
+      "prompt": "/87/ea4e680115/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 22273,
+    "cache_creation_tokens": 231023,
+    "cache_read_tokens": 9304048,
+    "output_tokens": 80836,
+    "api_call_count": 78
+  }
+}

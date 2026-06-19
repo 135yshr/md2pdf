@@ -1,0 +1,42 @@
+{
+  "cli_version": "0.5.1",
+  "checkpoint_id": "87ea4e680115",
+  "session_id": "c12f9db1-2437-4716-bbad-f5b5b5e0bfe0",
+  "strategy": "manual-commit",
+  "created_at": "2026-06-19T10:33:49.199854Z",
+  "branch": "feat/docx-markdown-native",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "CLAUDE.md",
+    "README.md",
+    "cmd/md2pdf/flags.go",
+    "internal/converter/converter.go",
+    "internal/converter/docx.go",
+    "internal/converter/docx_test.go",
+    "internal/converter/mermaid.go",
+    "internal/converter/mermaid_markdown.go",
+    "internal/converter/mermaid_markdown_test.go"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-8[1m]",
+  "turn_id": "3d954bfdec40",
+  "token_usage": {
+    "input_tokens": 22273,
+    "cache_creation_tokens": 231023,
+    "cache_read_tokens": 9304048,
+    "output_tokens": 80836,
+    "api_call_count": 78
+  },
+  "session_metrics": {
+    "turn_count": 4
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-06-19T10:33:49.070892Z",
+    "agent_lines": 567,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 567,
+    "agent_percentage": 100
+  }
+}
