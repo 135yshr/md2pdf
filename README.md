@@ -115,6 +115,7 @@ md2pdf [options] <input.md>
 | `-font-medium <path>` | auto-detected | Noto Sans CJK JP Medium font |
 | `-mmdc <path>` | auto-detected | Path to `mmdc` binary |
 | `-pandoc <path>` | auto-detected | Path to `pandoc` binary (used for `-format docx`) |
+| `-docx-font <family>` | `Yu Gothic` | Font family for DOCX output (Latin + East Asian) |
 | `-python <path>` | auto-detected | Python 3 interpreter with `playwright` installed (env: `MD2PDF_PYTHON`) |
 | `-puppeteer-config <f>` | auto-generated | Puppeteer JSON config for mmdc |
 | `-page-size <size>` | `A4` | `A4`, `Letter`, or `A3` |
@@ -160,23 +161,22 @@ md2pdf -v document.md
 
 ```mermaid
 flowchart TD
-    A["Markdown (.md)"] --> B[goldmark parser]
+    A["Markdown (.md)"] --> E{format?}
+    E -->|pdf| B[goldmark parser]
     B --> C[HTML builder]
     B -->|extracts Mermaid blocks| D[mmdc CLI]
-    D -->|SVG / PNG| C
-    C --> E{format?}
-    E -->|pdf| F["Playwright / Chromium"]
+    D -->|inline SVG| C
+    C --> F["Playwright / Chromium"]
     F --> G[PDF output]
-    E -->|docx| H[pandoc]
+    E -->|docx| J[Mermaid → PNG]
+    J --> H["pandoc (gfm reader)"]
     H --> I[DOCX output]
 ```
 
-1. **Parse** — goldmark converts Markdown to HTML (GFM tables, fenced code blocks). Mermaid code blocks are extracted and replaced with placeholders.
-2. **Render diagrams** — each Mermaid block is rendered via the `mmdc` CLI: to inline SVG for PDF, or to a PNG image for DOCX (Word cannot reliably display pandoc-embedded SVG).
-3. **Build HTML** — a self-contained HTML file is assembled with GitHub-flavored CSS, `@font-face` declarations for Noto Sans CJK JP, and the rendered diagrams injected inline.
-4. **Render output**:
-   - **PDF** (default) — a headless Chromium browser (via Playwright) loads the HTML and prints it to PDF.
-   - **DOCX** — `pandoc` converts the HTML to a Word document, using a generated reference document so GFM tables render with visible borders.
+PDF and DOCX take separate paths so each format reads from the source that renders best.
+
+- **PDF** (default) — goldmark converts Markdown to HTML (GFM tables, fenced code blocks), Mermaid blocks are rendered to inline SVG via `mmdc`, a self-contained HTML file is assembled with GitHub-flavored CSS and `@font-face` declarations for Noto Sans CJK JP, and a headless Chromium browser (via Playwright) prints it to PDF.
+- **DOCX** — the Markdown is sent **directly to `pandoc`** (its `gfm` reader, no HTML in between), so pandoc produces clean, Word-native paragraph and list styles. Mermaid blocks are rasterised to PNG and spliced back in as image references (Word cannot reliably display pandoc-embedded SVG). A generated reference document gives the output a readable, Japanese-friendly look: a 10.5pt body, compact blue headings, bordered GFM tables, and the `Yu Gothic` font (override with `-docx-font`).
 
 ## Comparison with other tools
 

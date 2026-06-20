@@ -47,6 +47,7 @@ func parseFlags(args []string) (*converter.Config, error) {
 	fontMedium := fs.String("font-medium", "", "Path to Noto Sans CJK JP Medium .ttc/.ttf font file")
 	mmdcPath := fs.String("mmdc", "", "Path to mmdc binary (Mermaid CLI)")
 	pandocPath := fs.String("pandoc", "", "Path to pandoc binary (used for -format docx)")
+	docxFont := fs.String("docx-font", "", "Font family for DOCX output (default: Yu Gothic)")
 	pythonPath := fs.String("python", "", "Path to Python 3 interpreter with the playwright package (overrides MD2PDF_PYTHON)")
 	puppeteerCfg := fs.String("puppeteer-config", "", "Path to Puppeteer JSON config file for mmdc (auto-created if omitted)")
 	pageSize := fs.String("page-size", "A4", "PDF page size: A4, Letter, A3")
@@ -135,6 +136,7 @@ func parseFlags(args []string) (*converter.Config, error) {
 		FontMedium:      medium,
 		MmdcPath:        mmdc,
 		PandocPath:      *pandocPath,
+		DOCXFont:        *docxFont,
 		PythonPath:      python,
 		PuppeteerConfig: *puppeteerCfg,
 		PageSize:        *pageSize,
@@ -205,6 +207,7 @@ Options:
   -font-medium <path>     Noto Sans CJK JP Medium font
   -mmdc <path>            Path to mmdc (Mermaid CLI) binary
   -pandoc <path>          Path to pandoc binary (used for -format docx)
+  -docx-font <family>     Font family for DOCX output (default: Yu Gothic)
   -python <path>          Path to Python 3 interpreter with the playwright
                           package (env: MD2PDF_PYTHON)
   -puppeteer-config <f>   Path to Puppeteer JSON config for mmdc
