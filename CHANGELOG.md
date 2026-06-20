@@ -1,3 +1,8 @@
+# [v0.6.0](https://github.com/135yshr/md2pdf/compare/v0.5.0...v0.6.0) (2026-06-20)
+
+## ✨ New Features
+- [`828b073`](https://github.com/135yshr/md2pdf/commit/828b073)  feat: generate DOCX directly from Markdown (#34) (Issues: [`#34`](https://github.com/135yshr/md2pdf/issues/34))
+
 # [v0.5.0](https://github.com/135yshr/md2pdf/compare/v0.4.3...v0.5.0) (2026-06-19)
 
 ## ✨ New Features
