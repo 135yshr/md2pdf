@@ -83,13 +83,13 @@ func (c *Converter) buildHTML(doc *parsedDoc, destPath string) error {
 func (c *Converter) buildCSS() (string, error) {
 	var fontFaces string
 	if c.cfg.FontRegular != "" {
-		fontFaces += fontFace("Noto Sans JP", 400, c.cfg.FontRegular)
+		fontFaces += fontFace("Noto Sans JP", 400, c.cfg.FontRegular, c.cfg.FontLocalRegular)
 	}
 	if c.cfg.FontMedium != "" {
-		fontFaces += fontFace("Noto Sans JP", 500, c.cfg.FontMedium)
+		fontFaces += fontFace("Noto Sans JP", 500, c.cfg.FontMedium, c.cfg.FontLocalMedium)
 	}
 	if c.cfg.FontBold != "" {
-		fontFaces += fontFace("Noto Sans JP", 700, c.cfg.FontBold)
+		fontFaces += fontFace("Noto Sans JP", 700, c.cfg.FontBold, c.cfg.FontLocalBold)
 	}
 
 	custom, err := c.readCustomCSS()
@@ -124,16 +124,30 @@ func (c *Converter) readCustomCSS() (string, error) {
 	return sb.String(), nil
 }
 
-// fontFace returns a single @font-face rule for the given family, weight and path.
-func fontFace(family string, weight int, path string) string {
+// fontFace returns a single @font-face rule for the given family, weight and
+// path, preceded by any installed face names to try first.
+//
+// The local names come first because a font collection holds every weight in
+// one file and CSS cannot name a face inside it: Noto Sans CJK's NotoSansCJK.ttc
+// carries 45 faces and starts with Thin, so a url() renders the whole document
+// in Thin however the rule is weighted. A local() name lets the system font
+// manager pick the requested weight instead. The url() stays last so a font the
+// system does not know about is still loaded from disk.
+func fontFace(family string, weight int, path string, locals []string) string {
+	sources := make([]string, 0, len(locals)+1)
+	for _, name := range locals {
+		sources = append(sources, fmt.Sprintf("local('%s')", name))
+	}
+	sources = append(sources, fmt.Sprintf("url('file://%s') format('truetype')", path))
+
 	return fmt.Sprintf(`
   @font-face {
     font-family: '%s';
     font-weight: %d;
     font-style: normal;
-    src: url('file://%s') format('truetype');
+    src: %s;
   }
-`, family, weight, path)
+`, family, weight, strings.Join(sources, ", "))
 }
 
 // baseCSS is the GitHub-flavored Markdown stylesheet.

@@ -52,6 +52,19 @@ type Config struct {
 	FontBold string
 	// FontMedium is the file path to the Noto Sans CJK JP Medium font.
 	FontMedium string
+	// FontLocalRegular names the installed faces to try before the font file
+	// itself, most specific first. Empty leaves the file as the only source.
+	//
+	// The list exists because a font collection carries every weight in a
+	// single file and CSS has no syntax for a face inside one, so a url()
+	// resolves to the collection's first face whatever weight the rule
+	// declares. Naming the face with local() hands the choice to the system
+	// font manager, which can address it.
+	FontLocalRegular []string
+	// FontLocalBold is the same list for the bold weight.
+	FontLocalBold []string
+	// FontLocalMedium is the same list for the medium weight.
+	FontLocalMedium []string
 	// MmdcPath is the path to the mmdc (Mermaid CLI) binary.
 	MmdcPath string
 	// PandocPath is the path to the pandoc binary used for DOCX output.
