@@ -1,31 +1,48 @@
 ---
 title: "Architecture"
-description: "How md2pdf converts Markdown to PDF or DOCX — the four-stage pipeline."
+description: "How md2pdf converts Markdown to PDF, DOCX, or terminal output — the pipelines behind each format."
 weight: 30
 ---
 
-md2pdf converts Markdown to PDF or DOCX through a four-stage pipeline. The first
-three stages are shared; the final stage is selected by the output format.
+md2pdf reads Markdown once and then branches on `-format`. Each format has its
+own pipeline, because each renders best from a different source.
 
-## Pipeline overview
+## PDF pipeline (Markdown → HTML → Chromium)
 
 1. **Parse** — goldmark converts Markdown to HTML with GFM extensions (tables, fenced code blocks, strikethrough). Mermaid code blocks are extracted and replaced with placeholders.
-2. **Render diagrams** — each Mermaid block is rendered via the `mmdc` CLI: to inline SVG for PDF, or to a PNG image for DOCX (Word cannot reliably display pandoc-embedded SVG).
+2. **Render diagrams** — each Mermaid block is rendered to inline SVG via the `mmdc` CLI.
 3. **Build HTML** — a self-contained HTML file is assembled with GitHub-flavored CSS, `@font-face` declarations for Noto Sans CJK JP, and the rendered diagrams injected inline.
-4. **Render output** — depending on `-format`:
-   - **PDF** (default): a headless Chromium browser (via Playwright) loads the HTML and prints it to PDF.
-   - **DOCX**: `pandoc` converts the HTML to a Word document, using a generated reference document so GFM tables render with visible borders.
+4. **Print** — a headless Chromium browser (via Playwright) loads the HTML and prints it to PDF.
+
+## DOCX pipeline (Markdown → pandoc)
+
+DOCX is produced **directly from Markdown** by pandoc's `gfm` reader, with no
+HTML in between, so pandoc emits clean, Word-native paragraph and list styles.
+Mermaid blocks are rasterised to PNG and spliced back in as image references
+(Word cannot reliably display pandoc-embedded SVG). A generated reference
+document supplies the styling: bordered GFM tables, a 10.5pt body, compact
+headings, and a Japanese-friendly font.
+
+## Console pipeline (Markdown → glamour → terminal)
+
+Console output is rendered **directly from Markdown** to styled ANSI text by
+[glamour](https://github.com/charmbracelet/glamour), the goldmark-based renderer
+behind [glow](https://github.com/charmbracelet/glow). The wrap width follows the
+terminal, the theme follows the terminal background, and the result is paged
+through `$PAGER`. No external tools are involved, and Mermaid blocks stay
+visible as their source.
 
 ## Source layout
 
 ```
 internal/converter/
-  converter.go   # Orchestrates the pipeline, manages temp directory
-  parser.go      # Stage 1 — goldmark parsing
-  mermaid.go     # Stage 2 — mmdc SVG/PNG rendering
-  html.go        # Stage 3 — HTML assembly
-  pdf.go         # Stage 4 (pdf) — Chromium PDF printing
-  docx.go        # Stage 4 (docx) — pandoc DOCX conversion
+  converter.go   # Orchestrates the pipelines, manages temp directory
+  parser.go      # goldmark parsing
+  mermaid.go     # mmdc SVG/PNG rendering
+  html.go        # HTML assembly
+  pdf.go         # PDF — Chromium PDF printing
+  docx.go        # DOCX — pandoc conversion and reference-doc styling
+  console.go     # Console — glamour ANSI rendering, width/theme/pager handling
 
 cmd/md2pdf/
   main.go        # CLI entry point
@@ -39,5 +56,6 @@ cmd/md2pdf/
 | [goldmark](https://github.com/yuin/goldmark) | Markdown to HTML (Go library) |
 | [mmdc](https://github.com/mermaid-js/mermaid-cli) | Mermaid diagram rendering |
 | [Playwright](https://playwright.dev/python/) + Chromium | HTML to PDF |
-| [pandoc](https://pandoc.org/) | HTML to DOCX (only for `-format docx`) |
+| [pandoc](https://pandoc.org/) | Markdown to DOCX (only for `-format docx`) |
+| [glamour](https://github.com/charmbracelet/glamour) | Markdown to styled ANSI text (Go library, `-format console`) |
 | Noto Sans CJK JP | Japanese font support |

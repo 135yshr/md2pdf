@@ -41,7 +41,7 @@ func parseFlags(args []string) (*converter.Config, error) {
 	fs.SetOutput(os.Stderr)
 
 	output := fs.String("o", "", "Output file path (default: <input>.pdf, or .docx with -format docx)")
-	format := fs.String("format", "", "Output format: pdf (default) or docx (inferred from -o extension when omitted)")
+	format := fs.String("format", "", "Output format: pdf (default), docx or console (inferred from -o extension when omitted)")
 	fontRegular := fs.String("font", "", "Path to Noto Sans CJK JP Regular .ttc/.ttf font file")
 	fontBold := fs.String("font-bold", "", "Path to Noto Sans CJK JP Bold .ttc/.ttf font file")
 	fontMedium := fs.String("font-medium", "", "Path to Noto Sans CJK JP Medium .ttc/.ttf font file")
@@ -51,6 +51,9 @@ func parseFlags(args []string) (*converter.Config, error) {
 	pythonPath := fs.String("python", "", "Path to Python 3 interpreter with the playwright package (overrides MD2PDF_PYTHON)")
 	puppeteerCfg := fs.String("puppeteer-config", "", "Path to Puppeteer JSON config file for mmdc (auto-created if omitted)")
 	pageSize := fs.String("page-size", "A4", "PDF page size: A4, Letter, A3")
+	consoleWidth := fs.Int("width", 0, "Console word-wrap width in columns (0: follow terminal, max 120)")
+	consoleStyle := fs.String("style", "", "Console color theme: auto (default), dark, light, notty, ... or a JSON stylesheet path")
+	consolePager := fs.Bool("pager", true, "Send console output through $PAGER (default: less -R -F) on a terminal")
 	marginTop := fs.String("margin-top", "18mm", "Top margin (e.g. 18mm, 1in)")
 	marginBottom := fs.String("margin-bottom", "18mm", "Bottom margin")
 	marginLeft := fs.String("margin-left", "14mm", "Left margin")
@@ -87,10 +90,22 @@ func parseFlags(args []string) (*converter.Config, error) {
 	}
 
 	// Resolve output path, defaulting the extension to the chosen format.
+	// Console format writes to standard output and needs no path.
 	out := *output
-	if out == "" {
+	if out == "" && outFormat != converter.FormatConsole {
 		base := strings.TrimSuffix(input, filepath.Ext(input))
 		out = base + "." + outFormat
+	}
+
+	// Validate the console-only options up front so a bad value fails before
+	// any rendering work starts.
+	if outFormat == converter.FormatConsole {
+		if *consoleWidth < 0 {
+			return nil, fmt.Errorf("-width must be zero or positive, got %d", *consoleWidth)
+		}
+		if err := converter.ValidateConsoleStyle(*consoleStyle); err != nil {
+			return nil, err
+		}
 	}
 
 	// Resolve font paths.
@@ -144,6 +159,9 @@ func parseFlags(args []string) (*converter.Config, error) {
 		MarginBottom:    *marginBottom,
 		MarginLeft:      *marginLeft,
 		MarginRight:     *marginRight,
+		ConsoleWidth:    *consoleWidth,
+		ConsoleStyle:    *consoleStyle,
+		ConsolePager:    *consolePager,
 		Verbose:         *verbose,
 	}, nil
 }
@@ -151,31 +169,50 @@ func parseFlags(args []string) (*converter.Config, error) {
 // resolveFormat determines the output format from the explicit -format flag and
 // the -o path. The flag takes precedence; otherwise the format is inferred from
 // the output file extension, defaulting to pdf. It returns an error when the two
-// disagree or when an unsupported format is requested.
+// disagree or when an unsupported format is requested. Console format renders to
+// the terminal, so it cannot be combined with -o.
 func resolveFormat(format, output string) (string, error) {
 	fromExt := ""
 	switch strings.ToLower(filepath.Ext(output)) {
 	case ".pdf":
-		fromExt = "pdf"
+		fromExt = converter.FormatPDF
 	case ".docx":
-		fromExt = "docx"
+		fromExt = converter.FormatDOCX
 	}
 
 	if format == "" {
 		if fromExt != "" {
 			return fromExt, nil
 		}
-		return "pdf", nil
+		return converter.FormatPDF, nil
 	}
 
-	normalized := strings.ToLower(format)
-	if normalized != "pdf" && normalized != "docx" {
-		return "", fmt.Errorf("unsupported output format %q: must be pdf or docx", format)
+	normalized := normalizeFormat(format)
+	switch normalized {
+	case converter.FormatPDF, converter.FormatDOCX:
+	case converter.FormatConsole:
+		if output != "" {
+			return "", errors.New("-format console renders to the terminal; remove -o")
+		}
+		return converter.FormatConsole, nil
+	default:
+		return "", fmt.Errorf("unsupported output format %q: must be pdf, docx or console", format)
 	}
+
 	if fromExt != "" && fromExt != normalized {
 		return "", fmt.Errorf("output extension .%s conflicts with -format %s", fromExt, normalized)
 	}
 	return normalized, nil
+}
+
+// normalizeFormat lowercases a -format value and folds the terminal aliases
+// onto the canonical console format name.
+func normalizeFormat(format string) string {
+	normalized := strings.ToLower(format)
+	if normalized == "term" || normalized == "terminal" {
+		return converter.FormatConsole
+	}
+	return normalized
 }
 
 // findFirst returns the first path from the list that exists on disk,
@@ -200,8 +237,9 @@ Usage:
 
 Options:
   -o <path>               Output path (default: <input>.pdf, or .docx with -format docx)
-  -format <fmt>           Output format: pdf (default) or docx
-                          (inferred from -o extension when omitted)
+  -format <fmt>           Output format: pdf (default), docx or console
+                          (console has the aliases term and terminal;
+                          inferred from -o extension when omitted)
   -font <path>            Noto Sans CJK JP Regular font (.ttc/.ttf)
   -font-bold <path>       Noto Sans CJK JP Bold font
   -font-medium <path>     Noto Sans CJK JP Medium font
@@ -216,6 +254,13 @@ Options:
   -margin-bottom <m>      Bottom margin (default: 18mm)
   -margin-left <m>        Left margin   (default: 14mm)
   -margin-right <m>       Right margin  (default: 14mm)
+  -width <cols>           Console word-wrap width (default: terminal width,
+                          capped at 120 columns)
+  -style <name|path>      Console color theme: auto (default), dark, light,
+                          notty, ascii, dracula, pink, tokyo-night, or a path
+                          to a JSON stylesheet (env: GLAMOUR_STYLE)
+  -pager                  Page console output through $PAGER on a terminal
+                          (default: true; use -pager=false to disable)
   -v                      Verbose output
   -version                Print version and exit
 
@@ -224,6 +269,9 @@ Examples:
   md2pdf -o report.pdf document.md
   md2pdf -format docx document.md
   md2pdf -o report.docx document.md
+  md2pdf -format console document.md
+  md2pdf -format console -style dark -width 100 document.md
+  md2pdf -format console -pager=false document.md | cat
   md2pdf -font /path/to/NotoSansCJK-Regular.ttc document.md
 `)
 }

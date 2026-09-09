@@ -25,6 +25,12 @@ func TestResolveFormat(t *testing.T) {
 		{"unknown extension defaults to pdf", "", "out.txt", "pdf", false},
 		{"unsupported format errors", "rtf", "", "", true},
 		{"conflicting flag and extension errors", "pdf", "out.docx", "", true},
+		{"console format", "console", "", "console", false},
+		{"console is case-insensitive", "Console", "", "console", false},
+		{"term is an alias for console", "term", "", "console", false},
+		{"terminal is an alias for console", "terminal", "", "console", false},
+		{"console rejects an output path", "console", "out.txt", "", true},
+		{"console rejects a pdf output path", "console", "out.pdf", "", true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -98,6 +104,82 @@ func TestParseFlags_DefaultOutputExtensionFollowsFormat(t *testing.T) {
 		}
 		if cfg.PandocPath != "/custom/pandoc" {
 			t.Errorf("PandocPath = %q, want %q", cfg.PandocPath, "/custom/pandoc")
+		}
+	})
+}
+
+func TestParseFlags_ConsoleFormat(t *testing.T) {
+	input := filepath.Join(t.TempDir(), "doc.md")
+	if err := os.WriteFile(input, []byte("# hi"), 0o644); err != nil {
+		t.Fatalf("write input: %v", err)
+	}
+
+	t.Run("defaults", func(t *testing.T) {
+		cfg, err := parseFlags([]string{"-format", "console", input})
+		if err != nil {
+			t.Fatalf("parseFlags: %v", err)
+		}
+		if cfg.Format != "console" {
+			t.Errorf("Format = %q, want console", cfg.Format)
+		}
+		if cfg.OutputFile != "" {
+			t.Errorf("OutputFile = %q, want empty for console output", cfg.OutputFile)
+		}
+		if cfg.ConsoleWidth != 0 {
+			t.Errorf("ConsoleWidth = %d, want 0 (follow terminal)", cfg.ConsoleWidth)
+		}
+		if cfg.ConsoleStyle != "" {
+			t.Errorf("ConsoleStyle = %q, want empty (auto)", cfg.ConsoleStyle)
+		}
+		if !cfg.ConsolePager {
+			t.Error("ConsolePager = false, want true by default")
+		}
+	})
+
+	t.Run("explicit options", func(t *testing.T) {
+		cfg, err := parseFlags([]string{
+			"-format", "term", "-width", "100", "-style", "dark", "-pager=false", input,
+		})
+		if err != nil {
+			t.Fatalf("parseFlags: %v", err)
+		}
+		if cfg.Format != "console" {
+			t.Errorf("Format = %q, want console", cfg.Format)
+		}
+		if cfg.ConsoleWidth != 100 {
+			t.Errorf("ConsoleWidth = %d, want 100", cfg.ConsoleWidth)
+		}
+		if cfg.ConsoleStyle != "dark" {
+			t.Errorf("ConsoleStyle = %q, want dark", cfg.ConsoleStyle)
+		}
+		if cfg.ConsolePager {
+			t.Error("ConsolePager = true, want false")
+		}
+	})
+
+	t.Run("rejects an unknown style", func(t *testing.T) {
+		_, err := parseFlags([]string{"-format", "console", "-style", "darkk", input})
+		if err == nil {
+			t.Fatal("expected an error for an unknown style, got nil")
+		}
+		if !strings.Contains(err.Error(), "unknown console style") {
+			t.Errorf("error = %v, want it to mention the unknown style", err)
+		}
+	})
+
+	t.Run("rejects a negative width", func(t *testing.T) {
+		if _, err := parseFlags([]string{"-format", "console", "-width", "-10", input}); err == nil {
+			t.Fatal("expected an error for a negative width, got nil")
+		}
+	})
+
+	t.Run("rejects an output path", func(t *testing.T) {
+		_, err := parseFlags([]string{"-format", "console", "-o", "out.txt", input})
+		if err == nil {
+			t.Fatal("expected an error when -o is combined with console, got nil")
+		}
+		if !strings.Contains(err.Error(), "-o") {
+			t.Errorf("error = %v, want it to mention -o", err)
 		}
 	})
 }
