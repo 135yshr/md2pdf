@@ -1,3 +1,8 @@
+# [v0.14.2](https://github.com/135yshr/md2pdf/compare/v0.14.1...v0.14.2) (2026-09-09)
+
+## 🐛 Bug Fixes
+- [`3217336`](https://github.com/135yshr/md2pdf/commit/3217336)  fix: render CJK bold instead of Thin for collection font installs (#63) (Issues: [`#63`](https://github.com/135yshr/md2pdf/issues/63) [`#61`](https://github.com/135yshr/md2pdf/issues/61) [`#62`](https://github.com/135yshr/md2pdf/issues/62) [`#61`](https://github.com/135yshr/md2pdf/issues/61) [`#61`](https://github.com/135yshr/md2pdf/issues/61) [`#61`](https://github.com/135yshr/md2pdf/issues/61) [`#61`](https://github.com/135yshr/md2pdf/issues/61) [`#61`](https://github.com/135yshr/md2pdf/issues/61))
+
 # [v0.14.1](https://github.com/135yshr/md2pdf/compare/v0.14.0...v0.14.1) (2026-09-09)
 
 ## 🐛 Bug Fixes
