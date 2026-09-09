@@ -22,20 +22,23 @@ sudo apt install fonts-noto-cjk   # Ubuntu/Debian
 ## Running Tests
 
 ```sh
-# Everything that needs no external dependencies
+# Every test. The integration test skips itself when its tools are absent.
 go test ./...
 
-# Adds the integration suite (requires mmdc, python3 playwright, chromium, CJK fonts)
-go test ./... -tags integration
+# Require the integration toolchain (mmdc, python3 playwright, chromium, CJK
+# fonts): a missing tool fails instead of skipping. This is what CI runs.
+MD2PDF_REQUIRE_INTEGRATION=1 go test ./...
 ```
 
 ## Pull Request Guidelines
 
 1. Fork the repository and create a branch from `main`.
 2. Keep commits focused — one logical change per commit.
-3. Add or update tests for any changed behaviour. A test that needs mmdc,
-   Playwright/Chromium or pandoc belongs behind the `integration` build tag;
-   everything else must pass with no external tools installed.
+3. Add or update tests for any changed behaviour. `go test ./...` must pass with
+   no external tools installed, so a test that needs mmdc, Playwright/Chromium
+   or pandoc should either skip when the tool is absent (see `requireTool`) or
+   drive a stub binary. Do not exclude tests from the run with `-run` filters or
+   build tags — that has silently dropped tests here before.
 4. Ensure `go test ./...` passes and `go vet ./...` reports no issues.
 5. Write commit messages in English in the imperative mood ("Add feature", not "Added feature").
 6. Open a pull request against `main` and fill in the PR template.

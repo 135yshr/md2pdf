@@ -416,11 +416,12 @@ Use `-v` to confirm which interpreter md2pdf is using.
 ## Running Tests
 
 ```sh
-# Everything that needs no external tools
+# Every test. The integration test skips itself when its tools are absent.
 go test ./...
 
-# Adds the integration suite (requires mmdc + python3 playwright)
-go test ./... -tags integration
+# Require the integration toolchain (mmdc + python3 playwright): a missing tool
+# now fails instead of skipping.
+MD2PDF_REQUIRE_INTEGRATION=1 go test ./...
 
 # With verbose output
 go test -v ./...
