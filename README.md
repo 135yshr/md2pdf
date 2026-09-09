@@ -215,9 +215,10 @@ gh issue view 30 --json body -q .body | md2pdf -o issue.pdf -
   **current directory**, since a piped document has no location of its own.
 - `-o` is **required** for `pdf` and `docx`, because there is no input filename
   to derive the output name from.
-- Empty input is an **error**, not an empty document. Empty standard input
-  almost always means the command upstream in the pipe produced nothing, and
-  failing loudly makes the pipeline fail too. Whitespace-only counts as empty.
+- Empty **standard input** is an error, not an empty document: an empty pipe
+  almost always means the command upstream produced nothing, and failing loudly
+  makes the pipeline fail too. Whitespace-only counts as empty. An empty *file*
+  is unaffected and still renders an empty document, as it always has.
 - Passing `-` when standard input is a terminal fails immediately rather than
   waiting silently for something to be typed.
 

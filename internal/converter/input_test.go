@@ -56,15 +56,26 @@ func TestReadInput_EmptyStdinIsAnError(t *testing.T) {
 	}
 }
 
-func TestReadInput_EmptyFileIsAnError(t *testing.T) {
+// TestReadInput_EmptyFileIsNotAnError is a regression guard. Before multi-input
+// support an empty file rendered an empty document and exited 0, and the
+// acceptance criteria require a single input path to behave as it did then. Only
+// an empty *pipe* is treated as a failure — see readInput's comment for why the
+// two differ.
+func TestReadInput_EmptyFileIsNotAnError(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "empty.md")
-	if err := os.WriteFile(path, []byte("\n"), 0o644); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-	c := newTestConverter(t, &Config{Format: FormatConsole})
-	if _, err := c.readInput(path); err == nil {
-		t.Error("expected an error for an empty file")
+	for _, content := range []string{"", "\n", "   \n\t\n"} {
+		path := filepath.Join(dir, "empty.md")
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		c := newTestConverter(t, &Config{Format: FormatConsole})
+		got, err := c.readInput(path)
+		if err != nil {
+			t.Errorf("readInput on an empty file returned %v, want nil", err)
+		}
+		if string(got) != content {
+			t.Errorf("readInput = %q, want %q", got, content)
+		}
 	}
 }
 
