@@ -80,6 +80,9 @@ type Config struct {
 	// ConsolePager sends console output through $PAGER (default: less -R -F)
 	// when writing to an interactive terminal.
 	ConsolePager bool
+	// MermaidRender selects how Mermaid blocks are drawn in console output:
+	// "auto" (default), "image" or "source".
+	MermaidRender string
 	// Verbose enables detailed progress logging.
 	Verbose bool
 }
@@ -88,6 +91,12 @@ type Config struct {
 type Converter struct {
 	cfg     *Config
 	workDir string // temporary directory for intermediate files
+	// rasterizeMermaid renders one Mermaid block to a PNG and returns its
+	// absolute path, and mermaidAvailable reports whether the renderer can run
+	// at all. Both are fields so tests can stand in for the external mmdc
+	// invocation without depending on what is installed on the machine.
+	rasterizeMermaid func(idx int, source string) (string, error)
+	mermaidAvailable func() bool
 }
 
 // New creates a new Converter and prepares a temporary working directory.
@@ -96,7 +105,10 @@ func New(cfg *Config) (*Converter, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
 	}
-	return &Converter{cfg: cfg, workDir: work}, nil
+	c := &Converter{cfg: cfg, workDir: work}
+	c.rasterizeMermaid = c.consoleDiagramPNG
+	c.mermaidAvailable = c.mmdcAvailable
+	return c, nil
 }
 
 // Close removes the temporary working directory and all intermediate files.

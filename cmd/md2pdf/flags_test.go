@@ -183,3 +183,42 @@ func TestParseFlags_ConsoleFormat(t *testing.T) {
 		}
 	})
 }
+
+func TestParseFlags_MermaidRenderModes(t *testing.T) {
+	dir := t.TempDir()
+	input := filepath.Join(dir, "doc.md")
+	if err := os.WriteFile(input, []byte("# T\n"), 0o644); err != nil {
+		t.Fatalf("write input: %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		args    []string
+		want    string
+		wantErr bool
+	}{
+		{"default is empty", []string{"-format", "console", input}, "", false},
+		{"auto", []string{"-format", "console", "-mermaid-render", "auto", input}, "auto", false},
+		{"image", []string{"-format", "console", "-mermaid-render", "image", input}, "image", false},
+		{"source", []string{"-format", "console", "-mermaid-render", "source", input}, "source", false},
+		{"ascii is not supported yet", []string{"-format", "console", "-mermaid-render", "ascii", input}, "", true},
+		{"unknown value", []string{"-format", "console", "-mermaid-render", "nope", input}, "", true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := parseFlags(tc.args)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("parseFlags(%v) = %+v, want an error", tc.args, cfg)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseFlags(%v) error = %v", tc.args, err)
+			}
+			if cfg.MermaidRender != tc.want {
+				t.Errorf("MermaidRender = %q, want %q", cfg.MermaidRender, tc.want)
+			}
+		})
+	}
+}

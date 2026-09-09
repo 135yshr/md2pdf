@@ -21,7 +21,7 @@ without font breakage. Single Go binary, drop-in for CI.
 - 🇯🇵 **Japanese / CJK text out of the box** — Noto Sans CJK JP preconfigured
 - 📝 **GitHub-flavored Markdown** — tables, fenced code blocks, strikethrough
 - 📃 **PDF or DOCX output** — `-format docx` exports editable Word documents (via pandoc)
-- 👀 **Read it in the terminal** — `-format console` renders the document as styled, wrapped ANSI text and pages it through `less` (no conversion tools needed)
+- 👀 **Read it in the terminal** — `-format console` renders the document as styled, wrapped ANSI text and pages it through `less` (no conversion tools needed), drawing Mermaid diagrams as inline images on kitty, iTerm2 and Sixel terminals
 - 🤖 **CI-friendly single binary** — `go install` and you're done
 - 📄 **Configurable** — page size, margins, fonts
 
@@ -129,6 +129,7 @@ md2pdf [options] <input.md>
 | `-width <cols>` | terminal width | Console word-wrap width, capped at 120 columns (`-format console`) |
 | `-style <name\|path>` | `auto` | Console theme: `auto`, `dark`, `light`, `notty`, `ascii`, `dracula`, `pink`, `tokyo-night`, or a JSON stylesheet path (env: `GLAMOUR_STYLE`) |
 | `-pager` | true | Page console output through `$PAGER` (default `less -R -F`); `-pager=false` writes straight to stdout |
+| `-mermaid-render <mode>` | `auto` | How Mermaid blocks are drawn in console output: `auto`, `image` or `source` (`-format console`) |
 | `-v` | false | Verbose output (progress logs go to stderr) |
 | `-version` | — | Print version and exit |
 
@@ -149,6 +150,8 @@ md2pdf -o report.docx document.md   # format inferred from extension
 md2pdf -format console document.md
 md2pdf -format console -style dark -width 100 document.md
 md2pdf -format console -pager=false document.md | cat   # plain text, no color
+md2pdf -format console -mermaid-render image document.md   # require inline diagrams
+md2pdf -format console -mermaid-render source document.md  # always show Mermaid source
 
 # Explicit font path
 md2pdf -font /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc document.md
@@ -189,8 +192,42 @@ flowchart TD
 Each format reads from the source that renders best for it.
 
 - **PDF** (default) — goldmark converts Markdown to HTML (GFM tables, fenced code blocks), Mermaid blocks are rendered to inline SVG via `mmdc`, a self-contained HTML file is assembled with GitHub-flavored CSS and `@font-face` declarations for Noto Sans CJK JP, and a headless Chromium browser (via Playwright) prints it to PDF.
-- **Console** — the Markdown is rendered to styled ANSI text by [glamour](https://github.com/charmbracelet/glamour) (the library behind [glow](https://github.com/charmbracelet/glow)), wrapped to the terminal width and paged through `$PAGER`. The theme follows the terminal background unless `-style` says otherwise; color is dropped entirely when `NO_COLOR` is set or the output is piped. Mermaid blocks stay visible as their source, so no conversion tools are required — the pager is the only external program involved.
+- **Console** — the Markdown is rendered to styled ANSI text by [glamour](https://github.com/charmbracelet/glamour) (the library behind [glow](https://github.com/charmbracelet/glow)), wrapped to the terminal width and paged through `$PAGER`. The theme follows the terminal background unless `-style` says otherwise; color is dropped entirely when `NO_COLOR` is set or the output is piped. Mermaid blocks are drawn as inline images when the terminal supports one of the image protocols below, and otherwise stay visible as their source, so console output still needs no conversion tools of its own.
 - **DOCX** — the Markdown is sent **directly to `pandoc`** (its `gfm` reader, no HTML in between), so pandoc produces clean, Word-native paragraph and list styles. Mermaid blocks are rasterised to PNG and spliced back in as image references (Word cannot reliably display pandoc-embedded SVG). A generated reference document gives the output a readable, Japanese-friendly look: a 10.5pt body, compact blue headings, bordered GFM tables, and the `Yu Gothic` font (override with `-docx-font`).
+
+### Mermaid diagrams in the terminal
+
+With `-format console`, Mermaid blocks are drawn as real diagrams on terminals
+that speak an inline image protocol. `-mermaid-render` picks the strategy:
+
+| Mode | Behaviour |
+| --- | --- |
+| `auto` (default) | Draw inline images when the terminal supports a protocol **and** `mmdc` is installed; otherwise print the Mermaid source |
+| `image` | Require inline images; fail with a message naming the missing capability instead of falling back |
+| `source` | Always print the Mermaid source as a code block |
+
+Detected protocols, from the `TERM` and `TERM_PROGRAM` environment variables:
+
+| Protocol | Terminals |
+| --- | --- |
+| kitty graphics | kitty, Ghostty (`TERM=xterm-kitty`, `TERM=xterm-ghostty`, `KITTY_WINDOW_ID`) |
+| iTerm2 inline images | iTerm2, WezTerm (`TERM_PROGRAM=iTerm.app`, `TERM_PROGRAM=WezTerm`) |
+| Sixel | foot, mlterm, yaft, and any `TERM` containing `sixel` |
+
+Notes:
+
+- Drawing images requires `mmdc`. Without it, console output still works and
+  shows the diagram source — the exit status stays 0 and `-v` explains why.
+- Images are **not** written when the output is piped or redirected, or when
+  `NO_COLOR` is set, so captured output stays plain text.
+- A diagram wider than the wrap width is scaled down to it rather than
+  overflowing the line.
+- Inline images **bypass the pager**: neither the kitty nor the iTerm2 sequences
+  survive a trip through `less`. Use `-mermaid-render source` when you would
+  rather page a long document than see the diagrams.
+- Sixel detection is environment-based. Querying the terminal directly would
+  require putting it into raw mode, so a Sixel terminal that is not listed above
+  can be forced with `-mermaid-render image`.
 
 ## Comparison with other tools
 
