@@ -14,8 +14,8 @@ Install external dependencies:
 
 ```sh
 npm install -g @mermaid-js/mermaid-cli
-pip install playwright
-playwright install chromium
+# a Chromium for PDF output (Google Chrome also works)
+brew install --cask chromium
 sudo apt install fonts-noto-cjk   # Ubuntu/Debian
 ```
 
@@ -25,8 +25,8 @@ sudo apt install fonts-noto-cjk   # Ubuntu/Debian
 # Every test. The integration test skips itself when its tools are absent.
 go test ./...
 
-# Require the integration toolchain (mmdc, python3 playwright, chromium, CJK
-# fonts): a missing tool fails instead of skipping. This is what CI runs.
+# Require the integration toolchain (mmdc, a Chromium, CJK fonts): a missing
+# tool fails instead of skipping. This is what CI runs.
 MD2PDF_REQUIRE_INTEGRATION=1 go test ./...
 ```
 
@@ -35,8 +35,8 @@ MD2PDF_REQUIRE_INTEGRATION=1 go test ./...
 1. Fork the repository and create a branch from `main`.
 2. Keep commits focused — one logical change per commit.
 3. Add or update tests for any changed behaviour. `go test ./...` must pass with
-   no external tools installed, so a test that needs mmdc, Playwright/Chromium
-   or pandoc should either skip when the tool is absent (see `requireTool`) or
+   no external tools installed, so a test that needs mmdc, a Chromium or pandoc
+   should either skip when the tool is absent (see `requireTool`) or
    drive a stub binary. Do not exclude tests from the run with `-run` filters or
    build tags — that has silently dropped tests here before.
 4. Ensure `go test ./...` passes and `go vet ./...` reports no issues.

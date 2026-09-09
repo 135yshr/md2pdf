@@ -19,8 +19,8 @@ go vet ./...
 # Every test in the module. Nothing is filtered or tagged out.
 go test ./...
 
-# The integration test skips itself unless mmdc, python3 + playwright, chromium
-# and fonts-noto-cjk are installed. To make a missing tool fail instead of skip
+# The integration test skips itself unless mmdc, a Chromium and fonts-noto-cjk
+# are installed. To make a missing tool fail instead of skip
 # (this is what CI does), declare the toolchain mandatory:
 MD2PDF_REQUIRE_INTEGRATION=1 go test ./... -timeout 120s
 
@@ -30,7 +30,7 @@ go test ./internal/converter/ -run TestSpecificName -v
 
 ## Linting
 
-Uses golangci-lint with config in `.golangci.yml`. Key enabled linters: errcheck, gosimple, govet, staticcheck, unused, gofmt, goimports, misspell, godot, gosec, noctx, wrapcheck, exhaustive. G204 (subprocess with variable) is excluded since mmdc/python invocations are intentional. Test files have relaxed rules (no wrapcheck, gosec, errcheck).
+Uses golangci-lint with config in `.golangci.yml`. Key enabled linters: errcheck, gosimple, govet, staticcheck, unused, gofmt, goimports, misspell, godot, gosec, noctx, wrapcheck, exhaustive. G204 (subprocess with variable) is excluded since the mmdc and pandoc invocations are intentional. Test files have relaxed rules (no wrapcheck, gosec, errcheck).
 
 ## Architecture
 
@@ -41,7 +41,7 @@ Uses golangci-lint with config in `.golangci.yml`. Key enabled linters: errcheck
 1. **parser.go** — goldmark parses Markdown to HTML, extracting fenced Mermaid code blocks into a `parsedDoc` struct with placeholders
 2. **mermaid.go** — each Mermaid block is rendered to inline SVG via the external `mmdc` CLI (`renderMermaid`)
 3. **html.go** — assembles a self-contained HTML file with GitHub CSS, `@font-face` declarations, and inlined SVGs
-4. **pdf.go** — headless Chromium (via Playwright Python driver) prints the HTML to PDF
+4. **pdf.go** — a headless Chromium prints the HTML to PDF, driven **directly over the DevTools Protocol** with chromedp. There is no Python stage: `resolvePrintOptions` converts `-page-size` and the `-margin-*` flags into the inches `Page.printToPDF` requires (`paper.go`), and `renderPDF` navigates to the `file://` URL, awaits `document.fonts.ready` — a Promise, so `WithAwaitPromise` is required, and printing before it settles lays the page out with fallback font metrics — then prints. The browser comes from `ChromiumPath`, the same resolution handed to `mmdc` via the generated Puppeteer config, so one Chromium serves both stages and `CHROME_PATH` overrides both
 
 `FormatHTML` is the same pipeline stopping after step 3: `Convert` points `buildHTML` at the caller's output path instead of the working directory and returns, so Chromium never runs. Image paths are deliberately **not** rewritten or copied — the default output sits beside the input, where the Markdown's own relative paths already resolve.
 
@@ -88,7 +88,7 @@ With several inputs, `renderConsole` renders each document **independently** thr
 
 ## External Dependencies
 
-Runtime: `mmdc` (Mermaid CLI via npm), Python 3 + Playwright + Chromium, Noto Sans CJK JP fonts. DOCX output additionally requires `pandoc`. Console output needs **no external tools** (a pager is used when available).
+Runtime: `mmdc` (Mermaid CLI via npm), a Chromium or Chrome binary, Noto Sans CJK JP fonts. DOCX output additionally requires `pandoc`. Console output needs **no external tools** (a pager is used when available).
 Go modules: `github.com/yuin/goldmark` (Markdown parsing), `charm.land/glamour/v2` (terminal rendering), `charm.land/lipgloss/v2` (terminal background detection), `github.com/charmbracelet/colorprofile` (color downsampling), `github.com/charmbracelet/x/term` (TTY detection and size), `github.com/charmbracelet/x/ansi` (inline image escape sequences: `KittyGraphics`, `ITerm2`, `SixelGraphics` and the `kitty`/`iterm2`/`sixel` subpackages), `github.com/AlexanderGrooff/mermaid-ascii` (Mermaid → text art; pinned to a pseudo-version, as it publishes no tags).
 
 Only the *image* step of the console Mermaid chain needs `mmdc`. Its absence downgrades diagrams to text art, which is rendered in-process — console output never requires an external tool and never fails the run over a missing one.

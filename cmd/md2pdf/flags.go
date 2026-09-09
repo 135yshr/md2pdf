@@ -64,7 +64,6 @@ func parseFlags(args []string) (*converter.Config, error) {
 	mmdcPath := fs.String("mmdc", "", "Path to mmdc binary (Mermaid CLI)")
 	pandocPath := fs.String("pandoc", "", "Path to pandoc binary (used for -format docx)")
 	docxFont := fs.String("docx-font", "", "Font family for DOCX output (default: Yu Gothic)")
-	pythonPath := fs.String("python", "", "Path to Python 3 interpreter with the playwright package (overrides MD2PDF_PYTHON)")
 	puppeteerCfg := fs.String("puppeteer-config", "", "Path to Puppeteer JSON config file for mmdc (auto-created if omitted)")
 	var cssFiles cssFlag
 	fs.Var(&cssFiles, "css", "Path to a custom CSS file, applied after the built-in stylesheet (repeatable)")
@@ -162,13 +161,6 @@ func parseFlags(args []string) (*converter.Config, error) {
 		mmdc = findFirst(mmdcDefaultPaths)
 	}
 
-	// Resolve Python interpreter. The flag wins; otherwise MD2PDF_PYTHON.
-	// An empty result triggers auto-detection inside the converter.
-	python := *pythonPath
-	if python == "" {
-		python = os.Getenv("MD2PDF_PYTHON")
-	}
-
 	return &converter.Config{
 		InputFiles:      inputs,
 		OutputFile:      out,
@@ -179,7 +171,6 @@ func parseFlags(args []string) (*converter.Config, error) {
 		MmdcPath:        mmdc,
 		PandocPath:      *pandocPath,
 		DOCXFont:        *docxFont,
-		PythonPath:      python,
 		PuppeteerConfig: *puppeteerCfg,
 		CSSFiles:        cssFiles,
 		PageSize:        *pageSize,
@@ -284,8 +275,6 @@ Options:
   -mmdc <path>            Path to mmdc (Mermaid CLI) binary
   -pandoc <path>          Path to pandoc binary (used for -format docx)
   -docx-font <family>     Font family for DOCX output (default: Yu Gothic)
-  -python <path>          Path to Python 3 interpreter with the playwright
-                          package (env: MD2PDF_PYTHON)
   -puppeteer-config <f>   Path to Puppeteer JSON config for mmdc
   -page-size <size>       PDF page size: A4 (default), Letter, A3
   -margin-top <m>         Top margin    (default: 18mm)
