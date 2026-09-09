@@ -26,7 +26,7 @@ type paperSize struct {
 }
 
 // paperSizes are the sheets -page-size accepts, keyed by lowercase name. The
-// ISO sizes are derived from their millimetre definitions: A4 is 210x297mm and
+// ISO sizes are derived from their millimeter definitions: A4 is 210x297mm and
 // A3 is 297x420mm.
 var paperSizes = map[string]paperSize{
 	"a4":     {210 / mmPerInch, 297 / mmPerInch},

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// closeTo compares inch measurements, which are floats derived from millimetre
+// closeTo compares inch measurements, which are floats derived from millimeter
 // definitions and so never exactly representable.
 func closeTo(got, want float64) bool {
 	return math.Abs(got-want) < 0.001
@@ -61,7 +61,7 @@ func TestLengthInches(t *testing.T) {
 		want       float64
 		wantErrSub string
 	}{
-		{name: "millimetres", value: "18mm", want: 0.70866},
+		{name: "millimeters", value: "18mm", want: 0.70866},
 		{name: "the default left margin", value: "14mm", want: 0.55118},
 		{name: "inches", value: "1in", want: 1},
 		{name: "fractional inches", value: "0.5in", want: 0.5},

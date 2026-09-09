@@ -54,10 +54,26 @@ jobs:
       - name: Install mmdc
         run: npm install -g @mermaid-js/mermaid-cli
 
-      - name: Install Python dependencies
+      # PDF printing drives Chromium over the DevTools Protocol from Go, so a
+      # browser is all that is needed here — no Python and no Playwright. The
+      # runner image ships Google Chrome, which ChromiumPath finds; this step
+      # fails loudly if that ever stops being true, rather than letting the
+      # print stage fail deeper down.
+      - name: Verify a browser is available
         run: |
-          pip install playwright
-          playwright install chromium
+          for candidate in \
+            "$CHROME_PATH" \
+            /usr/bin/google-chrome \
+            /usr/bin/chromium \
+            /usr/bin/chromium-browser; do
+            if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+              echo "browser: $candidate"
+              "$candidate" --version || true
+              exit 0
+            fi
+          done
+          echo "no Chromium or Chrome found on the runner" >&2
+          exit 1
 
       - name: Install Noto CJK fonts
         run: sudo apt-get install -y fonts-noto-cjk

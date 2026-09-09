@@ -60,10 +60,6 @@ type Config struct {
 	// DOCXFont is the font family applied to DOCX output for both Latin and
 	// East Asian text. When empty, a Japanese-friendly default is used.
 	DOCXFont string
-	// PythonPath is the path to the Python 3 interpreter used to drive Playwright.
-	// When empty, md2pdf auto-detects an interpreter on PATH that can import the
-	// playwright package.
-	PythonPath string
 	// PuppeteerConfig is an optional path to a Puppeteer JSON config file
 	// passed to mmdc via its -p flag. When empty the converter auto-generates
 	// a temporary config pointing at the system Chromium.
@@ -310,8 +306,15 @@ func copyFile(src, dst string) error {
 	return out.Close()
 }
 
+// ChromiumPath locates the Chromium executable md2pdf drives, honouring
+// CHROME_PATH and then probing the usual install locations. It is exported so
+// callers can report on the environment without attempting a conversion.
+func ChromiumPath() (string, error) {
+	return chromiumPath()
+}
+
 // chromiumPath attempts to locate the system Chromium executable.
-// It checks common Linux paths and falls back to whatever Playwright ships.
+// It checks common install paths, including caches left by Playwright.
 func chromiumPath() (string, error) {
 	// Honour CHROME_PATH if set. Fail fast on invalid values.
 	if p := os.Getenv("CHROME_PATH"); p != "" {

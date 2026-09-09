@@ -43,10 +43,11 @@ func TestHTMLOutput_SkipsChromium(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	// An unusable interpreter would fail the PDF stage loudly if it ran.
+	// An unusable page size would fail the print stage loudly if it ran, so a
+	// clean return proves the pipeline stopped before the browser.
 	c := newTestConverter(t, &Config{
-		Format:     FormatHTML,
-		PythonPath: filepath.Join(dir, "definitely-not-python"),
+		Format:   FormatHTML,
+		PageSize: "definitely-not-a-paper-size",
 	})
 	if err := c.Convert([]string{input}, filepath.Join(dir, "doc.html")); err != nil {
 		t.Fatalf("Convert must not touch the PDF pipeline: %v", err)

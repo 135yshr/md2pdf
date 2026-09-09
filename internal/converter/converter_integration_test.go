@@ -63,12 +63,28 @@ func requireTool(t *testing.T, name string) {
 	}
 }
 
+// requireBrowser skips or fails depending on whether a Chromium can be found.
+// PDF printing drives it over the DevTools Protocol, so it is as much a
+// requirement as mmdc — and unlike a PATH lookup it is located by
+// converter.ChromiumPath, the same resolution the pipeline uses.
+func requireBrowser(t *testing.T) {
+	t.Helper()
+	if _, err := converter.ChromiumPath(); err == nil {
+		return
+	}
+	if integrationRequired() {
+		t.Fatalf("no Chromium found, but %s is set: "+
+			"the integration toolchain is expected to be installed here", requireIntegrationEnv)
+	}
+	t.Skip("no Chromium found; skipping integration test")
+}
+
 // TestConvert_Integration runs the full Markdown → PDF pipeline. It always
 // builds and always runs; when the external toolchain is absent it skips, unless
 // MD2PDF_REQUIRE_INTEGRATION says the toolchain must be there.
 func TestConvert_Integration(t *testing.T) {
 	requireTool(t, "mmdc")
-	requireTool(t, "python3")
+	requireBrowser(t)
 
 	dir := t.TempDir()
 	mdPath := filepath.Join(dir, "test.md")

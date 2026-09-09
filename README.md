@@ -57,9 +57,9 @@ md2pdf uses external tools for diagram rendering and PDF generation. Install the
 # Mermaid CLI (diagram rendering)
 npm install -g @mermaid-js/mermaid-cli
 
-# Playwright + Chromium (PDF generation)
-pip install playwright
-playwright install chromium
+# A Chromium (PDF generation)
+brew install --cask chromium        # macOS; Google Chrome also works
+sudo apt install -y chromium        # Debian/Ubuntu
 
 # pandoc — only needed for DOCX output (-format docx)
 brew install pandoc          # macOS / Linux (Homebrew)
@@ -94,7 +94,7 @@ instead, run `md2pdf -format docx document.md`.
 | Dependency | Purpose | Install |
 |---|---|---|
 | [mmdc](https://github.com/mermaid-js/mermaid-cli) | Mermaid → SVG/PNG | `npm install -g @mermaid-js/mermaid-cli` |
-| Python 3 + [Playwright](https://playwright.dev/python/) | HTML → PDF | `pip install playwright && playwright install chromium` |
+| A Chromium browser | HTML → PDF | `brew install --cask chromium` / `apt install chromium` (Google Chrome also works; override with `CHROME_PATH`) |
 | [pandoc](https://pandoc.org/) | Markdown → DOCX (only for `-format docx`) | `brew install pandoc` / `apt install pandoc` |
 | Noto Sans CJK JP | Japanese font (optional) | See above |
 | Go 1.26+ | Build from source only | https://go.dev |
@@ -120,7 +120,6 @@ md2pdf [options] <input.md>
 | `-mmdc <path>` | auto-detected | Path to `mmdc` binary |
 | `-pandoc <path>` | auto-detected | Path to `pandoc` binary (used for `-format docx`) |
 | `-docx-font <family>` | `Yu Gothic` | Font family for DOCX output (Latin + East Asian) |
-| `-python <path>` | auto-detected | Python 3 interpreter with `playwright` installed (env: `MD2PDF_PYTHON`) |
 | `-puppeteer-config <f>` | auto-generated | Puppeteer JSON config for mmdc |
 | `-page-size <size>` | `A4` | `A4`, `Letter`, or `A3` |
 | `-margin-top <m>` | `18mm` | Top margin |
@@ -189,7 +188,7 @@ flowchart TD
     B --> C[HTML builder]
     B -->|extracts Mermaid blocks| D[mmdc CLI]
     D -->|inline SVG| C
-    C --> F["Playwright / Chromium"]
+    C --> F["Chromium (DevTools Protocol)"]
     F --> G[PDF output]
     E -->|docx| J[Mermaid → PNG]
     J --> H["pandoc (gfm reader)"]
@@ -200,7 +199,7 @@ flowchart TD
 
 Each format reads from the source that renders best for it.
 
-- **PDF** (default) — goldmark converts Markdown to HTML (GFM tables, fenced code blocks), Mermaid blocks are rendered to inline SVG via `mmdc`, a self-contained HTML file is assembled with GitHub-flavored CSS and `@font-face` declarations for Noto Sans CJK JP, and a headless Chromium browser (via Playwright) prints it to PDF.
+- **PDF** (default) — goldmark converts Markdown to HTML (GFM tables, fenced code blocks), Mermaid blocks are rendered to inline SVG via `mmdc`, a self-contained HTML file is assembled with GitHub-flavored CSS and `@font-face` declarations for Noto Sans CJK JP, and a headless Chromium browser, driven directly over the DevTools Protocol, prints it to PDF. No Python or Playwright is involved — the same browser also serves `mmdc`, so one Chromium covers both stages.
 - **Console** — the Markdown is rendered to styled ANSI text by [glamour](https://github.com/charmbracelet/glamour) (the library behind [glow](https://github.com/charmbracelet/glow)), wrapped to the terminal width and paged through `$PAGER`. The theme follows the terminal background unless `-style` says otherwise; color is dropped entirely when `NO_COLOR` is set or the output is piped. Mermaid blocks are drawn as inline images when the terminal supports one of the image protocols below, as box-drawing text art when it does not, and otherwise stay visible as their source — so console output still needs no conversion tools of its own.
 - **DOCX** — the Markdown is sent **directly to `pandoc`** (its `gfm` reader, no HTML in between), so pandoc produces clean, Word-native paragraph and list styles. Mermaid blocks are rasterised to PNG and spliced back in as image references (Word cannot reliably display pandoc-embedded SVG). A generated reference document gives the output a readable, Japanese-friendly look: a 10.5pt body, compact blue headings, bordered GFM tables, and the `Yu Gothic` font (override with `-docx-font`).
 
@@ -393,25 +392,23 @@ for this exact combination, so it works without any extra setup.
 
 ## Troubleshooting
 
-### `ModuleNotFoundError: No module named 'playwright'`
+### No Chromium executable found
 
-If md2pdf fails with this error even though `pip install playwright` succeeded,
-the Python interpreter md2pdf picked up does not match the one where
-`playwright` is installed. This is common on macOS when multiple Pythons
-coexist (system `/usr/bin/python3`, Homebrew, pyenv, venv).
+md2pdf drives a headless Chromium to print the PDF, and `mmdc` needs one to
+render diagrams. Both use the same browser, located in this order:
 
-Fix it by pointing md2pdf at the correct interpreter:
+1. `CHROME_PATH`, if set
+2. common Linux paths (`/usr/bin/chromium`, `/usr/bin/google-chrome`, …)
+3. a Playwright browser cache, if one happens to exist
+4. `/Applications/Google Chrome.app` and `/Applications/Chromium.app` on macOS
+
+If none is found, point md2pdf at the browser you have:
 
 ```sh
-# One-off
-md2pdf -python "$(which python3)" document.md
-
-# Persistent
-export MD2PDF_PYTHON="$(which python3)"
-md2pdf document.md
+export CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 ```
 
-Use `-v` to confirm which interpreter md2pdf is using.
+Console output needs no browser at all, so `-format console` keeps working.
 
 ## Running Tests
 
@@ -419,7 +416,7 @@ Use `-v` to confirm which interpreter md2pdf is using.
 # Every test. The integration test skips itself when its tools are absent.
 go test ./...
 
-# Require the integration toolchain (mmdc + python3 playwright): a missing tool
+# Require the integration toolchain (mmdc + a Chromium): a missing tool
 # now fails instead of skipping.
 MD2PDF_REQUIRE_INTEGRATION=1 go test ./...
 
