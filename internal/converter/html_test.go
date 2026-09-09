@@ -184,3 +184,32 @@ func TestBuildCSS_UnchangedWithoutCustomCSS(t *testing.T) {
 		t.Errorf("stylesheet drifted with no -css given.\n got: %q\nwant: %q", css, want)
 	}
 }
+
+// TestBuildCSS_MultipleFilesInOrder covers layering several stylesheets, where
+// the last one given has to win.
+func TestBuildCSS_MultipleFilesInOrder(t *testing.T) {
+	dir := t.TempDir()
+	first := dir + "/base.css"
+	second := dir + "/client.css"
+	if err := os.WriteFile(first, []byte("body { color: red; } /* FIRST */\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if err := os.WriteFile(second, []byte("body { color: blue; } /* SECOND */\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	c := &Converter{cfg: &Config{CSSFiles: []string{first, second}}}
+	css, err := c.buildCSS()
+	if err != nil {
+		t.Fatalf("buildCSS: %v", err)
+	}
+
+	iFirst := strings.Index(css, "FIRST")
+	iSecond := strings.Index(css, "SECOND")
+	if iFirst < 0 || iSecond < 0 {
+		t.Fatalf("both stylesheets must be present:\n%s", css)
+	}
+	if iFirst > iSecond {
+		t.Error("stylesheets are out of argument order, so the wrong one would win")
+	}
+}
