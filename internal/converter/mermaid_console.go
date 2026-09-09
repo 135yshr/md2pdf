@@ -126,6 +126,10 @@ type consoleMermaidPlan struct {
 	// pureASCII asks for plain +, - and | instead of Unicode box-drawing
 	// characters when text art is produced.
 	pureASCII bool
+	// strict is set when the user asked for images by name. Anything that stops
+	// an image being drawn is then an error rather than a step down the chain,
+	// so -mermaid-render image is a guarantee and not a preference.
+	strict bool
 }
 
 // emitsImages reports whether the plan will write image escape sequences.
@@ -174,7 +178,11 @@ func resolveConsoleMermaidPlan(mode string, isTTY, noColor bool, getenv func(str
 		return asciiPlan, nil
 	}
 
-	return consoleMermaidPlan{mode: MermaidRenderImage, protocol: protocol}, nil
+	return consoleMermaidPlan{
+		mode:     MermaidRenderImage,
+		protocol: protocol,
+		strict:   mode == MermaidRenderImage,
+	}, nil
 }
 
 // consoleDiagram pairs the placeholder left in the Markdown with the terminal
@@ -184,10 +192,39 @@ type consoleDiagram struct {
 	placeholder string
 	// content is the text or escape sequence to splice in.
 	content string
-	// clip asks for over-wide lines to be trimmed to the wrap width. It is set
-	// for text art, whose width is measurable, and never for an image escape
-	// sequence, which occupies no columns of its own.
-	clip bool
+	// kind records what the content is made of, which decides both whether it
+	// can be clipped to the wrap width and whether the pager has to be skipped.
+	kind consoleDiagramKind
+}
+
+// consoleDiagramKind distinguishes a drawn diagram's medium. Text art is the
+// zero value because it is the medium with no special handling: it occupies
+// measurable columns and survives both piping and the pager.
+type consoleDiagramKind int
+
+// The media a console diagram can be drawn in.
+const (
+	diagramTextArt consoleDiagramKind = iota
+	diagramImage
+)
+
+// isImage reports whether the diagram is an inline image escape sequence.
+func (d consoleDiagram) isImage() bool { return d.kind == diagramImage }
+
+// clippable reports whether over-wide lines may be trimmed. An image sequence
+// occupies no columns of its own, so trimming it would only corrupt it.
+func (d consoleDiagram) clippable() bool { return d.kind == diagramTextArt }
+
+// anyImageDiagram reports whether any diagram was drawn as an inline image.
+// The plan alone cannot answer this: an image plan still produces text art when
+// mmdc turns out to be missing or a diagram fails to rasterise.
+func anyImageDiagram(diagrams []consoleDiagram) bool {
+	for _, d := range diagrams {
+		if d.isImage() {
+			return true
+		}
+	}
+	return false
 }
 
 // consoleTokenPrefix is the prefix of the stand-in token left in the Markdown
@@ -248,7 +285,7 @@ func spliceConsoleDiagrams(rendered string, diagrams []consoleDiagram, width int
 		indent := stripped[:len(stripped)-len(strings.TrimLeft(stripped, " "))]
 
 		content := diagram.content
-		if diagram.clip && width > 0 {
+		if diagram.clippable() && width > 0 {
 			content = clipConsoleArt(content, max(1, width-len(indent)))
 		}
 		for _, contentLine := range strings.Split(content, "\n") {
@@ -292,6 +329,12 @@ func (c *Converter) prepareConsoleMermaid(md []byte, plan consoleMermaidPlan, wi
 	// Mermaid CLI drops one step down the chain instead of all the way to source.
 	useImages := plan.emitsImages()
 	if useImages && !c.mermaidAvailable() {
+		if plan.strict {
+			return nil, nil, errors.New(
+				"-mermaid-render image needs the Mermaid CLI to rasterise diagrams, " +
+					"but mmdc was not found; install @mermaid-js/mermaid-cli, " +
+					"or use -mermaid-render ascii to draw them as text art")
+		}
 		c.logf("mmdc not found; drawing Mermaid diagrams as text art instead " +
 			"(install @mermaid-js/mermaid-cli to draw them as images)")
 		useImages = false
@@ -305,10 +348,13 @@ func (c *Converter) prepareConsoleMermaid(md []byte, plan consoleMermaidPlan, wi
 
 	diagrams := make([]consoleDiagram, 0, len(blocks))
 	for i, block := range blocks {
-		diagram, ok := c.renderConsoleBlock(i, block.Source, plan, width, useImages)
-		if !ok {
+		diagram, err := c.renderConsoleBlock(i, block.Source, plan, width, useImages)
+		switch {
+		case errors.Is(err, errShowMermaidSource):
 			markdown = strings.Replace(markdown, block.Placeholder, fencedMermaid(block.Source), 1)
 			continue
+		case err != nil:
+			return nil, nil, err
 		}
 		diagram.placeholder = consoleDiagramToken(i)
 		markdown = strings.Replace(markdown, block.Placeholder, diagram.placeholder, 1)
@@ -317,16 +363,28 @@ func (c *Converter) prepareConsoleMermaid(md []byte, plan consoleMermaidPlan, wi
 	return []byte(markdown), diagrams, nil
 }
 
+// errShowMermaidSource reports that no step of the chain could draw a diagram,
+// so the block keeps its Mermaid source. It is a normal outcome, not a failure.
+var errShowMermaidSource = errors.New("no renderer could draw this diagram")
+
 // renderConsoleBlock renders one Mermaid block by walking the fallback chain for
 // the plan: an inline image first when one is possible, then box-drawing text
-// art. It reports ok=false when neither worked, leaving the caller to restore
-// the block's Mermaid source.
-func (c *Converter) renderConsoleBlock(idx int, source string, plan consoleMermaidPlan, width int, useImages bool) (consoleDiagram, bool) {
+// art. It returns errShowMermaidSource when neither worked, leaving the caller
+// to restore the block's Mermaid source.
+//
+// A strict plan (-mermaid-render image) skips the text-art step entirely and
+// returns the rasterisation error, so asking for an image never quietly yields
+// something else.
+func (c *Converter) renderConsoleBlock(idx int, source string, plan consoleMermaidPlan, width int, useImages bool) (consoleDiagram, error) {
 	if useImages {
 		sequence, err := c.renderConsoleDiagram(idx, source, plan.protocol, width)
 		if err == nil {
 			c.logf("  diagram %d drawn (%d bytes of %s escape sequence)", idx, len(sequence), plan.protocol)
-			return consoleDiagram{content: sequence}, true
+			return consoleDiagram{content: sequence, kind: diagramImage}, nil
+		}
+		if plan.strict {
+			return consoleDiagram{}, fmt.Errorf(
+				"-mermaid-render image could not draw diagram %d as a %s image: %w", idx, plan.protocol, err)
 		}
 		c.logf("  diagram %d could not be drawn as an image (%v); trying text art", idx, err)
 	}
@@ -334,10 +392,10 @@ func (c *Converter) renderConsoleBlock(idx int, source string, plan consoleMerma
 	art, err := renderMermaidASCII(source, width, plan.pureASCII)
 	if err != nil {
 		c.logf("  diagram %d could not be drawn as text art (%v); showing its source instead", idx, err)
-		return consoleDiagram{}, false
+		return consoleDiagram{}, errShowMermaidSource
 	}
 	c.logf("  diagram %d drawn as text art", idx)
-	return consoleDiagram{content: art, clip: true}, true
+	return consoleDiagram{content: art, kind: diagramTextArt}, nil
 }
 
 // renderConsoleDiagram rasterises one Mermaid block and encodes the PNG for the

@@ -24,6 +24,11 @@ func TestASCIIDiagramSupported(t *testing.T) {
 		{"sequenceDiagram", "sequenceDiagram\n  A->>B: hi\n", true},
 		{"leading blank lines", "\n\n  flowchart LR\n  A --> B\n", true},
 		{"leading comment", "%% a note\nflowchart LR\n  A --> B\n", true},
+		// Frontmatter must be stripped before the type check, or a titled
+		// diagram looks like an unsupported one.
+		{"yaml frontmatter", "---\ntitle: My Flow\n---\nflowchart LR\n  A --> B\n", true},
+		{"frontmatter with config", "---\ntitle: T\nconfig:\n  theme: dark\n---\nsequenceDiagram\n  A->>B: hi\n", true},
+		{"frontmatter over an unsupported type", "---\ntitle: T\n---\ngantt\n  title A\n", false},
 		// erDiagram parses but its output is visibly misaligned, so it is excluded
 		// on purpose rather than because the library rejects it.
 		{"erDiagram is excluded", "erDiagram\n  CUSTOMER ||--o{ ORDER : places\n", false},
@@ -130,9 +135,9 @@ func TestRenderMermaidASCII_InvalidSourceDoesNotPanic(t *testing.T) {
 	}
 }
 
-// TestClipConsoleArt covers the acceptance criterion that art wider than the
+// TestArtClippingTrimsToWidth covers the acceptance criterion that art wider than the
 // wrap width is clipped rather than soft-wrapped into fragments.
-func TestClipConsoleArt(t *testing.T) {
+func TestArtClippingTrimsToWidth(t *testing.T) {
 	const width = 30
 	src := "flowchart LR\n  A[Alpha Node] --> B[Beta Node] --> C[Gamma Node] --> D[Delta Node]\n"
 	art, err := renderMermaidASCII(src, width, false)
@@ -146,9 +151,9 @@ func TestClipConsoleArt(t *testing.T) {
 	}
 }
 
-// TestClipConsoleArt_KeepsNarrowLinesAndColors checks clipping is a no-op for
+// TestArtClipping_KeepsNarrowLinesAndColors checks clipping is a no-op for
 // lines that already fit, and that it counts columns rather than bytes.
-func TestClipConsoleArt_KeepsNarrowLinesAndColors(t *testing.T) {
+func TestArtClipping_KeepsNarrowLinesAndColors(t *testing.T) {
 	art := "abc\n\x1b[31mred\x1b[0m\n開始"
 	if got := clipConsoleArt(art, 10); got != art {
 		t.Errorf("clipConsoleArt altered art that already fits:\n%q", got)
@@ -173,7 +178,7 @@ func TestSpliceConsoleDiagrams_ClipsArtToWidthLessIndent(t *testing.T) {
 	rendered := "  MD2PDFDG0\n"
 	wide := strings.Repeat("X", 40)
 	out, missing := spliceConsoleDiagrams(rendered, []consoleDiagram{
-		{placeholder: "MD2PDFDG0", content: wide, clip: true},
+		{placeholder: "MD2PDFDG0", content: wide, kind: diagramTextArt},
 	}, width)
 	if len(missing) != 0 {
 		t.Fatalf("unplaced diagrams: %v", missing)
@@ -191,7 +196,7 @@ func TestSpliceConsoleDiagrams_ClipsArtToWidthLessIndent(t *testing.T) {
 func TestSpliceConsoleDiagrams_NeverClipsImageSequences(t *testing.T) {
 	sequence := "\x1b_Gf=100,a=T;" + strings.Repeat("A", 500) + "\x1b\\"
 	out, _ := spliceConsoleDiagrams("  MD2PDFDG0\n", []consoleDiagram{
-		{placeholder: "MD2PDFDG0", content: sequence, clip: false},
+		{placeholder: "MD2PDFDG0", content: sequence, kind: diagramImage},
 	}, 20)
 	if !strings.Contains(out, sequence) {
 		t.Error("image escape sequence was altered by the splice")
@@ -337,8 +342,9 @@ func TestPrepareConsoleMermaid_ASCIIFallsBackPerDiagramType(t *testing.T) {
 }
 
 // TestPrepareConsoleMermaid_ImagePlanFallsBackToASCIIWithoutMmdc walks the full
-// chain: images are planned, mmdc is absent, so text art is used rather than
-// dropping straight to the source.
+// chain for a plan auto chose: images are planned, mmdc is absent, so text art
+// is used rather than dropping straight to the source. A strict plan errors
+// instead — see TestPrepareConsoleMermaid_StrictImageModeErrorsWithoutMmdc.
 func TestPrepareConsoleMermaid_ImagePlanFallsBackToASCIIWithoutMmdc(t *testing.T) {
 	md := []byte("```mermaid\nflowchart LR\n  A --> B\n```\n")
 	c := newTestConverter(t, &Config{Format: FormatConsole})
@@ -402,7 +408,7 @@ func TestPrepareConsoleMermaid_SourceModeSkipsASCIIToo(t *testing.T) {
 	}
 }
 
-func TestConsoleWantsPureASCII(t *testing.T) {
+func TestWantsPureASCIIStyle(t *testing.T) {
 	tests := []struct {
 		name     string
 		explicit string
@@ -427,6 +433,122 @@ func TestConsoleWantsPureASCII(t *testing.T) {
 			if got != tc.want {
 				t.Errorf("consoleWantsPureASCII(%q, %q, %q) = %t, want %t",
 					tc.explicit, tc.envStyle, tc.resolved, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestAnyImageDiagram(t *testing.T) {
+	tests := []struct {
+		name     string
+		diagrams []consoleDiagram
+		want     bool
+	}{
+		{"none", nil, false},
+		{"text art only", []consoleDiagram{{kind: diagramTextArt}}, false},
+		{"one image", []consoleDiagram{{kind: diagramImage}}, true},
+		{"mixed", []consoleDiagram{{kind: diagramTextArt}, {kind: diagramImage}}, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := anyImageDiagram(tc.diagrams); got != tc.want {
+				t.Errorf("anyImageDiagram() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestPrepareConsoleMermaid_ImageFallbackIsPageable is the regression test for
+// the pager being skipped on an image-capable terminal whose diagrams actually
+// came out as text art. The decision follows the emitted diagrams, not the plan,
+// so nothing here may report itself as an image.
+func TestPrepareConsoleMermaid_ImageFallbackIsPageable(t *testing.T) {
+	md := []byte("```mermaid\nflowchart LR\n  A --> B\n```\n")
+	c := newTestConverter(t, &Config{Format: FormatConsole})
+	c.mermaidAvailable = func() bool { return false }
+
+	plan := consoleMermaidPlan{mode: MermaidRenderImage, protocol: imageProtocolKitty}
+	_, diagrams, err := c.prepareConsoleMermaid(md, plan, 80)
+	if err != nil {
+		t.Fatalf("prepareConsoleMermaid: %v", err)
+	}
+	if len(diagrams) != 1 {
+		t.Fatalf("got %d diagrams, want 1", len(diagrams))
+	}
+	if anyImageDiagram(diagrams) {
+		t.Error("a text-art fallback reported itself as an image, which would skip the pager")
+	}
+	if !diagrams[0].clippable() {
+		t.Error("text art must be clippable to the wrap width")
+	}
+}
+
+// TestPrepareConsoleMermaid_StrictImageModeErrorsWithoutMmdc pins that
+// -mermaid-render image is a guarantee: without the rasteriser it fails rather
+// than quietly producing something that is not an image.
+func TestPrepareConsoleMermaid_StrictImageModeErrorsWithoutMmdc(t *testing.T) {
+	md := []byte("```mermaid\nflowchart LR\n  A --> B\n```\n")
+	c := newTestConverter(t, &Config{Format: FormatConsole})
+	c.mermaidAvailable = func() bool { return false }
+
+	plan := consoleMermaidPlan{mode: MermaidRenderImage, protocol: imageProtocolKitty, strict: true}
+	_, diagrams, err := c.prepareConsoleMermaid(md, plan, 80)
+	if err == nil {
+		t.Fatalf("expected an error in strict image mode, got %d diagrams", len(diagrams))
+	}
+	for _, want := range []string{"mermaid-render image", "mmdc"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %q", err, want)
+		}
+	}
+}
+
+// TestPrepareConsoleMermaid_StrictImageModeErrorsOnRasterFailure covers the same
+// guarantee for a diagram mmdc refuses to render.
+func TestPrepareConsoleMermaid_StrictImageModeErrorsOnRasterFailure(t *testing.T) {
+	md := []byte("```mermaid\nflowchart LR\n  A --> B\n```\n")
+	c := newTestConverter(t, &Config{Format: FormatConsole})
+	c.mermaidAvailable = func() bool { return true }
+	c.rasterizeMermaid = func(int, string) (string, error) { return "", errStubRasterFailure }
+
+	plan := consoleMermaidPlan{mode: MermaidRenderImage, protocol: imageProtocolKitty, strict: true}
+	_, _, err := c.prepareConsoleMermaid(md, plan, 80)
+	if err == nil {
+		t.Fatal("expected an error in strict image mode when rasterisation fails")
+	}
+	if !errors.Is(err, errStubRasterFailure) {
+		t.Errorf("error does not wrap the rasterisation failure: %v", err)
+	}
+}
+
+// TestResolveConsoleMermaidPlan_StrictOnlyForExplicitImage checks the strict flag
+// is set by the user naming "image", not by auto happening to choose it.
+func TestResolveConsoleMermaidPlan_StrictOnlyForExplicitImage(t *testing.T) {
+	kitty := func(k string) string {
+		if k == "TERM" {
+			return "xterm-kitty"
+		}
+		return ""
+	}
+	tests := []struct {
+		mode       string
+		wantStrict bool
+	}{
+		{"image", true},
+		{"auto", false},
+		{"", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.mode, func(t *testing.T) {
+			plan, err := resolveConsoleMermaidPlan(tc.mode, true, false, kitty)
+			if err != nil {
+				t.Fatalf("resolveConsoleMermaidPlan: %v", err)
+			}
+			if plan.mode != MermaidRenderImage {
+				t.Fatalf("mode = %q, want image", plan.mode)
+			}
+			if plan.strict != tc.wantStrict {
+				t.Errorf("strict = %t, want %t", plan.strict, tc.wantStrict)
 			}
 		})
 	}

@@ -96,9 +96,10 @@ func detectConsoleEnv(out *os.File) consoleEnv {
 // source. Only the image step needs anything external (mmdc) or a capable
 // terminal, so a plain terminal and a redirected stream both still get diagrams.
 //
-// The pager is skipped only when inline images are drawn: neither the kitty
-// graphics sequences nor the iTerm2 inline-image sequences survive a trip
-// through less. Text art is plain text, so it pages normally.
+// The pager is skipped only when an inline image was actually drawn: neither the
+// kitty graphics sequences nor the iTerm2 inline-image sequences survive a trip
+// through less. Text art is plain text and pages normally, including when an
+// image plan fell back to it.
 func (c *Converter) renderConsole(md []byte, out *os.File) error {
 	env := detectConsoleEnv(out)
 	width := resolveConsoleWidth(c.cfg.ConsoleWidth, env.isTTY, env.width)
@@ -130,7 +131,7 @@ func (c *Converter) renderConsole(md []byte, out *os.File) error {
 
 	if c.cfg.ConsolePager && env.isTTY {
 		switch {
-		case plan.emitsImages() && len(diagrams) > 0:
+		case anyImageDiagram(diagrams):
 			c.logf("Skipping the pager so the inline images survive; " +
 				"use -mermaid-render ascii or source to page the document instead.")
 		default:

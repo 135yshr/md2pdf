@@ -60,7 +60,13 @@ func asciiDiagramSupported(source string) bool {
 // mermaidDiagramHeader returns the first meaningful line of a Mermaid diagram,
 // skipping blank lines and %% comments. It reports ok=false for a source with no
 // such line.
+//
+// YAML frontmatter is stripped with the renderer's own helper first. Without
+// that, a diagram carrying a "---" title block would look like an unsupported
+// type here and be rejected before render.RenderDiagram — which strips it — ever
+// saw it.
 func mermaidDiagramHeader(source string) (string, bool) {
+	source, _ = diagram.StripFrontmatter(source)
 	for _, line := range strings.Split(source, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" || strings.HasPrefix(trimmed, "%%") {

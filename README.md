@@ -21,7 +21,7 @@ without font breakage. Single Go binary, drop-in for CI.
 - 🇯🇵 **Japanese / CJK text out of the box** — Noto Sans CJK JP preconfigured
 - 📝 **GitHub-flavored Markdown** — tables, fenced code blocks, strikethrough
 - 📃 **PDF or DOCX output** — `-format docx` exports editable Word documents (via pandoc)
-- 👀 **Read it in the terminal** — `-format console` renders the document as styled, wrapped ANSI text and pages it through `less` (no conversion tools needed), drawing Mermaid diagrams as inline images on kitty, iTerm2 and Sixel terminals and as box-drawing text art everywhere else
+- 👀 **Read it in the terminal** — `-format console` renders the document as styled, wrapped ANSI text and pages it through `less` (no conversion tools needed), drawing Mermaid flowcharts and sequence diagrams as inline images on kitty, iTerm2 and Sixel terminals and as box-drawing text art everywhere else
 - 🤖 **CI-friendly single binary** — `go install` and you're done
 - 📄 **Configurable** — page size, margins, fonts
 
@@ -200,12 +200,14 @@ Each format reads from the source that renders best for it.
 
 With `-format console`, Mermaid blocks are drawn as diagrams rather than printed
 as source. md2pdf walks a fallback chain and `-mermaid-render` picks where to
-start:
+start. Anything the chain cannot draw — a diagram type without a text-art
+renderer, or a block that fails to parse — keeps its Mermaid source, so no
+document ever loses content:
 
 | Mode | Behaviour |
 | --- | --- |
 | `auto` (default) | Inline image → text art → Mermaid source, taking the first that works |
-| `image` | Require a terminal that can show inline images; fail with a message naming the missing capability rather than degrading. A *missing `mmdc`* still degrades to text art at exit 0 — the strict check is about the terminal, not the toolchain |
+| `image` | Require an inline image. A terminal that cannot show one, a missing `mmdc`, or a diagram that fails to rasterise are all errors rather than a quiet downgrade |
 | `ascii` | Always draw box-drawing text art (source only for diagram types it cannot draw) |
 | `source` | Always print the Mermaid source as a code block |
 
@@ -250,8 +252,9 @@ Notes:
   diagrams.
 - Images are never written when the output is piped or redirected, or when
   `NO_COLOR` is set; those cases fall through to text art, which is plain text.
-  With `-mermaid-render image` they are an error instead, since the terminal
-  cannot display an image at all.
+  With `-mermaid-render image` they are an error instead.
+- A Mermaid block carrying a YAML frontmatter title block is handled normally;
+  the title is printed above the diagram, as Mermaid does.
 - Sixel detection is environment-based, because querying the terminal directly
   would require putting it into raw mode and waiting for a reply. A Sixel
   terminal that sets none of the markers above is therefore not detected and
