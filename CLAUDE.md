@@ -16,11 +16,11 @@ go vet ./...
 ## Testing
 
 ```sh
-# Unit tests only (no external dependencies needed)
-go test ./internal/converter/ -run 'Test[^C]'
+# Everything that needs no external tools (this is what CI's unit job runs)
+go test ./...
 
-# All tests including integration (requires mmdc, python3 playwright, chromium, fonts-noto-cjk)
-go test ./... -timeout 120s
+# Adds the integration suite (requires mmdc, python3 playwright, chromium, fonts-noto-cjk)
+go test ./... -tags integration -timeout 120s
 
 # Single test
 go test ./internal/converter/ -run TestSpecificName -v
@@ -93,4 +93,4 @@ Only the *image* step of the console Mermaid chain needs `mmdc`. Its absence dow
 - Comments and GoDoc in English
 - Errors crossing package boundaries must be wrapped (wrapcheck)
 - Go 1.26 (see `go.mod`); CI tests against Go 1.26
-- Unit tests must not start with `TestC`: CI's unit-test job selects them with `-run 'Test[^C]'` to skip the integration tests
+- Tests that need the external toolchain go behind the `integration` build tag (see `converter_integration_test.go`), never behind a naming convention. `go test ./...` must pass with nothing installed, so anything left untagged has to be self-contained or use a stub binary. `ci_workflow_test.go` fails the build if CI goes back to selecting tests by name

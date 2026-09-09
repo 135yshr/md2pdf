@@ -1,3 +1,9 @@
+//go:build integration
+
+// This file is behind the "integration" build tag because it drives the real
+// external toolchain: mmdc, Python + Playwright, Chromium and CJK fonts. The tag
+// states that requirement at the file level, so the dependency-free unit run can
+// simply be "go test ./..." with no test-name filtering.
 package converter_test
 
 import (
@@ -9,8 +15,9 @@ import (
 	"github.com/135yshr/md2pdf/internal/converter"
 )
 
-// TestConvert_Integration runs the full Markdown → PDF pipeline.
-// It is skipped automatically when mmdc or python3+playwright are unavailable.
+// TestConvert_Integration runs the full Markdown → PDF pipeline. It only builds
+// under the "integration" tag, and still skips itself when the toolchain is
+// missing so that running the tagged suite locally degrades instead of failing.
 func TestConvert_Integration(t *testing.T) {
 	if _, err := exec.LookPath("mmdc"); err != nil {
 		t.Skip("mmdc not found in PATH; skipping integration test")

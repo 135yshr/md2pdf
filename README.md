@@ -369,11 +369,11 @@ Use `-v` to confirm which interpreter md2pdf is using.
 ## Running Tests
 
 ```sh
-# Unit tests only
-go test ./internal/converter/ -run 'Test[^C]'
-
-# All tests including integration (requires mmdc + python3 playwright)
+# Everything that needs no external tools
 go test ./...
+
+# Adds the integration suite (requires mmdc + python3 playwright)
+go test ./... -tags integration
 
 # With verbose output
 go test -v ./...

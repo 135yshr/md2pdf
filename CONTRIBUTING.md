@@ -22,18 +22,20 @@ sudo apt install fonts-noto-cjk   # Ubuntu/Debian
 ## Running Tests
 
 ```sh
-# Unit tests (no external dependencies required)
-go test ./internal/converter/ -run 'Test[^C]'
-
-# All tests including integration
+# Everything that needs no external dependencies
 go test ./...
+
+# Adds the integration suite (requires mmdc, python3 playwright, chromium, CJK fonts)
+go test ./... -tags integration
 ```
 
 ## Pull Request Guidelines
 
 1. Fork the repository and create a branch from `main`.
 2. Keep commits focused — one logical change per commit.
-3. Add or update tests for any changed behaviour.
+3. Add or update tests for any changed behaviour. A test that needs mmdc,
+   Playwright/Chromium or pandoc belongs behind the `integration` build tag;
+   everything else must pass with no external tools installed.
 4. Ensure `go test ./...` passes and `go vet ./...` reports no issues.
 5. Write commit messages in English in the imperative mood ("Add feature", not "Added feature").
 6. Open a pull request against `main` and fill in the PR template.
