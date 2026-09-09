@@ -32,6 +32,55 @@ func TestBuildCSS_ContainsFontFace(t *testing.T) {
 	}
 }
 
+// TestBuildCSS_LocalFacesComeBeforeTheFile is the regression guard for a
+// document rendered entirely in Thin: NotoSansCJK.ttc packs 45 faces into one
+// file starting with Thin, and CSS cannot name a face inside a collection, so a
+// url() gives Thin for every weight. The local() name has to come first for the
+// system font manager to resolve the weight that was asked for.
+func TestBuildCSS_LocalFacesComeBeforeTheFile(t *testing.T) {
+	c := &Converter{
+		cfg: &Config{
+			FontRegular:      "/fonts/NotoSansCJK.ttc",
+			FontBold:         "/fonts/NotoSansCJK.ttc",
+			FontLocalRegular: []string{"Noto Sans CJK JP Regular", "NotoSansCJKjp-Regular"},
+			FontLocalBold:    []string{"Noto Sans CJK JP Bold", "NotoSansCJKjp-Bold"},
+		},
+	}
+	css, err := c.buildCSS()
+	if err != nil {
+		t.Fatalf("buildCSS: %v", err)
+	}
+
+	for _, want := range []string{
+		"src: local('Noto Sans CJK JP Regular'), local('NotoSansCJKjp-Regular'), " +
+			"url('file:///fonts/NotoSansCJK.ttc') format('truetype');",
+		"src: local('Noto Sans CJK JP Bold'), local('NotoSansCJKjp-Bold'), " +
+			"url('file:///fonts/NotoSansCJK.ttc') format('truetype');",
+	} {
+		if !strings.Contains(css, want) {
+			t.Errorf("buildCSS() missing %q, got:\n%s", want, css)
+		}
+	}
+}
+
+// TestBuildCSS_NoLocalFacesLeavesTheFileAlone covers the per-weight install,
+// where the file already addresses one weight and needs no local() name.
+func TestBuildCSS_NoLocalFacesLeavesTheFileAlone(t *testing.T) {
+	c := &Converter{cfg: &Config{FontRegular: "/fonts/NotoSansCJKjp-Regular.otf"}}
+	css, err := c.buildCSS()
+	if err != nil {
+		t.Fatalf("buildCSS: %v", err)
+	}
+
+	if strings.Contains(css, "local(") {
+		t.Errorf("buildCSS() emitted a local() source for a per-weight font file:\n%s", css)
+	}
+	want := "src: url('file:///fonts/NotoSansCJKjp-Regular.otf') format('truetype');"
+	if !strings.Contains(css, want) {
+		t.Errorf("buildCSS() missing %q, got:\n%s", want, css)
+	}
+}
+
 func TestBuildCSS_NoFontFaceWhenEmpty(t *testing.T) {
 	c := &Converter{cfg: &Config{}}
 	css, err := c.buildCSS()
@@ -179,7 +228,7 @@ func TestBuildCSS_UnchangedWithoutCustomCSS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildCSS: %v", err)
 	}
-	want := fontFace("Noto Sans JP", 400, "/fonts/R.ttc") + baseCSS
+	want := fontFace("Noto Sans JP", 400, "/fonts/R.ttc", nil) + baseCSS
 	if css != want {
 		t.Errorf("stylesheet drifted with no -css given.\n got: %q\nwant: %q", css, want)
 	}

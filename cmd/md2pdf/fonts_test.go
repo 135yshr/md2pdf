@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -191,5 +192,72 @@ func TestDeriveFontWeight(t *testing.T) {
 func TestDeriveFontWeight_EmptyRegularStaysEmpty(t *testing.T) {
 	if got := deriveFontWeight("", "Bold"); got != "" {
 		t.Errorf("deriveFontWeight(\"\", …) = %q, want empty", got)
+	}
+}
+
+// TestLocalFaceNames covers which fonts need an installed face named alongside
+// the file. Only a weightless collection does: CSS cannot select a face inside
+// one, so loading it by URL yields its first face — Thin — for every weight.
+func TestLocalFaceNames(t *testing.T) {
+	tests := []struct {
+		name   string
+		path   string
+		weight string
+		want   []string
+	}{
+		{
+			// The layout on the reporter's machine, and the reason the whole
+			// document rendered in hairlines with no bold.
+			name:   "the bare collection is named per weight",
+			path:   "/Users/someone/Library/Fonts/NotoSansCJK.ttc",
+			weight: "Bold",
+			want:   []string{"Noto Sans CJK JP Bold", "NotoSansCJKjp-Bold"},
+		},
+		{
+			name:   "regular too",
+			path:   "/Users/someone/Library/Fonts/NotoSansCJK.ttc",
+			weight: "Regular",
+			want:   []string{"Noto Sans CJK JP Regular", "NotoSansCJKjp-Regular"},
+		},
+		{
+			name:   "the jp collection as well",
+			path:   "/usr/share/fonts/noto-cjk/NotoSansCJKjp.ttc",
+			weight: "Medium",
+			want:   []string{"Noto Sans CJK JP Medium", "NotoSansCJKjp-Medium"},
+		},
+		{
+			// A weighted collection is still a collection, but its first face is
+			// the weight it is named for, so the URL already resolves correctly.
+			name:   "a weighted collection needs no local name",
+			path:   "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+			weight: "Bold",
+			want:   nil,
+		},
+		{
+			name:   "a per-weight file needs no local name",
+			path:   "/usr/share/fonts/noto/NotoSansCJKjp-Bold.otf",
+			weight: "Bold",
+			want:   nil,
+		},
+		{
+			name:   "an unknown font is left alone",
+			path:   "/tmp/MyFont.ttc",
+			weight: "Bold",
+			want:   nil,
+		},
+		{
+			name:   "no font at all",
+			path:   "",
+			weight: "Bold",
+			want:   nil,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := localFaceNames(tc.path, tc.weight)
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("localFaceNames(%q, %q) = %v, want %v", tc.path, tc.weight, got, tc.want)
+			}
+		})
 	}
 }

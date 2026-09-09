@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -220,5 +221,74 @@ func TestParseFlags_MermaidRenderModes(t *testing.T) {
 				t.Errorf("MermaidRender = %q, want %q", cfg.MermaidRender, tc.want)
 			}
 		})
+	}
+}
+
+// TestParseFlags_CollectionFontCarriesLocalFaceNames wires the two halves
+// together: finding the collection is not enough, the Config also has to carry
+// the face names, or every weight silently resolves to the collection's first
+// face (Thin) and the PDF renders with no bold.
+func TestParseFlags_CollectionFontCarriesLocalFaceNames(t *testing.T) {
+	dir := t.TempDir()
+	input := filepath.Join(dir, "doc.md")
+	if err := os.WriteFile(input, []byte("# hi"), 0o644); err != nil {
+		t.Fatalf("write input: %v", err)
+	}
+	font := filepath.Join(dir, "NotoSansCJK.ttc")
+	if err := os.WriteFile(font, []byte("font"), 0o644); err != nil {
+		t.Fatalf("write font: %v", err)
+	}
+
+	cfg, err := parseFlags([]string{"-font", font, input})
+	if err != nil {
+		t.Fatalf("parseFlags: %v", err)
+	}
+
+	// A weightless collection reuses one file for all three weights, so the
+	// local names are the only thing telling them apart.
+	for _, tc := range []struct {
+		weight string
+		got    []string
+		path   string
+	}{
+		{"Regular", cfg.FontLocalRegular, cfg.FontRegular},
+		{"Bold", cfg.FontLocalBold, cfg.FontBold},
+		{"Medium", cfg.FontLocalMedium, cfg.FontMedium},
+	} {
+		if tc.path != font {
+			t.Errorf("%s weight resolved to %q, want the collection %q", tc.weight, tc.path, font)
+		}
+		want := []string{"Noto Sans CJK JP " + tc.weight, "NotoSansCJKjp-" + tc.weight}
+		if !slices.Equal(tc.got, want) {
+			t.Errorf("%s local face names = %v, want %v", tc.weight, tc.got, want)
+		}
+	}
+}
+
+// TestParseFlags_PerWeightFontNeedsNoLocalNames is the other side: a per-weight
+// install addresses one face by path already, so nothing is added.
+func TestParseFlags_PerWeightFontNeedsNoLocalNames(t *testing.T) {
+	dir := t.TempDir()
+	input := filepath.Join(dir, "doc.md")
+	if err := os.WriteFile(input, []byte("# hi"), 0o644); err != nil {
+		t.Fatalf("write input: %v", err)
+	}
+	for _, name := range []string{"NotoSansCJKjp-Regular.otf", "NotoSansCJKjp-Bold.otf"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("font"), 0o644); err != nil {
+			t.Fatalf("write font: %v", err)
+		}
+	}
+
+	cfg, err := parseFlags([]string{"-font", filepath.Join(dir, "NotoSansCJKjp-Regular.otf"), input})
+	if err != nil {
+		t.Fatalf("parseFlags: %v", err)
+	}
+
+	if cfg.FontLocalRegular != nil || cfg.FontLocalBold != nil || cfg.FontLocalMedium != nil {
+		t.Errorf("per-weight font gained local face names: %v / %v / %v",
+			cfg.FontLocalRegular, cfg.FontLocalBold, cfg.FontLocalMedium)
+	}
+	if want := filepath.Join(dir, "NotoSansCJKjp-Bold.otf"); cfg.FontBold != want {
+		t.Errorf("FontBold = %q, want the sibling %q", cfg.FontBold, want)
 	}
 }

@@ -87,6 +87,35 @@ func deriveFontWeight(regular, weight string) string {
 	return regular
 }
 
+// weightlessCollections are the Noto Sans CJK files that pack every weight into
+// one collection without naming a weight in the filename.
+//
+// They are the only files that need local() face names. A weighted collection
+// such as NotoSansCJK-Bold.ttc is also a collection, but its first face is the
+// weight it is named for, so loading it by URL already yields the right face.
+var weightlessCollections = map[string]bool{
+	"NotoSansCJK.ttc":   true,
+	"NotoSansCJKjp.ttc": true,
+}
+
+// localFaceNames returns the installed names of the Noto Sans CJK JP face for a
+// weight, or nil when path already addresses a single weight and the file can
+// simply be loaded.
+//
+// CSS cannot select a face inside a collection, so a weightless collection
+// loaded by URL always yields its first face — Thin, in Noto Sans CJK, which
+// renders a whole document in hairlines with no bold at all. Naming the face
+// lets the system font manager resolve the weight from the same installed file.
+// Both spellings are offered because the two work through different lookups:
+// the full name is what a font manager reports, the PostScript name what some
+// matchers index on.
+func localFaceNames(path, weight string) []string {
+	if !weightlessCollections[filepath.Base(path)] {
+		return nil
+	}
+	return []string{"Noto Sans CJK JP " + weight, "NotoSansCJKjp-" + weight}
+}
+
 // userHomeDir returns the home directory, or an empty string when it cannot be
 // determined, which only drops the per-user font directory from the search.
 func userHomeDir() string {
