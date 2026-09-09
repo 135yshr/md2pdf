@@ -37,13 +37,27 @@ var mmdcDefaultPaths = []string{
 	"/opt/homebrew/bin/mmdc",
 }
 
+// cssFlag collects repeated -css occurrences, preserving the order they were
+// given so the cascade is predictable.
+type cssFlag []string
+
+// String implements flag.Value.
+func (f *cssFlag) String() string { return strings.Join(*f, ", ") }
+
+// Set implements flag.Value, appending rather than replacing so -css can be
+// passed more than once.
+func (f *cssFlag) Set(value string) error {
+	*f = append(*f, value)
+	return nil
+}
+
 // parseFlags parses command-line arguments and returns a Config.
 func parseFlags(args []string) (*converter.Config, error) {
 	fs := flag.NewFlagSet("md2pdf", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 
 	output := fs.String("o", "", "Output file path (default: <input>.pdf, or .docx with -format docx)")
-	format := fs.String("format", "", "Output format: pdf (default), docx or console (inferred from -o extension when omitted)")
+	format := fs.String("format", "", "Output format: pdf (default), html, docx or console (inferred from -o extension when omitted)")
 	fontRegular := fs.String("font", "", "Path to Noto Sans CJK JP Regular .ttc/.ttf font file")
 	fontBold := fs.String("font-bold", "", "Path to Noto Sans CJK JP Bold .ttc/.ttf font file")
 	fontMedium := fs.String("font-medium", "", "Path to Noto Sans CJK JP Medium .ttc/.ttf font file")
@@ -52,6 +66,8 @@ func parseFlags(args []string) (*converter.Config, error) {
 	docxFont := fs.String("docx-font", "", "Font family for DOCX output (default: Yu Gothic)")
 	pythonPath := fs.String("python", "", "Path to Python 3 interpreter with the playwright package (overrides MD2PDF_PYTHON)")
 	puppeteerCfg := fs.String("puppeteer-config", "", "Path to Puppeteer JSON config file for mmdc (auto-created if omitted)")
+	var cssFiles cssFlag
+	fs.Var(&cssFiles, "css", "Path to a custom CSS file, applied after the built-in stylesheet (repeatable)")
 	pageSize := fs.String("page-size", "A4", "PDF page size: A4, Letter, A3")
 	consoleWidth := fs.Int("width", 0, "Console word-wrap width in columns (0: follow terminal, max 120)")
 	consoleStyle := fs.String("style", "", "Console color theme: auto (default), dark, light, notty, ... or a JSON stylesheet path")
@@ -91,6 +107,18 @@ func parseFlags(args []string) (*converter.Config, error) {
 	out, err := resolveOutputPath(*output, inputs, outFormat)
 	if err != nil {
 		return nil, err
+	}
+
+	// Fail on an unreadable stylesheet before any rendering work starts, so a
+	// typo in -css is reported immediately and by name.
+	for _, path := range cssFiles {
+		info, err := os.Stat(path)
+		if err != nil {
+			return nil, fmt.Errorf("custom CSS file not found: %s", path)
+		}
+		if info.IsDir() {
+			return nil, fmt.Errorf("custom CSS path is a directory: %s", path)
+		}
 	}
 
 	// Validate the console-only options up front so a bad value fails before
@@ -153,6 +181,7 @@ func parseFlags(args []string) (*converter.Config, error) {
 		DOCXFont:        *docxFont,
 		PythonPath:      python,
 		PuppeteerConfig: *puppeteerCfg,
+		CSSFiles:        cssFiles,
 		PageSize:        *pageSize,
 		MarginTop:       *marginTop,
 		MarginBottom:    *marginBottom,
@@ -178,6 +207,8 @@ func resolveFormat(format, output string) (string, error) {
 		fromExt = converter.FormatPDF
 	case ".docx":
 		fromExt = converter.FormatDOCX
+	case ".html", ".htm":
+		fromExt = converter.FormatHTML
 	}
 
 	if format == "" {
@@ -189,14 +220,14 @@ func resolveFormat(format, output string) (string, error) {
 
 	normalized := normalizeFormat(format)
 	switch normalized {
-	case converter.FormatPDF, converter.FormatDOCX:
+	case converter.FormatPDF, converter.FormatDOCX, converter.FormatHTML:
 	case converter.FormatConsole:
 		if output != "" {
 			return "", errors.New("-format console renders to the terminal; remove -o")
 		}
 		return converter.FormatConsole, nil
 	default:
-		return "", fmt.Errorf("unsupported output format %q: must be pdf, docx or console", format)
+		return "", fmt.Errorf("unsupported output format %q: must be pdf, html, docx or console", format)
 	}
 
 	if fromExt != "" && fromExt != normalized {
@@ -238,10 +269,15 @@ Usage:
   md2pdf -format console [options] <input.md>...   several files, in order
 
 Options:
-  -o <path>               Output path (default: <input>.pdf, or .docx with -format docx)
-  -format <fmt>           Output format: pdf (default), docx or console
+  -o <path>               Output path (default: <input>.<format>, e.g.
+                          <input>.html with -format html)
+  -format <fmt>           Output format: pdf (default), html, docx or console
                           (console has the aliases term and terminal;
-                          inferred from -o extension when omitted)
+                          inferred from -o extension when omitted, including
+                          .html and .htm)
+  -css <path>             Custom CSS applied after the built-in stylesheet,
+                          so its rules win. Repeatable; later files win over
+                          earlier ones. Used by pdf and html output.
   -font <path>            Noto Sans CJK JP Regular font (.ttc/.ttf)
   -font-bold <path>       Noto Sans CJK JP Bold font
   -font-medium <path>     Noto Sans CJK JP Medium font
@@ -288,6 +324,9 @@ Examples:
   md2pdf -o report.pdf document.md
   md2pdf -format docx document.md
   md2pdf -o report.docx document.md
+  md2pdf -format html document.md
+  md2pdf -format html -css brand.css document.md
+  md2pdf -css brand.css -css client.css -o report.pdf document.md
   md2pdf -format console document.md
   md2pdf -format console -style dark -width 100 document.md
   md2pdf -format console -pager=false document.md | cat

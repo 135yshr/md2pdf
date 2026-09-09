@@ -32,14 +32,18 @@ Uses golangci-lint with config in `.golangci.yml`. Key enabled linters: errcheck
 
 ## Architecture
 
-`converter.go`'s `Convert` branches on `Config.Format` (`FormatPDF` / `FormatDOCX` / `FormatConsole`): each format takes a **different pipeline** because each reads best from a different source.
+`converter.go`'s `Convert` branches on `Config.Format` (`FormatPDF` / `FormatHTML` / `FormatDOCX` / `FormatConsole`): each format takes a **different pipeline** because each reads best from a different source.
 
-### PDF pipeline (Markdown → HTML → Chromium)
+### PDF pipeline (Markdown → HTML → Chromium), and HTML output
 
 1. **parser.go** — goldmark parses Markdown to HTML, extracting fenced Mermaid code blocks into a `parsedDoc` struct with placeholders
 2. **mermaid.go** — each Mermaid block is rendered to inline SVG via the external `mmdc` CLI (`renderMermaid`)
 3. **html.go** — assembles a self-contained HTML file with GitHub CSS, `@font-face` declarations, and inlined SVGs
 4. **pdf.go** — headless Chromium (via Playwright Python driver) prints the HTML to PDF
+
+`FormatHTML` is the same pipeline stopping after step 3: `Convert` points `buildHTML` at the caller's output path instead of the working directory and returns, so Chromium never runs. Image paths are deliberately **not** rewritten or copied — the default output sits beside the input, where the Markdown's own relative paths already resolve.
+
+`-css` stylesheets are read by `buildCSS`/`readCustomCSS` (`html.go`) and appended **after** `baseCSS` in the same inline `<style>` block, so user rules win the cascade; multiple `-css` files concatenate in argument order. A stylesheet containing `</style` is **rejected** rather than escaped: the page is assembled with `text/template`, which does no escaping, so the sequence would otherwise close the block and inject markup.
 
 ### DOCX pipeline (Markdown → pandoc, no HTML)
 
@@ -76,9 +80,9 @@ With several inputs, `renderConsole` renders each document **independently** thr
 
 **input.go** reads documents: `readInput` takes the bytes from a file or, for `StdinPath` (`-`), from the `Converter.stdin` seam, and treats whitespace-only input as **empty and an error for stdin only** — an empty pipe is invisible and nearly always an upstream failure, whereas an empty file is something the caller pointed at directly, and erroring on it would break the "single input behaves as before" regression guard. `inputDir` returns the directory relative paths resolve against: the file's own directory, or the **working directory** for stdin.
 
-**converter.go** orchestrates all three pipelines and manages a temporary working directory for intermediate files. `Convert` takes a **slice** of inputs; only console format renders more than one. **Config** struct holds all runtime options including `InputFiles` (a slice; `-` means stdin), `Format` ("pdf"|"docx"|"console"), `DOCXFont`, and the console options (`ConsoleWidth`, `ConsoleStyle`, `ConsolePager`, `MermaidRender`).
+**converter.go** orchestrates all three pipelines and manages a temporary working directory for intermediate files. `Convert` takes a **slice** of inputs; only console format renders more than one. **Config** struct holds all runtime options including `InputFiles` (a slice; `-` means stdin), `Format` ("pdf"|"html"|"docx"|"console"), `CSSFiles`, `DOCXFont`, and the console options (`ConsoleWidth`, `ConsoleStyle`, `ConsolePager`, `MermaidRender`).
 
-**cmd/md2pdf/** — CLI entry point. `inputs.go` owns the input contract: `resolveInputs` validates **every** positional argument before any rendering starts (so a typo in the third of three paths fails immediately, naming it), rejects more than one input for non-console formats, refuses `-` mixed with file paths, and fails fast via `stdinUsable` when `-` is given but standard input is a terminal — reading a terminal would block with no indication of what md2pdf is waiting for. `resolveOutputPath` makes `-o` mandatory for `pdf`/`docx` read from stdin, since there is no input filename to derive one from. `flags.go` handles argument parsing and auto-detection of font/mmdc paths; `resolveFormat` derives the output format from `-format` or the `-o` extension, folds the `term`/`terminal` aliases onto `console`, and rejects `-o` combined with console. Console `-style` values are validated up front by `converter.ValidateConsoleStyle`, and `-mermaid-render` by `converter.ValidateMermaidRenderMode`. Pandoc is resolved in `docx.go` (`findPandoc`) unless `-pandoc` is provided. `main.go` wires flags to the converter.
+**cmd/md2pdf/** — CLI entry point. `inputs.go` owns the input contract: `resolveInputs` validates **every** positional argument before any rendering starts (so a typo in the third of three paths fails immediately, naming it), rejects more than one input for non-console formats, refuses `-` mixed with file paths, and fails fast via `stdinUsable` when `-` is given but standard input is a terminal — reading a terminal would block with no indication of what md2pdf is waiting for. `resolveOutputPath` makes `-o` mandatory for `pdf`/`docx` read from stdin, since there is no input filename to derive one from. `flags.go` handles argument parsing and auto-detection of font/mmdc paths; `resolveFormat` derives the output format from `-format` or the `-o` extension (`.html`/`.htm` imply html), `-css` is a repeatable `flag.Value` (`cssFlag`) whose files are stat-checked at parse time so a typo fails before any rendering, folds the `term`/`terminal` aliases onto `console`, and rejects `-o` combined with console. Console `-style` values are validated up front by `converter.ValidateConsoleStyle`, and `-mermaid-render` by `converter.ValidateMermaidRenderMode`. Pandoc is resolved in `docx.go` (`findPandoc`) unless `-pandoc` is provided. `main.go` wires flags to the converter.
 
 ## External Dependencies
 

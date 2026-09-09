@@ -1,3 +1,8 @@
+# [v0.11.0](https://github.com/135yshr/md2pdf/compare/v0.10.0...v0.11.0) (2026-09-09)
+
+## ✨ New Features
+- [`5847a2b`](https://github.com/135yshr/md2pdf/commit/5847a2b)  feat: support custom CSS styling and HTML output (#50) (Issues: [`#50`](https://github.com/135yshr/md2pdf/issues/50) [`#30`](https://github.com/135yshr/md2pdf/issues/30))
+
 # [v0.10.0](https://github.com/135yshr/md2pdf/compare/v0.9.0...v0.10.0) (2026-09-09)
 
 ## ✨ New Features
