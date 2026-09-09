@@ -1,3 +1,8 @@
+# [v0.10.0](https://github.com/135yshr/md2pdf/compare/v0.9.0...v0.10.0) (2026-09-09)
+
+## ✨ New Features
+- [`2b17d73`](https://github.com/135yshr/md2pdf/commit/2b17d73)  feat: accept stdin and multiple input files (#49) (Issues: [`#49`](https://github.com/135yshr/md2pdf/issues/49) [`#43`](https://github.com/135yshr/md2pdf/issues/43) [`#44`](https://github.com/135yshr/md2pdf/issues/44) [`#45`](https://github.com/135yshr/md2pdf/issues/45))
+
 # [v0.9.0](https://github.com/135yshr/md2pdf/compare/v0.8.0...v0.9.0) (2026-09-09)
 
 ## ✨ New Features
