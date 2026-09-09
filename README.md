@@ -205,7 +205,7 @@ start:
 | Mode | Behaviour |
 | --- | --- |
 | `auto` (default) | Inline image → text art → Mermaid source, taking the first that works |
-| `image` | Require an inline image; fail with a message naming the missing capability instead of falling back |
+| `image` | Require a terminal that can show inline images; fail with a message naming the missing capability rather than degrading. A *missing `mmdc`* still degrades to text art at exit 0 — the strict check is about the terminal, not the toolchain |
 | `ascii` | Always draw box-drawing text art (source only for diagram types it cannot draw) |
 | `source` | Always print the Mermaid source as a code block |
 
@@ -250,6 +250,8 @@ Notes:
   diagrams.
 - Images are never written when the output is piped or redirected, or when
   `NO_COLOR` is set; those cases fall through to text art, which is plain text.
+  With `-mermaid-render image` they are an error instead, since the terminal
+  cannot display an image at all.
 - Sixel detection is environment-based, because querying the terminal directly
   would require putting it into raw mode and waiting for a reply. A Sixel
   terminal that sets none of the markers above is therefore not detected and

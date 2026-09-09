@@ -91,10 +91,10 @@ func renderMermaidASCII(source string, width int, pureASCII bool) (art string, e
 	if width > 0 {
 		cfg.MaxWidth = width
 	}
-	if direction, ok := mermaidGraphDirection(source); ok {
-		cfg.GraphDirection = direction
-	}
-
+	// Config.GraphDirection is deliberately left at its default: mermaid-ascii's
+	// parser takes the direction from the diagram header, so setting it here has
+	// no effect. A header without one (bare "graph") lays out top-down, matching
+	// Mermaid's own default.
 	defer func() {
 		if r := recover(); r != nil {
 			art = ""
@@ -107,29 +107,6 @@ func renderMermaidASCII(source string, width int, pureASCII bool) (art string, e
 		return "", fmt.Errorf("render mermaid as text art: %w", err)
 	}
 	return art, nil
-}
-
-// mermaidGraphDirection extracts the layout direction from a flowchart or graph
-// header so the art flows the way the document asks. Only left-to-right and
-// top-down layouts exist in mermaid-ascii, so the other Mermaid directions are
-// mapped onto the closer of the two.
-func mermaidGraphDirection(source string) (string, bool) {
-	header, ok := mermaidDiagramHeader(source)
-	if !ok {
-		return "", false
-	}
-	fields := strings.Fields(header)
-	if len(fields) < 2 {
-		return "", false
-	}
-	switch strings.ToUpper(fields[1]) {
-	case "LR", "RL":
-		return "LR", true
-	case "TD", "TB", "BT":
-		return "TD", true
-	default:
-		return "", false
-	}
 }
 
 // clipConsoleArt trims each line of text art to width columns. The art is

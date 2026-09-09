@@ -198,6 +198,9 @@ func TestSpliceConsoleDiagrams_NeverClipsImageSequences(t *testing.T) {
 	}
 }
 
+// TestRenderMermaidASCII_HonoursSourceDirection pins that the direction in the
+// diagram header reaches the layout. The parser in mermaid-ascii reads it from
+// the source, so this guards against a future change here overriding it.
 func TestRenderMermaidASCII_HonoursSourceDirection(t *testing.T) {
 	lr, err := renderMermaidASCII("flowchart LR\n  A --> B\n", 80, false)
 	if err != nil {
@@ -213,6 +216,22 @@ func TestRenderMermaidASCII_HonoursSourceDirection(t *testing.T) {
 		t.Errorf("TD art (%d lines) is not taller than LR art (%d lines); "+
 			"the direction in the source is being ignored\nLR:\n%s\nTD:\n%s",
 			tdLines, lrLines, lr, td)
+	}
+}
+
+// TestRenderMermaidASCII_BareHeaderLaysOutTopDown covers a header with no
+// direction, which Mermaid itself defaults to top-down.
+func TestRenderMermaidASCII_BareHeaderLaysOutTopDown(t *testing.T) {
+	for _, src := range []string{"graph\n  A --> B\n", "flowchart\n  A --> B\n"} {
+		art, err := renderMermaidASCII(src, 80, false)
+		if err != nil {
+			t.Fatalf("%q: %v", src, err)
+		}
+		lines := strings.Split(strings.TrimRight(art, "\n"), "\n")
+		if len(lines) < 10 {
+			t.Errorf("%q rendered %d lines, expected a tall top-down layout:\n%s",
+				src, len(lines), art)
+		}
 	}
 }
 
