@@ -1,0 +1,153 @@
+package converter
+
+import (
+	"errors"
+	"fmt"
+	"strings"
+
+	"charm.land/glamour/v2/styles"
+	"github.com/AlexanderGrooff/mermaid-ascii/pkg/diagram"
+	"github.com/AlexanderGrooff/mermaid-ascii/pkg/render"
+	"github.com/charmbracelet/x/ansi"
+)
+
+// asciiDiagramPrefixes lists the Mermaid diagram types rendered as text art.
+//
+// The set is deliberately narrower than what mermaid-ascii accepts. Its
+// erDiagram support parses but lays the entities out misaligned, and its graph
+// parser is the fallback for any unrecognized header, so relying on the library
+// to reject a type is not enough. Everything outside this list keeps its source.
+var asciiDiagramPrefixes = []string{"flowchart", "graph", "sequenceDiagram"}
+
+// errUnsupportedASCIIDiagram reports a diagram type that has no legible text-art
+// rendering, so the caller falls back to showing the Mermaid source.
+var errUnsupportedASCIIDiagram = errors.New("diagram type has no text-art rendering")
+
+// consoleWantsPureASCII reports whether the console style asks for plain ASCII
+// box characters instead of Unicode box-drawing ones. Glamour's "ascii" style is
+// the marker for a terminal that cannot show the latter.
+//
+// It follows the same precedence as resolveConsoleStyle — the -style flag over
+// GLAMOUR_STYLE — rather than looking only at the resolved style, because that
+// resolves to "notty" for redirected output and would otherwise discard an
+// explicit request for ASCII.
+func consoleWantsPureASCII(explicit, envStyle, resolved string) bool {
+	switch {
+	case explicit != "":
+		return explicit == styles.AsciiStyle
+	case envStyle != "":
+		return envStyle == styles.AsciiStyle
+	default:
+		return resolved == styles.AsciiStyle
+	}
+}
+
+// asciiDiagramSupported reports whether the Mermaid source names a diagram type
+// that renders legibly as text art.
+func asciiDiagramSupported(source string) bool {
+	header, ok := mermaidDiagramHeader(source)
+	if !ok {
+		return false
+	}
+	for _, prefix := range asciiDiagramPrefixes {
+		if header == prefix || strings.HasPrefix(header, prefix+" ") {
+			return true
+		}
+	}
+	return false
+}
+
+// mermaidDiagramHeader returns the first meaningful line of a Mermaid diagram,
+// skipping blank lines and %% comments. It reports ok=false for a source with no
+// such line.
+func mermaidDiagramHeader(source string) (string, bool) {
+	for _, line := range strings.Split(source, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "%%") {
+			continue
+		}
+		return trimmed, true
+	}
+	return "", false
+}
+
+// renderMermaidASCII converts Mermaid source to box-drawing text art at most
+// width columns wide. When pureASCII is set, the Unicode box-drawing characters
+// are swapped for plain +, - and | so the art stays readable on terminals that
+// cannot show them.
+//
+// Diagram types outside asciiDiagramPrefixes are rejected before parsing, and
+// mermaid-ascii's layout is guarded against panics: it is a fallback path, so a
+// crash there must degrade to the Mermaid source rather than take down the run.
+func renderMermaidASCII(source string, width int, pureASCII bool) (art string, err error) {
+	if !asciiDiagramSupported(source) {
+		header, _ := mermaidDiagramHeader(source)
+		return "", fmt.Errorf("%w: %q", errUnsupportedASCIIDiagram, header)
+	}
+
+	cfg := diagram.DefaultConfig()
+	cfg.UseAscii = pureASCII
+	cfg.StyleType = "cli"
+	if width > 0 {
+		cfg.MaxWidth = width
+	}
+	if direction, ok := mermaidGraphDirection(source); ok {
+		cfg.GraphDirection = direction
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			art = ""
+			err = fmt.Errorf("text-art layout panicked: %v", r)
+		}
+	}()
+
+	art, err = render.RenderDiagram(source, cfg)
+	if err != nil {
+		return "", fmt.Errorf("render mermaid as text art: %w", err)
+	}
+	return art, nil
+}
+
+// mermaidGraphDirection extracts the layout direction from a flowchart or graph
+// header so the art flows the way the document asks. Only left-to-right and
+// top-down layouts exist in mermaid-ascii, so the other Mermaid directions are
+// mapped onto the closer of the two.
+func mermaidGraphDirection(source string) (string, bool) {
+	header, ok := mermaidDiagramHeader(source)
+	if !ok {
+		return "", false
+	}
+	fields := strings.Fields(header)
+	if len(fields) < 2 {
+		return "", false
+	}
+	switch strings.ToUpper(fields[1]) {
+	case "LR", "RL":
+		return "LR", true
+	case "TD", "TB", "BT":
+		return "TD", true
+	default:
+		return "", false
+	}
+}
+
+// clipConsoleArt trims each line of text art to width columns. The art is
+// spliced into the document after glamour has wrapped it, so an over-wide line
+// would otherwise be folded by the terminal into unreadable fragments. Clipping
+// keeps the diagram's shape intact at the cost of its right edge.
+//
+// It is applied at splice time rather than at render time because only the
+// splice knows how far glamour indented the diagram.
+func clipConsoleArt(art string, width int) string {
+	if width <= 0 {
+		return art
+	}
+	lines := strings.Split(art, "\n")
+	for i, line := range lines {
+		if ansi.StringWidth(line) > width {
+			lines[i] = ansi.Truncate(line, width, "")
+		}
+	}
+	return strings.Join(lines, "\n")
+}

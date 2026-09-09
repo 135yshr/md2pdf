@@ -31,12 +31,20 @@ const (
 	// MermaidRenderImage forces inline images and fails when the terminal
 	// cannot display them.
 	MermaidRenderImage = "image"
+	// MermaidRenderASCII forces box-drawing text art, which needs no terminal
+	// image support and survives both piping and the pager.
+	MermaidRenderASCII = "ascii"
 	// MermaidRenderSource always prints the Mermaid source as a code block.
 	MermaidRenderSource = "source"
 )
 
 // mermaidRenderModes lists the values accepted by -mermaid-render.
-var mermaidRenderModes = []string{MermaidRenderAuto, MermaidRenderImage, MermaidRenderSource}
+var mermaidRenderModes = []string{
+	MermaidRenderAuto,
+	MermaidRenderImage,
+	MermaidRenderASCII,
+	MermaidRenderSource,
+}
 
 // ValidateMermaidRenderMode reports whether value names a supported Mermaid
 // rendering mode for console output. An empty value selects the default.
@@ -115,6 +123,9 @@ type consoleMermaidPlan struct {
 	// protocol is the image protocol to emit, set only when mode is
 	// MermaidRenderImage.
 	protocol terminalImageProtocol
+	// pureASCII asks for plain +, - and | instead of Unicode box-drawing
+	// characters when text art is produced.
+	pureASCII bool
 }
 
 // emitsImages reports whether the plan will write image escape sequences.
@@ -130,10 +141,16 @@ func resolveConsoleMermaidPlan(mode string, isTTY, noColor bool, getenv func(str
 	if mode == "" {
 		mode = MermaidRenderAuto
 	}
-	sourcePlan := consoleMermaidPlan{mode: MermaidRenderSource}
-	if mode == MermaidRenderSource {
-		return sourcePlan, nil
+	switch mode {
+	case MermaidRenderSource:
+		return consoleMermaidPlan{mode: MermaidRenderSource}, nil
+	case MermaidRenderASCII:
+		return consoleMermaidPlan{mode: MermaidRenderASCII}, nil
 	}
+
+	// Text art is the next step down the chain: it is plain text, so unlike an
+	// image it survives a redirect, NO_COLOR and the pager.
+	asciiPlan := consoleMermaidPlan{mode: MermaidRenderASCII}
 
 	if !isTTY || noColor {
 		if mode == MermaidRenderImage {
@@ -141,7 +158,7 @@ func resolveConsoleMermaidPlan(mode string, isTTY, noColor bool, getenv func(str
 				"-mermaid-render image needs an interactive terminal to draw inline images, " +
 					"but the output is redirected or NO_COLOR is set")
 		}
-		return sourcePlan, nil
+		return asciiPlan, nil
 	}
 
 	if getenv == nil {
@@ -154,7 +171,7 @@ func resolveConsoleMermaidPlan(mode string, isTTY, noColor bool, getenv func(str
 				"-mermaid-render image needs a terminal with an inline image protocol " +
 					"(kitty, iTerm2 or Sixel), but none was detected from TERM and TERM_PROGRAM")
 		}
-		return sourcePlan, nil
+		return asciiPlan, nil
 	}
 
 	return consoleMermaidPlan{mode: MermaidRenderImage, protocol: protocol}, nil
@@ -165,8 +182,12 @@ func resolveConsoleMermaidPlan(mode string, isTTY, noColor bool, getenv func(str
 type consoleDiagram struct {
 	// placeholder is the token standing in for the diagram in the Markdown.
 	placeholder string
-	// content is the text (usually an escape sequence) to splice in.
+	// content is the text or escape sequence to splice in.
 	content string
+	// clip asks for over-wide lines to be trimmed to the wrap width. It is set
+	// for text art, whose width is measurable, and never for an image escape
+	// sequence, which occupies no columns of its own.
+	clip bool
 }
 
 // consoleTokenPrefix is the prefix of the stand-in token left in the Markdown
@@ -202,14 +223,14 @@ const consoleTokenWidthMargin = 4
 // the token at. The whole line is dropped so the styling glamour wrapped the
 // token in does not leak around the diagram. Tokens that could not be found are
 // returned so the caller can report them instead of losing a diagram silently.
-func spliceConsoleDiagrams(rendered string, diagrams []consoleDiagram) (string, []string) {
+func spliceConsoleDiagrams(rendered string, diagrams []consoleDiagram, width int) (string, []string) {
 	if len(diagrams) == 0 {
 		return rendered, nil
 	}
 
-	byToken := make(map[string]string, len(diagrams))
+	byToken := make(map[string]consoleDiagram, len(diagrams))
 	for _, d := range diagrams {
-		byToken[d.placeholder] = d.content
+		byToken[d.placeholder] = d
 	}
 	placed := make(map[string]bool, len(diagrams))
 
@@ -218,13 +239,18 @@ func spliceConsoleDiagrams(rendered string, diagrams []consoleDiagram) (string, 
 	for _, line := range lines {
 		stripped := ansi.Strip(line)
 		token := consoleTokenRe.FindString(stripped)
-		content, ok := byToken[token]
+		diagram, ok := byToken[token]
 		if token == "" || !ok {
 			out = append(out, line)
 			continue
 		}
 		placed[token] = true
 		indent := stripped[:len(stripped)-len(strings.TrimLeft(stripped, " "))]
+
+		content := diagram.content
+		if diagram.clip && width > 0 {
+			content = clipConsoleArt(content, max(1, width-len(indent)))
+		}
 		for _, contentLine := range strings.Split(content, "\n") {
 			out = append(out, indent+contentLine)
 		}
@@ -240,13 +266,13 @@ func spliceConsoleDiagrams(rendered string, diagrams []consoleDiagram) (string, 
 }
 
 // prepareConsoleMermaid rewrites the Markdown so glamour never sees a Mermaid
-// block that will be drawn as an image, and returns the diagrams to splice in
-// afterwards. The original bytes are returned untouched whenever no diagram will
-// be drawn, so output stays identical to the source-only rendering. Diagrams are
-// rendered independently: one failure falls back to that block's source and
+// block that will be drawn, and returns the diagrams to splice in afterwards.
+// The original bytes are returned untouched whenever no diagram will be drawn,
+// so output stays identical to the source-only rendering. Diagrams are rendered
+// independently: one that cannot be drawn falls back to its own source and
 // leaves the rest of the document alone.
 func (c *Converter) prepareConsoleMermaid(md []byte, plan consoleMermaidPlan, width int) ([]byte, []consoleDiagram, error) {
-	if !plan.emitsImages() {
+	if !plan.emitsImages() && plan.mode != MermaidRenderASCII {
 		return md, nil, nil
 	}
 
@@ -262,27 +288,56 @@ func (c *Converter) prepareConsoleMermaid(md []byte, plan consoleMermaidPlan, wi
 		return md, nil, nil
 	}
 
-	if !c.mermaidAvailable() {
-		c.logf("mmdc not found; Mermaid diagrams stay as source " +
+	// Images need mmdc to rasterise the PNG; text art does not, so a missing
+	// Mermaid CLI drops one step down the chain instead of all the way to source.
+	useImages := plan.emitsImages()
+	if useImages && !c.mermaidAvailable() {
+		c.logf("mmdc not found; drawing Mermaid diagrams as text art instead " +
 			"(install @mermaid-js/mermaid-cli to draw them as images)")
-		return md, nil, nil
+		useImages = false
 	}
 
-	c.logf("Drawing %d Mermaid diagram(s) as %s images...", len(blocks), plan.protocol)
+	if useImages {
+		c.logf("Drawing %d Mermaid diagram(s) as %s images...", len(blocks), plan.protocol)
+	} else {
+		c.logf("Drawing %d Mermaid diagram(s) as text art...", len(blocks))
+	}
+
 	diagrams := make([]consoleDiagram, 0, len(blocks))
 	for i, block := range blocks {
-		sequence, err := c.renderConsoleDiagram(i, block.Source, plan.protocol, width)
-		if err != nil {
-			c.logf("  diagram %d could not be drawn (%v); showing its source instead", i, err)
+		diagram, ok := c.renderConsoleBlock(i, block.Source, plan, width, useImages)
+		if !ok {
 			markdown = strings.Replace(markdown, block.Placeholder, fencedMermaid(block.Source), 1)
 			continue
 		}
-		c.logf("  diagram %d drawn (%d bytes of %s escape sequence)", i, len(sequence), plan.protocol)
-		token := consoleDiagramToken(i)
-		markdown = strings.Replace(markdown, block.Placeholder, token, 1)
-		diagrams = append(diagrams, consoleDiagram{placeholder: token, content: sequence})
+		diagram.placeholder = consoleDiagramToken(i)
+		markdown = strings.Replace(markdown, block.Placeholder, diagram.placeholder, 1)
+		diagrams = append(diagrams, diagram)
 	}
 	return []byte(markdown), diagrams, nil
+}
+
+// renderConsoleBlock renders one Mermaid block by walking the fallback chain for
+// the plan: an inline image first when one is possible, then box-drawing text
+// art. It reports ok=false when neither worked, leaving the caller to restore
+// the block's Mermaid source.
+func (c *Converter) renderConsoleBlock(idx int, source string, plan consoleMermaidPlan, width int, useImages bool) (consoleDiagram, bool) {
+	if useImages {
+		sequence, err := c.renderConsoleDiagram(idx, source, plan.protocol, width)
+		if err == nil {
+			c.logf("  diagram %d drawn (%d bytes of %s escape sequence)", idx, len(sequence), plan.protocol)
+			return consoleDiagram{content: sequence}, true
+		}
+		c.logf("  diagram %d could not be drawn as an image (%v); trying text art", idx, err)
+	}
+
+	art, err := renderMermaidASCII(source, width, plan.pureASCII)
+	if err != nil {
+		c.logf("  diagram %d could not be drawn as text art (%v); showing its source instead", idx, err)
+		return consoleDiagram{}, false
+	}
+	c.logf("  diagram %d drawn as text art", idx)
+	return consoleDiagram{content: art, clip: true}, true
 }
 
 // renderConsoleDiagram rasterises one Mermaid block and encodes the PNG for the
