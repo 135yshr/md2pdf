@@ -20,7 +20,7 @@ const printTimeout = 120 * time.Second
 // browserStartTimeout is how long to wait for the browser to publish its
 // DevTools websocket URL.
 //
-// chromedp defaults to 20s, which is not enough for a genuinely cold start: on
+// The chromedp default of 20s is not enough for a genuinely cold start: on
 // a fresh CI runner the first Chrome launch sets up a profile and lost the race,
 // while a second launch in the same run finished comfortably. The overall
 // printTimeout still bounds the operation, so a browser that never comes up
