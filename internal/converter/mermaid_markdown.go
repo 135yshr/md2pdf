@@ -5,6 +5,10 @@ import (
 	"strings"
 )
 
+// mermaidPlaceholderPrefix is the prefix of the single-line token that stands
+// in for an extracted Mermaid block. The block's index is appended to it.
+const mermaidPlaceholderPrefix = "MD2PDFMERMAIDPLACEHOLDER"
+
 // fence describes an opened Markdown code fence: the fence character (backtick
 // or tilde), its run length and the language token from the info string.
 type fence struct {
@@ -41,7 +45,7 @@ func extractMermaidFromMarkdown(src string) (string, []*mermaidBlock) {
 		closed := j < len(lines)
 
 		if strings.EqualFold(open.lang, "mermaid") {
-			placeholder := fmt.Sprintf("MD2PDFMERMAIDPLACEHOLDER%d", len(blocks))
+			placeholder := fmt.Sprintf("%s%d", mermaidPlaceholderPrefix, len(blocks))
 			blocks = append(blocks, &mermaidBlock{
 				Source:      strings.Join(body, "\n") + "\n",
 				Placeholder: placeholder,

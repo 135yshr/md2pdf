@@ -56,19 +56,26 @@ Console output is rendered **directly from Markdown** to styled ANSI text by [gl
 1. **console.go** — `detectConsoleEnv` inspects the output file: TTY status, terminal size, `NO_COLOR`, `GLAMOUR_STYLE`, and the color profile
 2. `resolveConsoleWidth` follows the terminal width less a 2-column margin, capped at 120 and floored at 20; non-terminals get a fixed 80
 3. `resolveConsoleStyle` forces `notty` when `NO_COLOR` is set or the output is not a terminal; otherwise `-style` wins over `GLAMOUR_STYLE`, and `auto` resolves to `dark`/`light` via `lipgloss.HasDarkBackground`
-4. `renderConsoleMarkdown` renders through glamour; Mermaid blocks are deliberately left as fenced code (no `mmdc` needed)
-5. Output goes through `$PAGER` (default `less -R -F`, with `-R` injected when the user's `less` lacks it) when writing to a TTY and `-pager` is on; colors are downsampled by `colorprofile` to what the terminal supports
+4. `renderConsoleMarkdown` renders through glamour. Mermaid handling lives in **mermaid_console.go**: `resolveConsoleMermaidPlan` turns `-mermaid-render` (`auto`/`image`/`source`) plus the TTY/`NO_COLOR` state and `detectImageProtocol` (kitty / iTerm2 / Sixel, from `TERM` and `TERM_PROGRAM`) into a plan; `prepareConsoleMermaid` swaps each block for a short token and rasterises it via the `Converter.rasterizeMermaid` seam, and `encodeTerminalImage` emits the protocol's escape sequence through `x/ansi`. `spliceConsoleDiagrams` then replaces each token's line in glamour's output, keeping its indent. Failures split into two paths: `resolveConsoleMermaidPlan` **returns an error** when `-mermaid-render image` is asked for but the output is not a TTY, `NO_COLOR` is set, or no protocol was detected (`auto` degrades to source instead); once an image plan is chosen, `prepareConsoleMermaid` **falls back to the fenced source with exit status 0** for a missing `mmdc`, a width too narrow to hold a token, or an individual diagram that fails to render
+5. Output goes through `$PAGER` (default `less -R -F`, with `-R` injected when the user's `less` lacks it) when writing to a TTY and `-pager` is on; colors are downsampled by `colorprofile` to what the terminal supports. **The pager is skipped whenever inline images were drawn**, since kitty and iTerm2 sequences do not survive `less`
+
+Two details in the console Mermaid path are load-bearing:
+
+- The token left for glamour is short (`MD2PDFDG<n>`, not the long `mermaidPlaceholderPrefix` the DOCX path uses) because glamour **hard-wraps a word wider than the wrap width**, which would split the token and lose the diagram. `consoleTokenFits` bails out to source output when even the short token cannot fit an explicit `-width`.
+- `Converter.rasterizeMermaid` and `Converter.mermaidAvailable` are struct fields so tests can stand in for `mmdc`; the repo's own CI is the only place the real binary runs.
 
 Because console format writes the document to stdout, `Converter.logf` writes verbose logs to **stderr** and `main.go` suppresses the "Converting…/saved to…" lines for this format.
 
-**converter.go** orchestrates all three pipelines and manages a temporary working directory for intermediate files. **Config** struct holds all runtime options including `Format` ("pdf"|"docx"|"console"), `DOCXFont`, and the console options (`ConsoleWidth`, `ConsoleStyle`, `ConsolePager`).
+**converter.go** orchestrates all three pipelines and manages a temporary working directory for intermediate files. **Config** struct holds all runtime options including `Format` ("pdf"|"docx"|"console"), `DOCXFont`, and the console options (`ConsoleWidth`, `ConsoleStyle`, `ConsolePager`, `MermaidRender`).
 
-**cmd/md2pdf/** — CLI entry point. `flags.go` handles argument parsing and auto-detection of font/mmdc paths; `resolveFormat` derives the output format from `-format` or the `-o` extension, folds the `term`/`terminal` aliases onto `console`, and rejects `-o` combined with console. Console `-style` values are validated up front by `converter.ValidateConsoleStyle`. Pandoc is resolved in `docx.go` (`findPandoc`) unless `-pandoc` is provided. `main.go` wires flags to the converter.
+**cmd/md2pdf/** — CLI entry point. `flags.go` handles argument parsing and auto-detection of font/mmdc paths; `resolveFormat` derives the output format from `-format` or the `-o` extension, folds the `term`/`terminal` aliases onto `console`, and rejects `-o` combined with console. Console `-style` values are validated up front by `converter.ValidateConsoleStyle`, and `-mermaid-render` by `converter.ValidateMermaidRenderMode`. Pandoc is resolved in `docx.go` (`findPandoc`) unless `-pandoc` is provided. `main.go` wires flags to the converter.
 
 ## External Dependencies
 
 Runtime: `mmdc` (Mermaid CLI via npm), Python 3 + Playwright + Chromium, Noto Sans CJK JP fonts. DOCX output additionally requires `pandoc`. Console output needs **no external tools** (a pager is used when available).
-Go modules: `github.com/yuin/goldmark` (Markdown parsing), `charm.land/glamour/v2` (terminal rendering), `charm.land/lipgloss/v2` (terminal background detection), `github.com/charmbracelet/colorprofile` (color downsampling), `github.com/charmbracelet/x/term` (TTY detection and size).
+Go modules: `github.com/yuin/goldmark` (Markdown parsing), `charm.land/glamour/v2` (terminal rendering), `charm.land/lipgloss/v2` (terminal background detection), `github.com/charmbracelet/colorprofile` (color downsampling), `github.com/charmbracelet/x/term` (TTY detection and size), `github.com/charmbracelet/x/ansi` (inline image escape sequences: `KittyGraphics`, `ITerm2`, `SixelGraphics` and the `kitty`/`iterm2`/`sixel` subpackages).
+
+Drawing Mermaid diagrams in the terminal still needs `mmdc` (it rasterises the PNG), but its absence only downgrades output to the diagram source — it never fails the run.
 
 ## Code Style
 

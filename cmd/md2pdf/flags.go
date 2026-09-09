@@ -54,6 +54,7 @@ func parseFlags(args []string) (*converter.Config, error) {
 	consoleWidth := fs.Int("width", 0, "Console word-wrap width in columns (0: follow terminal, max 120)")
 	consoleStyle := fs.String("style", "", "Console color theme: auto (default), dark, light, notty, ... or a JSON stylesheet path")
 	consolePager := fs.Bool("pager", true, "Send console output through $PAGER (default: less -R -F) on a terminal")
+	mermaidRender := fs.String("mermaid-render", "", "Console Mermaid rendering: auto (default), image or source")
 	marginTop := fs.String("margin-top", "18mm", "Top margin (e.g. 18mm, 1in)")
 	marginBottom := fs.String("margin-bottom", "18mm", "Bottom margin")
 	marginLeft := fs.String("margin-left", "14mm", "Left margin")
@@ -104,6 +105,9 @@ func parseFlags(args []string) (*converter.Config, error) {
 			return nil, fmt.Errorf("-width must be zero or positive, got %d", *consoleWidth)
 		}
 		if err := converter.ValidateConsoleStyle(*consoleStyle); err != nil {
+			return nil, err
+		}
+		if err := converter.ValidateMermaidRenderMode(*mermaidRender); err != nil {
 			return nil, err
 		}
 	}
@@ -162,6 +166,7 @@ func parseFlags(args []string) (*converter.Config, error) {
 		ConsoleWidth:    *consoleWidth,
 		ConsoleStyle:    *consoleStyle,
 		ConsolePager:    *consolePager,
+		MermaidRender:   *mermaidRender,
 		Verbose:         *verbose,
 	}, nil
 }
@@ -261,6 +266,14 @@ Options:
                           to a JSON stylesheet (env: GLAMOUR_STYLE)
   -pager                  Page console output through $PAGER on a terminal
                           (default: true; use -pager=false to disable)
+  -mermaid-render <mode>  How to draw Mermaid diagrams in console output:
+                          auto (default) draws them as inline images on
+                          terminals that support kitty, iTerm2 or Sixel and
+                          otherwise prints the source; image forces inline
+                          images and fails if the terminal cannot show them;
+                          source always prints the Mermaid source.
+                          Inline images bypass the pager, which cannot
+                          display them.
   -v                      Verbose output
   -version                Print version and exit
 
@@ -272,6 +285,8 @@ Examples:
   md2pdf -format console document.md
   md2pdf -format console -style dark -width 100 document.md
   md2pdf -format console -pager=false document.md | cat
+  md2pdf -format console -mermaid-render image document.md
+  md2pdf -format console -mermaid-render source document.md
   md2pdf -font /path/to/NotoSansCJK-Regular.ttc document.md
 `)
 }
