@@ -117,3 +117,65 @@ func TestConvert_HTMLFormatRejectsMultipleInputs(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
+
+// makeSVGWritingMmdc returns the path to a stub mmdc that writes a recognisable
+// SVG to whatever -o names, so the Mermaid stage can run without the real CLI.
+func makeSVGWritingMmdc(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "mmdc")
+	script := `#!/bin/sh
+out=""
+prev=""
+for a in "$@"; do
+  if [ "$prev" = "-o" ]; then out="$a"; fi
+  prev="$a"
+done
+[ -n "$out" ] || exit 2
+printf '<svg id="stub-diagram" xmlns="http://www.w3.org/2000/svg"></svg>' > "$out"
+exit 0
+`
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatalf("write mmdc stub: %v", err)
+	}
+	return path
+}
+
+// TestConvert_HTMLFormatInlinesMermaidSVG covers the criterion that HTML output
+// carries the diagram inline, like the PDF pipeline it shares the stage with.
+func TestConvert_HTMLFormatInlinesMermaidSVG(t *testing.T) {
+	skipOnWindows(t)
+
+	dir := t.TempDir()
+	input := filepath.Join(dir, "doc.md")
+	out := filepath.Join(dir, "doc.html")
+	md := "# T\n\n```mermaid\nflowchart LR\n  A --> B\n```\n"
+	if err := os.WriteFile(input, []byte(md), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	c := newTestConverter(t, &Config{
+		Format:   FormatHTML,
+		MmdcPath: makeSVGWritingMmdc(t),
+		// A non-empty value short-circuits Chromium detection, which this test
+		// has no need for.
+		PuppeteerConfig: filepath.Join(dir, "puppeteer.json"),
+	})
+	if err := c.Convert([]string{input}, out); err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	page := string(data)
+	if !strings.Contains(page, `id="stub-diagram"`) {
+		t.Errorf("diagram SVG was not inlined into the HTML:\n%s", page)
+	}
+	if !strings.Contains(page, "diagram-wrapper") {
+		t.Error("diagram wrapper missing from the HTML")
+	}
+	if strings.Contains(page, "flowchart LR") {
+		t.Error("Mermaid source leaked into the HTML alongside the diagram")
+	}
+}

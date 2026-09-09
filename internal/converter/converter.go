@@ -188,22 +188,22 @@ func (c *Converter) Convert(inputs []string, outputPath string) error {
 		return fmt.Errorf("render mermaid: %w", err)
 	}
 
-	// HTML output is the PDF pipeline's own intermediate, so it is written
-	// straight to the caller's path and Chromium is never started. Image paths
-	// are left exactly as the Markdown had them, which resolves correctly for
-	// the default output location beside the input file.
-	if strings.EqualFold(c.cfg.Format, FormatHTML) {
-		c.logf("Building HTML...")
-		if err := c.buildHTML(doc, absOut); err != nil {
-			return fmt.Errorf("build html: %w", err)
-		}
-		return nil
+	// HTML output is the PDF pipeline's own intermediate, so it goes straight to
+	// the caller's path and Chromium is never started. Image paths are left
+	// exactly as the Markdown had them, which resolves correctly for the default
+	// output location beside the input file.
+	htmlOnly := strings.EqualFold(c.cfg.Format, FormatHTML)
+	htmlPath := filepath.Join(c.workDir, "document.html")
+	if htmlOnly {
+		htmlPath = absOut
 	}
 
 	c.logf("Building HTML...")
-	htmlPath := filepath.Join(c.workDir, "document.html")
 	if err := c.buildHTML(doc, htmlPath); err != nil {
 		return fmt.Errorf("build html: %w", err)
+	}
+	if htmlOnly {
+		return nil
 	}
 
 	c.logf("Copying images to working directory...")
