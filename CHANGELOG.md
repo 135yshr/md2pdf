@@ -1,3 +1,8 @@
+# [v0.13.0](https://github.com/135yshr/md2pdf/compare/v0.12.0...v0.13.0) (2026-09-09)
+
+## ✨ New Features
+- [`4c00fe8`](https://github.com/135yshr/md2pdf/commit/4c00fe8)  feat: declare Homebrew dependencies in the released formula (#59) (Issues: [`#59`](https://github.com/135yshr/md2pdf/issues/59) [`#56`](https://github.com/135yshr/md2pdf/issues/56) [`#54`](https://github.com/135yshr/md2pdf/issues/54) [`#57`](https://github.com/135yshr/md2pdf/issues/57) [`#56`](https://github.com/135yshr/md2pdf/issues/56) [`#56`](https://github.com/135yshr/md2pdf/issues/56))
+
 # [v0.12.0](https://github.com/135yshr/md2pdf/compare/v0.11.1...v0.12.0) (2026-09-09)
 
 ## ✨ New Features
