@@ -9,15 +9,66 @@ import (
 	"github.com/135yshr/md2pdf/internal/converter"
 )
 
-// TestConvert_Integration runs the full Markdown → PDF pipeline.
-// It is skipped automatically when mmdc or python3+playwright are unavailable.
+// requireIntegrationEnv is set by CI, where the external toolchain is installed
+// on purpose and a missing tool means the install broke rather than that the
+// suite is not applicable.
+const requireIntegrationEnv = "MD2PDF_REQUIRE_INTEGRATION"
+
+// integrationRequired reports whether a missing tool must fail the run instead
+// of skipping it.
+//
+// Skipping is right on a developer machine without the toolchain, and wrong in
+// CI: a silent skip there means the integration suite never ran and the job
+// still went green. That is the same invisible-exclusion problem that made the
+// old -run 'Test[^C]' selector dangerous, so it is closed here too.
+func integrationRequired() bool {
+	return os.Getenv(requireIntegrationEnv) != ""
+}
+
+// toolVerdict is what to do about a tool the integration suite needs.
+type toolVerdict int
+
+// The possible outcomes of looking for an external tool.
+const (
+	toolPresent toolVerdict = iota
+	toolMissingSkip
+	toolMissingFatal
+)
+
+// resolveToolVerdict decides how a missing tool should be handled. Keeping the
+// decision separate from testing.T makes it directly testable, which matters
+// because this is the switch that stops a broken CI toolchain from passing
+// silently.
+func resolveToolVerdict(name string, required bool, lookPath func(string) (string, error)) toolVerdict {
+	if _, err := lookPath(name); err == nil {
+		return toolPresent
+	}
+	if required {
+		return toolMissingFatal
+	}
+	return toolMissingSkip
+}
+
+// requireTool skips the test when name is not on PATH, or fails when the
+// environment declares the integration suite mandatory.
+func requireTool(t *testing.T, name string) {
+	t.Helper()
+	switch resolveToolVerdict(name, integrationRequired(), exec.LookPath) {
+	case toolPresent:
+	case toolMissingFatal:
+		t.Fatalf("%s not found in PATH, but %s is set: "+
+			"the integration toolchain is expected to be installed here", name, requireIntegrationEnv)
+	case toolMissingSkip:
+		t.Skipf("%s not found in PATH; skipping integration test", name)
+	}
+}
+
+// TestConvert_Integration runs the full Markdown → PDF pipeline. It always
+// builds and always runs; when the external toolchain is absent it skips, unless
+// MD2PDF_REQUIRE_INTEGRATION says the toolchain must be there.
 func TestConvert_Integration(t *testing.T) {
-	if _, err := exec.LookPath("mmdc"); err != nil {
-		t.Skip("mmdc not found in PATH; skipping integration test")
-	}
-	if _, err := exec.LookPath("python3"); err != nil {
-		t.Skip("python3 not found; skipping integration test")
-	}
+	requireTool(t, "mmdc")
+	requireTool(t, "python3")
 
 	dir := t.TempDir()
 	mdPath := filepath.Join(dir, "test.md")
@@ -75,5 +126,57 @@ Integration test complete.
 	}
 	if info.Size() < 1024 {
 		t.Errorf("PDF seems too small: %d bytes", info.Size())
+	}
+}
+
+// TestIntegrationRequired covers the switch that decides whether a missing tool
+// is a skip or a failure. It is the only thing standing between a broken
+// toolchain install in CI and a silently green job, so it gets its own test.
+func TestIntegrationRequired(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  bool
+	}{
+		{"unset skips", "", false},
+		{"set to 1 requires", "1", true},
+		{"set to anything requires", "yes", true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(requireIntegrationEnv, tc.value)
+			if got := integrationRequired(); got != tc.want {
+				t.Errorf("integrationRequired() with %s=%q = %t, want %t",
+					requireIntegrationEnv, tc.value, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestResolveToolVerdict covers the decision that keeps a broken CI toolchain
+// from passing silently: absent tools skip locally, but fail where the
+// environment says the toolchain must be installed.
+func TestResolveToolVerdict(t *testing.T) {
+	found := func(string) (string, error) { return "/usr/bin/tool", nil }
+	notFound := func(string) (string, error) { return "", exec.ErrNotFound }
+
+	tests := []struct {
+		name     string
+		lookPath func(string) (string, error)
+		required bool
+		want     toolVerdict
+	}{
+		{"present and optional", found, false, toolPresent},
+		{"present and required", found, true, toolPresent},
+		{"missing and optional skips", notFound, false, toolMissingSkip},
+		{"missing and required fails", notFound, true, toolMissingFatal},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := resolveToolVerdict("tool", tc.required, tc.lookPath)
+			if got != tc.want {
+				t.Errorf("resolveToolVerdict(required=%t) = %v, want %v", tc.required, got, tc.want)
+			}
+		})
 	}
 }

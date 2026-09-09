@@ -28,8 +28,11 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Unit tests
-        run: go test ./internal/converter/ -run 'Test[^C]' -v
+      # Nothing is excluded here: no test-name filter and no build tags. The one
+      # test needing an external toolchain skips itself when the tools are
+      # absent, so this run covers every test in the module.
+      - name: Tests
+        run: go test ./... -v
 
   integration:
     name: Integration Test
@@ -59,7 +62,13 @@ jobs:
       - name: Install Noto CJK fonts
         run: sudo apt-get install -y fonts-noto-cjk
 
-      - name: Integration test
+      # The same command as the job above. The only difference is that the
+      # toolchain is installed here, and MD2PDF_REQUIRE_INTEGRATION makes a
+      # missing tool fail instead of skip, so a broken install cannot pass
+      # silently.
+      - name: Tests (with the integration toolchain)
+        env:
+          MD2PDF_REQUIRE_INTEGRATION: "1"
         run: go test ./... -v -timeout 120s
 
   build:

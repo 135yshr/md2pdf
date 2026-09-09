@@ -16,11 +16,13 @@ go vet ./...
 ## Testing
 
 ```sh
-# Unit tests only (no external dependencies needed)
-go test ./internal/converter/ -run 'Test[^C]'
+# Every test in the module. Nothing is filtered or tagged out.
+go test ./...
 
-# All tests including integration (requires mmdc, python3 playwright, chromium, fonts-noto-cjk)
-go test ./... -timeout 120s
+# The integration test skips itself unless mmdc, python3 + playwright, chromium
+# and fonts-noto-cjk are installed. To make a missing tool fail instead of skip
+# (this is what CI does), declare the toolchain mandatory:
+MD2PDF_REQUIRE_INTEGRATION=1 go test ./... -timeout 120s
 
 # Single test
 go test ./internal/converter/ -run TestSpecificName -v
@@ -97,4 +99,4 @@ Only the *image* step of the console Mermaid chain needs `mmdc`. Its absence dow
 - Comments and GoDoc in English
 - Errors crossing package boundaries must be wrapped (wrapcheck)
 - Go 1.26 (see `go.mod`); CI tests against Go 1.26
-- Unit tests must not start with `TestC`: CI's unit-test job selects them with `-run 'Test[^C]'` to skip the integration tests
+- **Nothing excludes tests from a run** — no `-run` filter, no build tags. A test needing the external toolchain checks for it and skips (see `requireTool` in `converter_integration_test.go`); everything else must pass with nothing installed, using a stub binary where a tool is involved. Both CI jobs run the identical `go test ./... -v`; the integration job differs only in having the tools installed and setting `MD2PDF_REQUIRE_INTEGRATION=1`, which turns a missing tool into a failure so a broken install cannot pass silently
