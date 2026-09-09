@@ -78,6 +78,7 @@ func parseFlags(args []string) (*converter.Config, error) {
 	marginRight := fs.String("margin-right", "14mm", "Right margin")
 	verbose := fs.Bool("v", false, "Verbose output")
 	showVersion := fs.Bool("version", false, "Print version and exit")
+	doctor := fs.Bool("doctor", false, "Report which runtime dependencies are present and which formats can run, then exit")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, err
@@ -86,6 +87,21 @@ func parseFlags(args []string) (*converter.Config, error) {
 	if *showVersion {
 		fmt.Printf("md2pdf version %s (commit: %s, built: %s)\n", version, commit, date)
 		os.Exit(0)
+	}
+
+	// -doctor inspects the machine rather than converting anything, so it runs
+	// before the input arguments are required. Font resolution still happens
+	// below, because the report needs the path that a conversion would use.
+	if *doctor {
+		cfg := &converter.Config{
+			MmdcPath:    resolveMmdcPath(*mmdcPath),
+			PandocPath:  *pandocPath,
+			FontRegular: resolveFontRegular(*fontRegular),
+		}
+		if runDoctor(os.Stdout, converter.Diagnose(cfg)) {
+			os.Exit(0)
+		}
+		os.Exit(1)
 	}
 
 	// Resolve output format first: it decides whether several inputs are
@@ -135,10 +151,7 @@ func parseFlags(args []string) (*converter.Config, error) {
 	}
 
 	// Resolve font paths.
-	regular := *fontRegular
-	if regular == "" {
-		regular = findFirst(defaultFontPaths)
-	}
+	regular := resolveFontRegular(*fontRegular)
 	bold := *fontBold
 	if bold == "" {
 		// Derive bold from regular path by replacing "Regular" with "Bold".
@@ -156,10 +169,7 @@ func parseFlags(args []string) (*converter.Config, error) {
 	}
 
 	// Resolve mmdc path.
-	mmdc := *mmdcPath
-	if mmdc == "" {
-		mmdc = findFirst(mmdcDefaultPaths)
-	}
+	mmdc := resolveMmdcPath(*mmdcPath)
 
 	return &converter.Config{
 		InputFiles:      inputs,
@@ -237,6 +247,25 @@ func normalizeFormat(format string) string {
 	return normalized
 }
 
+// resolveFontRegular returns the regular-weight font to use: the -font flag, or
+// the first of the well-known locations that exists. Shared with -doctor so the
+// report names the same font a conversion would load.
+func resolveFontRegular(explicit string) string {
+	if explicit != "" {
+		return explicit
+	}
+	return findFirst(defaultFontPaths)
+}
+
+// resolveMmdcPath returns the mmdc binary to use: the -mmdc flag, or the first
+// of the well-known locations that exists.
+func resolveMmdcPath(explicit string) string {
+	if explicit != "" {
+		return explicit
+	}
+	return findFirst(mmdcDefaultPaths)
+}
+
 // findFirst returns the first path from the list that exists on disk,
 // or the first element if none exist (to preserve fallback semantics).
 func findFirst(paths []string) string {
@@ -297,6 +326,10 @@ Options:
                           source always prints the Mermaid source.
                           Inline images bypass the pager, which cannot display
                           them; text art pages normally.
+  -doctor                 Report which runtime dependencies are present and
+                          which output formats can run, then exit. Exits
+                          non-zero when a format is blocked, so it works as a
+                          check in a setup script.
   -v                      Verbose output
   -version                Print version and exit
 
@@ -322,6 +355,7 @@ Examples:
   md2pdf -format console -mermaid-render image document.md
   md2pdf -format console -mermaid-render ascii document.md
   md2pdf -format console -mermaid-render source document.md
+  md2pdf -doctor
   md2pdf -font /path/to/NotoSansCJK-Regular.ttc document.md
   cat doc.md | md2pdf -format console -
   gh pr view 41 --json body -q .body | md2pdf -o pr.pdf -
