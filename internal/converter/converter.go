@@ -65,6 +65,9 @@ type Config struct {
 	// passed to mmdc via its -p flag. When empty the converter auto-generates
 	// a temporary config pointing at the system Chromium.
 	PuppeteerConfig string
+	// CSSFiles are extra stylesheet paths injected after the built-in
+	// GitHub-flavored CSS, in the order given, so later files win the cascade.
+	CSSFiles []string
 	// PageSize controls the PDF paper size (A4, Letter, A3).
 	PageSize string
 	// MarginTop, MarginBottom, MarginLeft, MarginRight set PDF page margins.
