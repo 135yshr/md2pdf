@@ -479,8 +479,9 @@ func TestRenderConsole_PipedOutputEmitsNoImageSequences(t *testing.T) {
 	calls := 0
 	useStubRasterizer(t, c, dir, &calls)
 
-	md := []byte("# T\n\n```mermaid\ngraph TD\n A-->B\n```\n")
-	if err := c.renderConsole(md, f); err != nil {
+	md := "# T\n\n```mermaid\ngraph TD\n A-->B\n```\n"
+	c.stdin = strings.NewReader(md)
+	if err := c.renderConsole([]string{StdinPath}, f); err != nil {
 		t.Fatalf("renderConsole: %v", err)
 	}
 
@@ -544,7 +545,8 @@ func TestRenderConsole_ByteIdenticalToPreFeatureRendering(t *testing.T) {
 			defer f.Close()
 
 			c := newTestConverter(t, tc.cfg)
-			if err := c.renderConsole(tc.md, f); err != nil {
+			c.stdin = bytes.NewReader(tc.md)
+			if err := c.renderConsole([]string{StdinPath}, f); err != nil {
 				t.Fatalf("renderConsole: %v", err)
 			}
 			got, err := os.ReadFile(outPath)
@@ -574,7 +576,8 @@ func TestRenderConsole_ExplicitImageOnPlainTerminalFails(t *testing.T) {
 		ConsolePager:  false,
 		MermaidRender: MermaidRenderImage,
 	})
-	err = c.renderConsole([]byte("```mermaid\ngraph TD\n A-->B\n```\n"), f)
+	c.stdin = strings.NewReader("```mermaid\ngraph TD\n A-->B\n```\n")
+	err = c.renderConsole([]string{StdinPath}, f)
 	if err == nil {
 		t.Fatal("expected renderConsole to fail with -mermaid-render image on a plain terminal")
 	}

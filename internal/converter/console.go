@@ -88,8 +88,9 @@ func detectConsoleEnv(out *os.File) consoleEnv {
 	return env
 }
 
-// renderConsole renders the Markdown document as styled ANSI text, sending the
-// result through the user's pager when writing to an interactive terminal.
+// renderConsole renders each input document as styled ANSI text, in the order
+// given, separated by a rule, and sends the result through the user's pager when
+// writing to an interactive terminal.
 //
 // Mermaid blocks walk a fallback chain: an inline image on terminals that
 // support an image protocol, then box-drawing text art, then the fenced Mermaid
@@ -100,38 +101,47 @@ func detectConsoleEnv(out *os.File) consoleEnv {
 // kitty graphics sequences nor the iTerm2 inline-image sequences survive a trip
 // through less. Text art is plain text and pages normally, including when an
 // image plan fell back to it.
-func (c *Converter) renderConsole(md []byte, out *os.File) error {
+func (c *Converter) renderConsole(inputs []string, out *os.File) error {
 	env := detectConsoleEnv(out)
 	width := resolveConsoleWidth(c.cfg.ConsoleWidth, env.isTTY, env.width)
 	style := resolveConsoleStyle(c.cfg.ConsoleStyle, env.envStyle, env.isTTY, env.noColor, env.darkBG)
-	c.logf("Rendering for the console (style: %s, width: %d)...", style, width)
+	c.logf("Rendering %d document(s) for the console (style: %s, width: %d)...",
+		len(inputs), style, width)
 
+	// The plan depends on the terminal, not on the document, so it is resolved
+	// once and shared. Whether an image was actually drawn is not: that is
+	// collected across documents, because a single image anywhere means the
+	// pager has to be skipped for all of them.
 	plan, err := resolveConsoleMermaidPlan(c.cfg.MermaidRender, env.isTTY, env.noColor, os.Getenv)
 	if err != nil {
 		return err
 	}
 	plan.pureASCII = consoleWantsPureASCII(c.cfg.ConsoleStyle, env.envStyle, style)
 
-	doc, diagrams, err := c.prepareConsoleMermaid(md, plan, width)
-	if err != nil {
-		return err
+	docs := make([][]byte, 0, len(inputs))
+	drewImages := false
+	for _, input := range inputs {
+		md, err := c.readInput(input)
+		if err != nil {
+			return err
+		}
+		rendered, hadImages, err := c.renderConsoleDocument(md, style, width, plan)
+		if err != nil {
+			return err
+		}
+		docs = append(docs, rendered)
+		drewImages = drewImages || hadImages
 	}
 
-	rendered, err := renderConsoleMarkdown(doc, style, width)
+	separator, err := c.consoleSeparator(len(docs), style, width)
 	if err != nil {
 		return err
 	}
-	if len(diagrams) > 0 {
-		spliced, missing := spliceConsoleDiagrams(string(rendered), diagrams, width)
-		for _, token := range missing {
-			c.logf("  warning: could not place diagram %s in the rendered output", token)
-		}
-		rendered = []byte(spliced)
-	}
+	rendered := joinConsoleDocuments(docs, separator)
 
 	if c.cfg.ConsolePager && env.isTTY {
 		switch {
-		case anyImageDiagram(diagrams):
+		case drewImages:
 			c.logf("Skipping the pager so the inline images survive; " +
 				"use -mermaid-render ascii or source to page the document instead.")
 		default:
@@ -143,6 +153,56 @@ func (c *Converter) renderConsole(md []byte, out *os.File) error {
 		}
 	}
 	return writeConsole(out, rendered, env.profile)
+}
+
+// renderConsoleDocument renders one Markdown document to styled ANSI text,
+// drawing its Mermaid blocks and splicing them into place. It reports whether
+// any diagram came out as an inline image, which decides whether the pager can
+// still be used. Documents are rendered independently so their Mermaid
+// placeholder tokens cannot collide.
+func (c *Converter) renderConsoleDocument(md []byte, style string, width int, plan consoleMermaidPlan) ([]byte, bool, error) {
+	doc, diagrams, err := c.prepareConsoleMermaid(md, plan, width)
+	if err != nil {
+		return nil, false, err
+	}
+
+	rendered, err := renderConsoleMarkdown(doc, style, width)
+	if err != nil {
+		return nil, false, err
+	}
+	if len(diagrams) > 0 {
+		spliced, missing := spliceConsoleDiagrams(string(rendered), diagrams, width)
+		for _, token := range missing {
+			c.logf("  warning: could not place diagram %s in the rendered output", token)
+		}
+		rendered = []byte(spliced)
+	}
+	return rendered, anyImageDiagram(diagrams), nil
+}
+
+// consoleSeparator returns the rule placed between consecutive documents, or
+// nil when there is nothing to separate.
+//
+// The rule is glamour's own horizontal rule, produced by rendering "---" at the
+// same style and width as the documents. That keeps it in step with the theme
+// for free — dimmed under a dark style, plain ASCII under -style ascii, colorless
+// under NO_COLOR — and makes the separator look exactly like a rule the author
+// wrote in the Markdown themselves.
+func (c *Converter) consoleSeparator(docs int, style string, width int) ([]byte, error) {
+	if docs < 2 {
+		return nil, nil
+	}
+	rule, err := renderConsoleMarkdown([]byte("---\n"), style, width)
+	if err != nil {
+		return nil, err
+	}
+	return rule, nil
+}
+
+// joinConsoleDocuments concatenates rendered documents, placing the separator
+// between consecutive pairs but never before the first or after the last.
+func joinConsoleDocuments(docs [][]byte, separator []byte) []byte {
+	return bytes.Join(docs, separator)
 }
 
 // resolveConsoleWidth picks the word-wrap width. An explicit width always wins;

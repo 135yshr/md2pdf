@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/x/term"
+
 	"github.com/135yshr/md2pdf/internal/converter"
 )
 
@@ -71,31 +73,24 @@ func parseFlags(args []string) (*converter.Config, error) {
 		os.Exit(0)
 	}
 
-	if fs.NArg() != 1 {
-		return nil, errors.New("exactly one input Markdown file is required")
-	}
-
-	input := fs.Arg(0)
-	if _, err := os.Stat(input); err != nil {
-		return nil, fmt.Errorf("input file not found: %s", input)
-	}
-	if !strings.EqualFold(filepath.Ext(input), ".md") {
-		return nil, fmt.Errorf("input file must have a .md extension: %s", input)
-	}
-
-	// Resolve output format. An explicit -format flag wins; otherwise it is
-	// inferred from the -o extension, defaulting to pdf.
+	// Resolve output format first: it decides whether several inputs are
+	// allowed at all. An explicit -format flag wins; otherwise it is inferred
+	// from the -o extension, defaulting to pdf.
 	outFormat, err := resolveFormat(*format, *output)
+	if err != nil {
+		return nil, err
+	}
+
+	inputs, err := resolveInputs(fs.Args(), outFormat, term.IsTerminal(os.Stdin.Fd()))
 	if err != nil {
 		return nil, err
 	}
 
 	// Resolve output path, defaulting the extension to the chosen format.
 	// Console format writes to standard output and needs no path.
-	out := *output
-	if out == "" && outFormat != converter.FormatConsole {
-		base := strings.TrimSuffix(input, filepath.Ext(input))
-		out = base + "." + outFormat
+	out, err := resolveOutputPath(*output, inputs, outFormat)
+	if err != nil {
+		return nil, err
 	}
 
 	// Validate the console-only options up front so a bad value fails before
@@ -147,7 +142,7 @@ func parseFlags(args []string) (*converter.Config, error) {
 	}
 
 	return &converter.Config{
-		InputFile:       input,
+		InputFiles:      inputs,
 		OutputFile:      out,
 		Format:          outFormat,
 		FontRegular:     regular,
@@ -239,6 +234,8 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, `
 Usage:
   md2pdf [options] <input.md>
+  md2pdf [options] -                       read the document from stdin
+  md2pdf -format console [options] <input.md>...   several files, in order
 
 Options:
   -o <path>               Output path (default: <input>.pdf, or .docx with -format docx)
@@ -278,6 +275,14 @@ Options:
   -v                      Verbose output
   -version                Print version and exit
 
+Inputs:
+  A single .md path works for every format. "-" reads the document from
+  standard input instead; relative paths inside it resolve against the
+  current directory, and -o becomes required for pdf and docx because
+  there is no input filename to derive the output name from.
+  Several paths are accepted with -format console only, and render in
+  order separated by a rule.
+
 Examples:
   md2pdf document.md
   md2pdf -o report.pdf document.md
@@ -290,5 +295,8 @@ Examples:
   md2pdf -format console -mermaid-render ascii document.md
   md2pdf -format console -mermaid-render source document.md
   md2pdf -font /path/to/NotoSansCJK-Regular.ttc document.md
+  cat doc.md | md2pdf -format console -
+  gh pr view 41 --json body -q .body | md2pdf -o pr.pdf -
+  md2pdf -format console docs/*.md
 `)
 }

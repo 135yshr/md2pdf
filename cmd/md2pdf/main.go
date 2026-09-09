@@ -6,7 +6,7 @@
 //
 // Usage:
 //
-//	md2pdf [options] <input.md>
+//	md2pdf [options] <input.md>... | -
 //
 // Examples:
 //
@@ -30,6 +30,20 @@ var (
 	date    = "unknown"
 )
 
+// describeInputs names the inputs for progress output, since "-" on its own
+// reads poorly in a message.
+func describeInputs(inputs []string) string {
+	named := make([]string, 0, len(inputs))
+	for _, in := range inputs {
+		if in == converter.StdinPath {
+			named = append(named, "standard input")
+			continue
+		}
+		named = append(named, in)
+	}
+	return strings.Join(named, ", ")
+}
+
 func main() {
 	cfg, err := parseFlags(os.Args[1:])
 	if err != nil {
@@ -50,9 +64,9 @@ func main() {
 	quiet := cfg.Format == converter.FormatConsole
 
 	if !quiet {
-		fmt.Printf("Converting %s ...\n", cfg.InputFile)
+		fmt.Printf("Converting %s ...\n", describeInputs(cfg.InputFiles))
 	}
-	if err := c.Convert(cfg.InputFile, cfg.OutputFile); err != nil {
+	if err := c.Convert(cfg.InputFiles, cfg.OutputFile); err != nil {
 		fmt.Fprintf(os.Stderr, "md2pdf: conversion failed: %v\n", err)
 		os.Exit(1)
 	}

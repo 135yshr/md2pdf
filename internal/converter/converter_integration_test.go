@@ -49,7 +49,7 @@ Integration test complete.
 	}
 
 	cfg := &converter.Config{
-		InputFile:    mdPath,
+		InputFiles:   []string{mdPath},
 		OutputFile:   pdfPath,
 		PageSize:     "A4",
 		MarginTop:    "18mm",
@@ -65,7 +65,7 @@ Integration test complete.
 	}
 	defer c.Close()
 
-	if err := c.Convert(mdPath, pdfPath); err != nil {
+	if err := c.Convert([]string{mdPath}, pdfPath); err != nil {
 		t.Fatalf("Convert(): %v", err)
 	}
 
