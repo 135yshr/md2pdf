@@ -72,9 +72,9 @@ wrapped to your terminal width and paged through `$PAGER`.
 md2pdf -format console document.md
 ```
 
-Unlike PDF and DOCX output, this needs no external tools: no `mmdc`, no
-Playwright, no `pandoc`. Mermaid blocks are shown as their source inside a code
-block.
+Unlike PDF and DOCX output, this needs no external conversion tools: no `mmdc`,
+no Playwright, no `pandoc`. The only external program it may launch is your
+pager. Mermaid blocks are shown as their source inside a code block.
 
 Behavior worth knowing:
 

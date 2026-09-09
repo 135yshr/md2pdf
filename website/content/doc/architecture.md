@@ -29,8 +29,8 @@ Console output is rendered **directly from Markdown** to styled ANSI text by
 [glamour](https://github.com/charmbracelet/glamour), the goldmark-based renderer
 behind [glow](https://github.com/charmbracelet/glow). The wrap width follows the
 terminal, the theme follows the terminal background, and the result is paged
-through `$PAGER`. No external tools are involved, and Mermaid blocks stay
-visible as their source.
+through `$PAGER`. No external conversion tools are involved — only the pager
+itself, when one is available — and Mermaid blocks stay visible as their source.
 
 ## Source layout
 

@@ -53,7 +53,7 @@ func ValidateConsoleStyle(value string) error {
 	if value == "" || slices.Contains(builtinConsoleStyles, value) {
 		return nil
 	}
-	if _, err := os.Stat(value); err == nil {
+	if info, err := os.Stat(value); err == nil && info.Mode().IsRegular() {
 		return nil
 	}
 	return fmt.Errorf("unknown console style %q: use one of %s, or a path to a JSON stylesheet",

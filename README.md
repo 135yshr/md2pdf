@@ -21,7 +21,7 @@ without font breakage. Single Go binary, drop-in for CI.
 - 🇯🇵 **Japanese / CJK text out of the box** — Noto Sans CJK JP preconfigured
 - 📝 **GitHub-flavored Markdown** — tables, fenced code blocks, strikethrough
 - 📃 **PDF or DOCX output** — `-format docx` exports editable Word documents (via pandoc)
-- 👀 **Read it in the terminal** — `-format console` renders the document as styled, wrapped ANSI text and pages it through `less` (no external tools needed)
+- 👀 **Read it in the terminal** — `-format console` renders the document as styled, wrapped ANSI text and pages it through `less` (no conversion tools needed)
 - 🤖 **CI-friendly single binary** — `go install` and you're done
 - 📄 **Configurable** — page size, margins, fonts
 
@@ -189,7 +189,7 @@ flowchart TD
 Each format reads from the source that renders best for it.
 
 - **PDF** (default) — goldmark converts Markdown to HTML (GFM tables, fenced code blocks), Mermaid blocks are rendered to inline SVG via `mmdc`, a self-contained HTML file is assembled with GitHub-flavored CSS and `@font-face` declarations for Noto Sans CJK JP, and a headless Chromium browser (via Playwright) prints it to PDF.
-- **Console** — the Markdown is rendered to styled ANSI text by [glamour](https://github.com/charmbracelet/glamour) (the library behind [glow](https://github.com/charmbracelet/glow)), wrapped to the terminal width and paged through `$PAGER`. The theme follows the terminal background unless `-style` says otherwise; color is dropped entirely when `NO_COLOR` is set or the output is piped. Mermaid blocks stay visible as their source, so no external tools are required.
+- **Console** — the Markdown is rendered to styled ANSI text by [glamour](https://github.com/charmbracelet/glamour) (the library behind [glow](https://github.com/charmbracelet/glow)), wrapped to the terminal width and paged through `$PAGER`. The theme follows the terminal background unless `-style` says otherwise; color is dropped entirely when `NO_COLOR` is set or the output is piped. Mermaid blocks stay visible as their source, so no conversion tools are required — the pager is the only external program involved.
 - **DOCX** — the Markdown is sent **directly to `pandoc`** (its `gfm` reader, no HTML in between), so pandoc produces clean, Word-native paragraph and list styles. Mermaid blocks are rasterised to PNG and spliced back in as image references (Word cannot reliably display pandoc-embedded SVG). A generated reference document gives the output a readable, Japanese-friendly look: a 10.5pt body, compact blue headings, bordered GFM tables, and the `Yu Gothic` font (override with `-docx-font`).
 
 ## Comparison with other tools

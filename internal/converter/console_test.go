@@ -176,6 +176,7 @@ func TestValidateConsoleStyle(t *testing.T) {
 		{"existing stylesheet path", stylePath, false},
 		{"unknown name", "darkk", true},
 		{"missing stylesheet path", filepath.Join(t.TempDir(), "nope.json"), true},
+		{"directory is not a stylesheet", t.TempDir(), true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
