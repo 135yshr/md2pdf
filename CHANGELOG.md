@@ -1,3 +1,8 @@
+# [v0.12.0](https://github.com/135yshr/md2pdf/compare/v0.11.1...v0.12.0) (2026-09-09)
+
+## ✨ New Features
+- [`1c83e98`](https://github.com/135yshr/md2pdf/commit/1c83e98)  feat: drive Chromium from Go and drop the Python/Playwright dependency (#56) (Issues: [`#56`](https://github.com/135yshr/md2pdf/issues/56) [`#54`](https://github.com/135yshr/md2pdf/issues/54) [`#53`](https://github.com/135yshr/md2pdf/issues/53))
+
 # [v0.11.1](https://github.com/135yshr/md2pdf/compare/v0.11.0...v0.11.1) (2026-09-09)
 
 # [v0.11.0](https://github.com/135yshr/md2pdf/compare/v0.10.0...v0.11.0) (2026-09-09)
