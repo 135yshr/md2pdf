@@ -34,6 +34,20 @@ brews:
     homepage: https://github.com/135yshr/md2pdf
     description: "A CLI tool that converts Markdown files to PDF with GitHub-flavored styling"
     license: MIT
+    # Only what a formula can express. mmdc is required because Mermaid appears
+    # in this project's own examples and a missing diagram is the most common
+    # first stumble; pandoc is optional because it is needed only for
+    # -format docx.
+    #
+    # A formula cannot depend on a cask, so the Noto CJK fonts
+    # (font-noto-sans-cjk-jp) and a Chromium (the chromium cask, or Google
+    # Chrome) stay manual and are documented in the README instead. Note also
+    # that brew's mermaid-cli does not bring a browser of its own — md2pdf hands
+    # it the one CHROME_PATH resolution finds.
+    dependencies:
+      - name: mermaid-cli
+      - name: pandoc
+        type: optional
     test: |
       system "#{bin}/md2pdf", "-version"
 
