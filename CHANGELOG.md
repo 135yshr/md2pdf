@@ -1,3 +1,8 @@
+# [v0.8.0](https://github.com/135yshr/md2pdf/compare/v0.7.0...v0.8.0) (2026-09-09)
+
+## ✨ New Features
+- [`5782a01`](https://github.com/135yshr/md2pdf/commit/5782a01)  feat: display Mermaid diagrams inline via terminal image protocols (#46) (Issues: [`#46`](https://github.com/135yshr/md2pdf/issues/46) [`#42`](https://github.com/135yshr/md2pdf/issues/42) [`#44`](https://github.com/135yshr/md2pdf/issues/44) [`#44`](https://github.com/135yshr/md2pdf/issues/44) [`#44`](https://github.com/135yshr/md2pdf/issues/44) [`#43`](https://github.com/135yshr/md2pdf/issues/43) [`#44`](https://github.com/135yshr/md2pdf/issues/44) [`#42`](https://github.com/135yshr/md2pdf/issues/42) [`#43`](https://github.com/135yshr/md2pdf/issues/43) [`#43`](https://github.com/135yshr/md2pdf/issues/43))
+
 # [v0.7.0](https://github.com/135yshr/md2pdf/compare/v0.6.0...v0.7.0) (2026-09-09)
 
 ## ✨ New Features
