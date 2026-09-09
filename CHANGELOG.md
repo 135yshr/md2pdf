@@ -1,3 +1,8 @@
+# [v0.9.0](https://github.com/135yshr/md2pdf/compare/v0.8.0...v0.9.0) (2026-09-09)
+
+## ✨ New Features
+- [`3f82963`](https://github.com/135yshr/md2pdf/commit/3f82963)  feat: render Mermaid diagrams as ASCII/box-drawing art (#48) (Issues: [`#48`](https://github.com/135yshr/md2pdf/issues/48) [`#42`](https://github.com/135yshr/md2pdf/issues/42) [`#46`](https://github.com/135yshr/md2pdf/issues/46) [`#43`](https://github.com/135yshr/md2pdf/issues/43) [`#44`](https://github.com/135yshr/md2pdf/issues/44) [`#43`](https://github.com/135yshr/md2pdf/issues/43) [`#42`](https://github.com/135yshr/md2pdf/issues/42) [`#44`](https://github.com/135yshr/md2pdf/issues/44) [`#47`](https://github.com/135yshr/md2pdf/issues/47) [`#44`](https://github.com/135yshr/md2pdf/issues/44))
+
 # [v0.8.0](https://github.com/135yshr/md2pdf/compare/v0.7.0...v0.8.0) (2026-09-09)
 
 ## ✨ New Features
