@@ -118,6 +118,30 @@ Installed for you by `brew install 135yshr/tap/md2pdf`:
 
 `-format console` needs none of these — it renders in-process and only uses a pager if one is installed.
 
+**Check your machine with `-doctor`**, which reports what is present and which
+formats can run, without converting anything:
+
+```
+$ md2pdf -doctor
+Chromium       ok       /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+                        printing PDFs, and rendering Mermaid diagrams via mmdc
+mmdc           missing  brew install mermaid-cli, or npm install -g @mermaid-js/mermaid-cli
+                        Mermaid diagrams in pdf, html and docx output — only needed for documents containing Mermaid diagrams
+pandoc         missing  brew install pandoc, or apt install pandoc
+                        -format docx
+Noto CJK font  missing  brew install --cask font-noto-sans-cjk-jp, or apt install fonts-noto-cjk
+                        Japanese text in pdf and html output — output still works without it
+
+pdf      ready
+html     ready
+docx     not ready (needs pandoc)
+console  ready
+```
+
+It exits non-zero when a format is blocked, so it works as a check in a setup
+script. Note what it does **not** claim: a missing `mmdc` leaves `pdf` ready,
+because a document with no Mermaid blocks converts without it.
+
 **Why the browser and the font are not installed by Homebrew.** Both are casks,
 and a formula cannot depend on a cask: Homebrew's formula DSL has no `cask:`
 dependency at all, while the cask DSL accepts both `formula:` and `cask:`. So
@@ -141,6 +165,7 @@ md2pdf [options] <input.md>
 |---|---|---|
 | `-o <path>` | `<input>.pdf` | Output path (`.docx` extension implies `-format docx`; not allowed with `-format console`; **required when reading from stdin** for `pdf`/`docx`) |
 | `-format <fmt>` | `pdf` | Output format: `pdf`, `html`, `docx`, or `console` (aliases `term`, `terminal`; inferred from `-o` extension when omitted, including `.html`/`.htm`) |
+| `-doctor` | — | Report which runtime dependencies are present and which formats can run, then exit |
 | `-css <path>` | — | Custom CSS applied after the built-in stylesheet, so its rules win. Repeatable; later files override earlier ones. Used by `pdf` and `html` |
 | `-font <path>` | auto-detected | Noto Sans CJK JP Regular font |
 | `-font-bold <path>` | auto-detected | Noto Sans CJK JP Bold font |
