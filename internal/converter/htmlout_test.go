@@ -7,9 +7,9 @@ import (
 	"testing"
 )
 
-// TestConvert_HTMLFormatWritesDocument covers the criterion that html format
+// TestHTMLOutput_WritesDocument covers the criterion that html format
 // stops after the HTML stage and emits it to the output path.
-func TestConvert_HTMLFormatWritesDocument(t *testing.T) {
+func TestHTMLOutput_WritesDocument(t *testing.T) {
 	dir := t.TempDir()
 	input := filepath.Join(dir, "doc.md")
 	out := filepath.Join(dir, "doc.html")
@@ -34,9 +34,9 @@ func TestConvert_HTMLFormatWritesDocument(t *testing.T) {
 	}
 }
 
-// TestConvert_HTMLFormatSkipsChromium checks the Playwright stage is never
+// TestHTMLOutput_SkipsChromium checks the Playwright stage is never
 // reached, which is the whole point of the format.
-func TestConvert_HTMLFormatSkipsChromium(t *testing.T) {
+func TestHTMLOutput_SkipsChromium(t *testing.T) {
 	dir := t.TempDir()
 	input := filepath.Join(dir, "doc.md")
 	if err := os.WriteFile(input, []byte("# T\n"), 0o644); err != nil {
@@ -53,9 +53,9 @@ func TestConvert_HTMLFormatSkipsChromium(t *testing.T) {
 	}
 }
 
-// TestConvert_HTMLFormatAppliesCustomCSS covers composability: -format html with
+// TestHTMLOutput_AppliesCustomCSS covers composability: -format html with
 // -css must produce HTML carrying the custom rules.
-func TestConvert_HTMLFormatAppliesCustomCSS(t *testing.T) {
+func TestHTMLOutput_AppliesCustomCSS(t *testing.T) {
 	dir := t.TempDir()
 	input := filepath.Join(dir, "doc.md")
 	css := filepath.Join(dir, "brand.css")
@@ -81,9 +81,9 @@ func TestConvert_HTMLFormatAppliesCustomCSS(t *testing.T) {
 	}
 }
 
-// TestConvert_HTMLFormatPreservesImagePaths pins the agreed behaviour: image
+// TestHTMLOutput_PreservesImagePaths pins the agreed behavior: image
 // paths are emitted as written, so they resolve relative to the output file.
-func TestConvert_HTMLFormatPreservesImagePaths(t *testing.T) {
+func TestHTMLOutput_PreservesImagePaths(t *testing.T) {
 	dir := t.TempDir()
 	input := filepath.Join(dir, "doc.md")
 	out := filepath.Join(dir, "doc.html")
@@ -105,9 +105,9 @@ func TestConvert_HTMLFormatPreservesImagePaths(t *testing.T) {
 	}
 }
 
-// TestConvert_HTMLFormatRejectsMultipleInputs keeps html on the same
+// TestHTMLOutput_RejectsMultipleInputs keeps html on the same
 // single-document contract as pdf and docx.
-func TestConvert_HTMLFormatRejectsMultipleInputs(t *testing.T) {
+func TestHTMLOutput_RejectsMultipleInputs(t *testing.T) {
 	c := newTestConverter(t, &Config{Format: FormatHTML})
 	err := c.Convert([]string{"a.md", "b.md"}, filepath.Join(t.TempDir(), "out.html"))
 	if err == nil {
@@ -118,7 +118,7 @@ func TestConvert_HTMLFormatRejectsMultipleInputs(t *testing.T) {
 	}
 }
 
-// makeSVGWritingMmdc returns the path to a stub mmdc that writes a recognisable
+// makeSVGWritingMmdc returns the path to a stub mmdc that writes a recognizable
 // SVG to whatever -o names, so the Mermaid stage can run without the real CLI.
 func makeSVGWritingMmdc(t *testing.T) string {
 	t.Helper()
@@ -140,9 +140,9 @@ exit 0
 	return path
 }
 
-// TestConvert_HTMLFormatInlinesMermaidSVG covers the criterion that HTML output
+// TestHTMLOutput_InlinesMermaidSVG covers the criterion that HTML output
 // carries the diagram inline, like the PDF pipeline it shares the stage with.
-func TestConvert_HTMLFormatInlinesMermaidSVG(t *testing.T) {
+func TestHTMLOutput_InlinesMermaidSVG(t *testing.T) {
 	skipOnWindows(t)
 
 	dir := t.TempDir()

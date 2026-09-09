@@ -12,6 +12,7 @@
 //
 //	md2pdf document.md
 //	md2pdf -o output.pdf document.md
+//	md2pdf -format html -css custom.css document.md
 //	md2pdf -format console document.md
 //	md2pdf -font /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc document.md
 package main

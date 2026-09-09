@@ -57,7 +57,7 @@ func parseFlags(args []string) (*converter.Config, error) {
 	fs.SetOutput(os.Stderr)
 
 	output := fs.String("o", "", "Output file path (default: <input>.pdf, or .docx with -format docx)")
-	format := fs.String("format", "", "Output format: pdf (default), docx or console (inferred from -o extension when omitted)")
+	format := fs.String("format", "", "Output format: pdf (default), html, docx or console (inferred from -o extension when omitted)")
 	fontRegular := fs.String("font", "", "Path to Noto Sans CJK JP Regular .ttc/.ttf font file")
 	fontBold := fs.String("font-bold", "", "Path to Noto Sans CJK JP Bold .ttc/.ttf font file")
 	fontMedium := fs.String("font-medium", "", "Path to Noto Sans CJK JP Medium .ttc/.ttf font file")
@@ -269,10 +269,15 @@ Usage:
   md2pdf -format console [options] <input.md>...   several files, in order
 
 Options:
-  -o <path>               Output path (default: <input>.pdf, or .docx with -format docx)
-  -format <fmt>           Output format: pdf (default), docx or console
+  -o <path>               Output path (default: <input>.<format>, e.g.
+                          <input>.html with -format html)
+  -format <fmt>           Output format: pdf (default), html, docx or console
                           (console has the aliases term and terminal;
-                          inferred from -o extension when omitted)
+                          inferred from -o extension when omitted, including
+                          .html and .htm)
+  -css <path>             Custom CSS applied after the built-in stylesheet,
+                          so its rules win. Repeatable; later files win over
+                          earlier ones. Used by pdf and html output.
   -font <path>            Noto Sans CJK JP Regular font (.ttc/.ttf)
   -font-bold <path>       Noto Sans CJK JP Bold font
   -font-medium <path>     Noto Sans CJK JP Medium font
@@ -319,6 +324,9 @@ Examples:
   md2pdf -o report.pdf document.md
   md2pdf -format docx document.md
   md2pdf -o report.docx document.md
+  md2pdf -format html document.md
+  md2pdf -format html -css brand.css document.md
+  md2pdf -css brand.css -css client.css -o report.pdf document.md
   md2pdf -format console document.md
   md2pdf -format console -style dark -width 100 document.md
   md2pdf -format console -pager=false document.md | cat
