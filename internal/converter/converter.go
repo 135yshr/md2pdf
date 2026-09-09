@@ -30,6 +30,9 @@ const (
 	FormatDOCX = "docx"
 	// FormatConsole renders the document as styled ANSI text for a terminal.
 	FormatConsole = "console"
+	// FormatHTML writes the self-contained HTML that PDF output is built from,
+	// stopping before headless Chromium runs.
+	FormatHTML = "html"
 )
 
 // Config holds all runtime options for the converter.
@@ -127,9 +130,10 @@ func (c *Converter) Close() {
 
 // Convert runs the conversion pipeline for the given inputs, writing the result
 // to outputPath. PDF output flows through the Markdown → HTML → Chromium
-// stages; DOCX output is produced directly from Markdown by pandoc so the result
-// uses clean, Word-native styling instead of HTML-derived markup. Console output
-// is written to standard output instead of outputPath, which is ignored.
+// stages; HTML output stops after the HTML stage and emits that file directly;
+// DOCX output is produced directly from Markdown by pandoc so the result uses
+// clean, Word-native styling instead of HTML-derived markup. Console output is
+// written to standard output instead of outputPath, which is ignored.
 //
 // Console format renders every input in order; the other formats take exactly
 // one, which the CLI enforces before calling this.
@@ -182,6 +186,18 @@ func (c *Converter) Convert(inputs []string, outputPath string) error {
 	c.logf("Rendering %d Mermaid diagram(s)...", len(doc.mermaidBlocks))
 	if err := c.renderMermaid(doc); err != nil {
 		return fmt.Errorf("render mermaid: %w", err)
+	}
+
+	// HTML output is the PDF pipeline's own intermediate, so it is written
+	// straight to the caller's path and Chromium is never started. Image paths
+	// are left exactly as the Markdown had them, which resolves correctly for
+	// the default output location beside the input file.
+	if strings.EqualFold(c.cfg.Format, FormatHTML) {
+		c.logf("Building HTML...")
+		if err := c.buildHTML(doc, absOut); err != nil {
+			return fmt.Errorf("build html: %w", err)
+		}
+		return nil
 	}
 
 	c.logf("Building HTML...")
