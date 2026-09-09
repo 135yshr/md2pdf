@@ -201,7 +201,7 @@ func TestParseFlags_MermaidRenderModes(t *testing.T) {
 		{"auto", []string{"-format", "console", "-mermaid-render", "auto", input}, "auto", false},
 		{"image", []string{"-format", "console", "-mermaid-render", "image", input}, "image", false},
 		{"source", []string{"-format", "console", "-mermaid-render", "source", input}, "source", false},
-		{"ascii is not supported yet", []string{"-format", "console", "-mermaid-render", "ascii", input}, "", true},
+		{"ascii", []string{"-format", "console", "-mermaid-render", "ascii", input}, "ascii", false},
 		{"unknown value", []string{"-format", "console", "-mermaid-render", "nope", input}, "", true},
 	}
 	for _, tc := range tests {

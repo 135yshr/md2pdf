@@ -21,7 +21,7 @@ without font breakage. Single Go binary, drop-in for CI.
 - 🇯🇵 **Japanese / CJK text out of the box** — Noto Sans CJK JP preconfigured
 - 📝 **GitHub-flavored Markdown** — tables, fenced code blocks, strikethrough
 - 📃 **PDF or DOCX output** — `-format docx` exports editable Word documents (via pandoc)
-- 👀 **Read it in the terminal** — `-format console` renders the document as styled, wrapped ANSI text and pages it through `less` (no conversion tools needed), drawing Mermaid diagrams as inline images on kitty, iTerm2 and Sixel terminals
+- 👀 **Read it in the terminal** — `-format console` renders the document as styled, wrapped ANSI text and pages it through `less` (no conversion tools needed), drawing Mermaid flowcharts and sequence diagrams as inline images on kitty, iTerm2 and Sixel terminals and as box-drawing text art everywhere else
 - 🤖 **CI-friendly single binary** — `go install` and you're done
 - 📄 **Configurable** — page size, margins, fonts
 
@@ -129,7 +129,7 @@ md2pdf [options] <input.md>
 | `-width <cols>` | terminal width | Console word-wrap width, capped at 120 columns (`-format console`) |
 | `-style <name\|path>` | `auto` | Console theme: `auto`, `dark`, `light`, `notty`, `ascii`, `dracula`, `pink`, `tokyo-night`, or a JSON stylesheet path (env: `GLAMOUR_STYLE`) |
 | `-pager` | true | Page console output through `$PAGER` (default `less -R -F`); `-pager=false` writes straight to stdout |
-| `-mermaid-render <mode>` | `auto` | How Mermaid blocks are drawn in console output: `auto`, `image` or `source` (`-format console`) |
+| `-mermaid-render <mode>` | `auto` | How Mermaid blocks are drawn in console output: `auto`, `image`, `ascii` or `source` (`-format console`) |
 | `-v` | false | Verbose output (progress logs go to stderr) |
 | `-version` | — | Print version and exit |
 
@@ -151,6 +151,7 @@ md2pdf -format console document.md
 md2pdf -format console -style dark -width 100 document.md
 md2pdf -format console -pager=false document.md | cat   # plain text, no color
 md2pdf -format console -mermaid-render image document.md   # require inline diagrams
+md2pdf -format console -mermaid-render ascii document.md   # always draw text art
 md2pdf -format console -mermaid-render source document.md  # always show Mermaid source
 
 # Explicit font path
@@ -192,21 +193,27 @@ flowchart TD
 Each format reads from the source that renders best for it.
 
 - **PDF** (default) — goldmark converts Markdown to HTML (GFM tables, fenced code blocks), Mermaid blocks are rendered to inline SVG via `mmdc`, a self-contained HTML file is assembled with GitHub-flavored CSS and `@font-face` declarations for Noto Sans CJK JP, and a headless Chromium browser (via Playwright) prints it to PDF.
-- **Console** — the Markdown is rendered to styled ANSI text by [glamour](https://github.com/charmbracelet/glamour) (the library behind [glow](https://github.com/charmbracelet/glow)), wrapped to the terminal width and paged through `$PAGER`. The theme follows the terminal background unless `-style` says otherwise; color is dropped entirely when `NO_COLOR` is set or the output is piped. Mermaid blocks are drawn as inline images when the terminal supports one of the image protocols below, and otherwise stay visible as their source, so console output still needs no conversion tools of its own.
+- **Console** — the Markdown is rendered to styled ANSI text by [glamour](https://github.com/charmbracelet/glamour) (the library behind [glow](https://github.com/charmbracelet/glow)), wrapped to the terminal width and paged through `$PAGER`. The theme follows the terminal background unless `-style` says otherwise; color is dropped entirely when `NO_COLOR` is set or the output is piped. Mermaid blocks are drawn as inline images when the terminal supports one of the image protocols below, as box-drawing text art when it does not, and otherwise stay visible as their source — so console output still needs no conversion tools of its own.
 - **DOCX** — the Markdown is sent **directly to `pandoc`** (its `gfm` reader, no HTML in between), so pandoc produces clean, Word-native paragraph and list styles. Mermaid blocks are rasterised to PNG and spliced back in as image references (Word cannot reliably display pandoc-embedded SVG). A generated reference document gives the output a readable, Japanese-friendly look: a 10.5pt body, compact blue headings, bordered GFM tables, and the `Yu Gothic` font (override with `-docx-font`).
 
 ### Mermaid diagrams in the terminal
 
-With `-format console`, Mermaid blocks are drawn as real diagrams on terminals
-that speak an inline image protocol. `-mermaid-render` picks the strategy:
+With `-format console`, Mermaid blocks are drawn as diagrams rather than printed
+as source. md2pdf walks a fallback chain and `-mermaid-render` picks where to
+start. Anything the chain cannot draw — a diagram type without a text-art
+renderer, or a block that fails to parse — keeps its Mermaid source, so no
+document ever loses content:
 
 | Mode | Behaviour |
 | --- | --- |
-| `auto` (default) | Draw inline images when the terminal supports a protocol **and** `mmdc` is installed; otherwise print the Mermaid source |
-| `image` | Require inline images; fail with a message naming the missing capability instead of falling back |
+| `auto` (default) | Inline image → text art → Mermaid source, taking the first that works |
+| `image` | Require an inline image. A terminal that cannot show one, a missing `mmdc`, or a diagram that fails to rasterise are all errors rather than a quiet downgrade |
+| `ascii` | Always draw box-drawing text art (source only for diagram types it cannot draw) |
 | `source` | Always print the Mermaid source as a code block |
 
-Detected protocols, from the `TERM` and `TERM_PROGRAM` environment variables:
+**Step 1 — inline images.** Used when the terminal supports an image protocol,
+the output is an interactive terminal, `NO_COLOR` is unset, and `mmdc` is
+installed. Protocols are detected from `TERM` and `TERM_PROGRAM`:
 
 | Protocol | Terminals |
 | --- | --- |
@@ -214,22 +221,45 @@ Detected protocols, from the `TERM` and `TERM_PROGRAM` environment variables:
 | iTerm2 inline images | iTerm2, WezTerm (`TERM_PROGRAM=iTerm.app`, `TERM_PROGRAM=WezTerm`) |
 | Sixel | foot, mlterm, yaft, and any `TERM` containing `sixel` |
 
+**Step 2 — box-drawing text art.** Rendered in-process by
+[mermaid-ascii](https://github.com/AlexanderGrooff/mermaid-ascii), so it needs no
+external tool and works on any terminal, when piped, and under the pager:
+
+```
+┌─────────────┐          ┌─────────────┐
+│             │          │             │
+│ Client Apps ├─1─Login─►│ API Gateway │
+│             │          │             │
+└─────────────┘          └─────────────┘
+```
+
+Only `flowchart` / `graph` and `sequenceDiagram` are drawn as text art. Every
+other diagram type — `gantt`, `pie`, `erDiagram`, `stateDiagram`, `classDiagram`
+and the rest — keeps its Mermaid source. (`erDiagram` is excluded deliberately:
+the library parses it but lays the entities out misaligned.)
+
+**Step 3 — Mermaid source**, exactly as v0.7.0 printed it.
+
 Notes:
 
-- Drawing images requires `mmdc`. Without it, console output still works and
-  shows the diagram source — the exit status stays 0 and `-v` explains why.
-- Images are **not** written when the output is piped or redirected, or when
-  `NO_COLOR` is set, so captured output stays plain text.
-- A diagram wider than the wrap width is scaled down to it rather than
-  overflowing the line.
+- `-style ascii`, or `GLAMOUR_STYLE=ascii`, draws the art with plain `+`, `-`
+  and `|` instead of Unicode box-drawing characters.
+- Text art wider than the wrap width is clipped to it, keeping the diagram's
+  shape rather than letting the terminal fold lines into fragments.
 - Inline images **bypass the pager**: neither the kitty nor the iTerm2 sequences
-  survive a trip through `less`. Use `-mermaid-render source` when you would
-  rather page a long document than see the diagrams.
+  survive a trip through `less`. Text art pages normally, so
+  `-mermaid-render ascii` is the way to page a long document and still see
+  diagrams.
+- Images are never written when the output is piped or redirected, or when
+  `NO_COLOR` is set; those cases fall through to text art, which is plain text.
+  With `-mermaid-render image` they are an error instead.
+- A Mermaid block carrying a YAML frontmatter title block is handled normally;
+  the title is printed above the diagram, as Mermaid does.
 - Sixel detection is environment-based, because querying the terminal directly
   would require putting it into raw mode and waiting for a reply. A Sixel
-  terminal that sets none of the markers above is therefore not detected, and
-  its diagrams stay as source; `-mermaid-render image` reports the missing
-  capability rather than forcing a protocol.
+  terminal that sets none of the markers above is therefore not detected and
+  gets text art instead; `-mermaid-render image` reports the missing capability
+  rather than forcing a protocol.
 
 ## Comparison with other tools
 

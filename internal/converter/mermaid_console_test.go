@@ -54,7 +54,7 @@ func TestValidateMermaidRenderMode(t *testing.T) {
 		{"auto", false},
 		{"image", false},
 		{"source", false},
-		{"ascii", true}, // added by #44; rejected until then
+		{"ascii", false},
 		{"nope", true},
 		{"AUTO", true},
 	}
@@ -254,7 +254,7 @@ func TestSpliceConsoleDiagrams_ReplacesPlaceholderLine(t *testing.T) {
 	rendered := "  # Title   \n\n  MD2PDFDG0        \n\n  after\n"
 	out, missing := spliceConsoleDiagrams(rendered, []consoleDiagram{
 		{placeholder: "MD2PDFDG0", content: "ART-A\nART-B"},
-	})
+	}, 80)
 	if len(missing) != 0 {
 		t.Errorf("unexpected unplaced diagrams: %v", missing)
 	}
@@ -274,7 +274,7 @@ func TestSpliceConsoleDiagrams_KeepsDocumentOrder(t *testing.T) {
 	out, missing := spliceConsoleDiagrams(rendered, []consoleDiagram{
 		{placeholder: "MD2PDFDG0", content: "FIRST"},
 		{placeholder: "MD2PDFDG1", content: "SECOND"},
-	})
+	}, 80)
 	if len(missing) != 0 {
 		t.Errorf("unexpected unplaced diagrams: %v", missing)
 	}
@@ -296,7 +296,7 @@ func TestSpliceConsoleDiagrams_StripsStyledPlaceholderLine(t *testing.T) {
 	rendered := "  \x1b[38;5;252mMD2PDFDG0\x1b[m\x1b[38;5;252m \x1b[m\n"
 	out, _ := spliceConsoleDiagrams(rendered, []consoleDiagram{
 		{placeholder: "MD2PDFDG0", content: "ART"},
-	})
+	}, 80)
 
 	if strings.Contains(out, "MD2PDFDG0") {
 		t.Errorf("placeholder survived:\n%q", out)
@@ -311,7 +311,7 @@ func TestSpliceConsoleDiagrams_StripsStyledPlaceholderLine(t *testing.T) {
 
 func TestSpliceConsoleDiagrams_NoDiagramsIsIdentity(t *testing.T) {
 	rendered := "  # Title\n\n  body\n"
-	if got, _ := spliceConsoleDiagrams(rendered, nil); got != rendered {
+	if got, _ := spliceConsoleDiagrams(rendered, nil, 80); got != rendered {
 		t.Errorf("splice altered the document with no diagrams:\n%q", got)
 	}
 }
@@ -437,10 +437,11 @@ func TestPrepareConsoleMermaid_FailedBlockFallsBackToItsSource(t *testing.T) {
 	}
 }
 
-// TestPrepareConsoleMermaid_MissingMmdcFallsBackToSource covers an image-capable
-// terminal without mmdc installed: no error, and the source is shown.
+// TestPrepareConsoleMermaid_MissingMmdcFallsBackToSource covers the bottom of the
+// chain: an image-capable terminal with no mmdc installed and a diagram type text
+// art cannot draw either. The run must still succeed and show the source.
 func TestPrepareConsoleMermaid_MissingMmdcFallsBackToSource(t *testing.T) {
-	md := []byte("```mermaid\ngraph TD\n A-->B\n```\n")
+	md := []byte("```mermaid\ngantt\n  title Roadmap\n```\n")
 	c := newTestConverter(t, &Config{
 		Format:   FormatConsole,
 		MmdcPath: filepath.Join(t.TempDir(), "definitely-not-installed-mmdc"),
@@ -455,8 +456,8 @@ func TestPrepareConsoleMermaid_MissingMmdcFallsBackToSource(t *testing.T) {
 	if len(diagrams) != 0 {
 		t.Errorf("got %d diagrams without mmdc, want 0", len(diagrams))
 	}
-	if !strings.Contains(string(rewritten), "A-->B") {
-		t.Errorf("Mermaid source missing after mmdc fallback:\n%s", rewritten)
+	if !strings.Contains(string(rewritten), "title Roadmap") {
+		t.Errorf("Mermaid source missing after falling through the chain:\n%s", rewritten)
 	}
 }
 
@@ -496,41 +497,64 @@ func TestRenderConsole_PipedOutputEmitsNoImageSequences(t *testing.T) {
 	if calls != 0 {
 		t.Errorf("rasterizer ran %d times for piped output, want 0", calls)
 	}
-	if !strings.Contains(got, "A-->B") {
-		t.Errorf("Mermaid source missing from piped output:\n%s", got)
+	// Piped output cannot show images, so the chain drops to text art, which is
+	// plain text and survives a redirect.
+	if !strings.ContainsAny(got, "┌┐└┘─│►") {
+		t.Errorf("text art missing from piped output:\n%s", got)
+	}
+	if strings.Contains(got, "A-->B") {
+		t.Errorf("Mermaid source shown instead of text art:\n%s", got)
 	}
 }
 
-// TestRenderConsole_ByteIdenticalToSourceModeWhenNoCapability is the v0.7.0
-// regression guard: with no image capability the output must match what the
-// pre-feature code produced, which is exactly source mode.
-func TestRenderConsole_ByteIdenticalToSourceModeWhenNoCapability(t *testing.T) {
-	md := []byte("# Diagram\n\nIntro.\n\n```mermaid\ngraph TD\n  A[Start] --> B[End]\n```\n\nOutro.\n")
+// TestRenderConsole_ByteIdenticalToPreFeatureRendering is the v0.7.0 regression
+// guard. Since text art now sits in the chain below images, "no diagram can be
+// drawn" means either the user asked for source or no step of the chain supports
+// the diagram type; both must reproduce the pre-feature bytes exactly.
+func TestRenderConsole_ByteIdenticalToPreFeatureRendering(t *testing.T) {
+	tests := []struct {
+		name string
+		md   []byte
+		cfg  *Config
+	}{
+		{
+			name: "explicit source mode",
+			md:   []byte("# Diagram\n\nIntro.\n\n```mermaid\ngraph TD\n  A[Start] --> B[End]\n```\n\nOutro.\n"),
+			cfg:  &Config{Format: FormatConsole, ConsolePager: false, MermaidRender: MermaidRenderSource},
+		},
+		{
+			name: "diagram type no step of the chain can draw",
+			md:   []byte("# Diagram\n\nIntro.\n\n```mermaid\ngantt\n  title Roadmap\n```\n\nOutro.\n"),
+			cfg:  &Config{Format: FormatConsole, ConsolePager: false},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			want, err := renderConsoleMarkdown(tc.md, "notty", consoleFallbackWidth)
+			if err != nil {
+				t.Fatalf("baseline render: %v", err)
+			}
 
-	want, err := renderConsoleMarkdown(md, "notty", consoleFallbackWidth)
-	if err != nil {
-		t.Fatalf("baseline render: %v", err)
-	}
+			t.Setenv("TERM", "dumb")
+			outPath := filepath.Join(t.TempDir(), "out.txt")
+			f, err := os.Create(outPath)
+			if err != nil {
+				t.Fatalf("create: %v", err)
+			}
+			defer f.Close()
 
-	t.Setenv("TERM", "dumb")
-	dir := t.TempDir()
-	outPath := filepath.Join(dir, "out.txt")
-	f, err := os.Create(outPath)
-	if err != nil {
-		t.Fatalf("create: %v", err)
-	}
-	defer f.Close()
-
-	c := newTestConverter(t, &Config{Format: FormatConsole, ConsolePager: false})
-	if err := c.renderConsole(md, f); err != nil {
-		t.Fatalf("renderConsole: %v", err)
-	}
-	got, err := os.ReadFile(outPath)
-	if err != nil {
-		t.Fatalf("read: %v", err)
-	}
-	if !bytes.Equal(got, want) {
-		t.Errorf("output drifted from the pre-feature rendering.\n got: %q\nwant: %q", got, want)
+			c := newTestConverter(t, tc.cfg)
+			if err := c.renderConsole(tc.md, f); err != nil {
+				t.Fatalf("renderConsole: %v", err)
+			}
+			got, err := os.ReadFile(outPath)
+			if err != nil {
+				t.Fatalf("read: %v", err)
+			}
+			if !bytes.Equal(got, want) {
+				t.Errorf("output drifted from the pre-feature rendering.\n got: %q\nwant: %q", got, want)
+			}
+		})
 	}
 }
 
@@ -605,7 +629,7 @@ func TestPrepareConsoleMermaid_TokensSurviveNarrowGlamourWidths(t *testing.T) {
 			if err != nil {
 				t.Fatalf("renderConsoleMarkdown: %v", err)
 			}
-			out, missing := spliceConsoleDiagrams(string(rendered), diagrams)
+			out, missing := spliceConsoleDiagrams(string(rendered), diagrams, width)
 			if len(missing) != 0 {
 				t.Fatalf("width %d: diagram token was not placed (glamour wrapped it): %v", width, missing)
 			}
