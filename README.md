@@ -35,6 +35,21 @@ without font breakage. Single Go binary, drop-in for CI.
 brew install 135yshr/tap/md2pdf
 ```
 
+This also installs [`mermaid-cli`](https://github.com/mermaid-js/mermaid-cli),
+so diagrams work out of the box. Two things it **cannot** install, because a
+Homebrew formula is not allowed to depend on a cask:
+
+```sh
+brew install --cask chromium              # needed for PDF and for Mermaid
+brew install --cask font-noto-sans-cjk-jp # needed for Japanese text in PDF
+```
+
+Google Chrome counts as the browser; point md2pdf at any location with
+`CHROME_PATH`. `-format console` needs neither.
+
+`pandoc` is declared optional and is only needed for `-format docx` — either
+`brew install pandoc`, or `brew install --with-pandoc 135yshr/tap/md2pdf`.
+
 **Go install**
 
 ```sh
@@ -91,15 +106,28 @@ instead, run `md2pdf -format docx document.md`.
 
 ## Requirements Summary
 
+Installed for you by `brew install 135yshr/tap/md2pdf`:
+
 | Dependency | Purpose | Install |
 |---|---|---|
-| [mmdc](https://github.com/mermaid-js/mermaid-cli) | Mermaid → SVG/PNG | `npm install -g @mermaid-js/mermaid-cli` |
+| [mmdc](https://github.com/mermaid-js/mermaid-cli) | Mermaid → SVG/PNG | `brew install mermaid-cli`, or `npm install -g @mermaid-js/mermaid-cli` |
 | A Chromium browser | HTML → PDF | `brew install --cask chromium` / `apt install chromium` (Google Chrome also works; override with `CHROME_PATH`) |
 | [pandoc](https://pandoc.org/) | Markdown → DOCX (only for `-format docx`) | `brew install pandoc` / `apt install pandoc` |
 | Noto Sans CJK JP | Japanese font (optional) | See above |
 | Go 1.26+ | Build from source only | https://go.dev |
 
 `-format console` needs none of these — it renders in-process and only uses a pager if one is installed.
+
+**Why the browser and the font are not installed by Homebrew.** Both are casks,
+and a formula cannot depend on a cask: Homebrew's formula DSL has no `cask:`
+dependency at all, while the cask DSL accepts both `formula:` and `cask:`. So
+`brew install 135yshr/tap/md2pdf` brings `mermaid-cli` (and `pandoc` if you ask
+for it) and stops there.
+
+Note also that `brew install mermaid-cli` does **not** bring a browser of its
+own — Homebrew's own formula test asserts that `mmdc` fails with
+`Could not find chrome-headless-shell`. md2pdf works because it hands `mmdc` the
+browser it resolved itself, which is the same one it uses to print the PDF.
 
 ## Usage
 
