@@ -213,3 +213,70 @@ func TestBuildCSS_MultipleFilesInOrder(t *testing.T) {
 		t.Error("stylesheets are out of argument order, so the wrong one would win")
 	}
 }
+
+// TestBuildCSS_MissingFileIsAnError checks a typo in -css surfaces as an error
+// naming the file rather than silently producing an unstyled document.
+func TestBuildCSS_MissingFileIsAnError(t *testing.T) {
+	missing := t.TempDir() + "/nope.css"
+	c := &Converter{cfg: &Config{CSSFiles: []string{missing}}}
+
+	_, err := c.buildCSS()
+	if err == nil {
+		t.Fatal("expected an error for a missing stylesheet")
+	}
+	if !strings.Contains(err.Error(), "nope.css") {
+		t.Errorf("error %q does not name the missing file", err)
+	}
+}
+
+// TestBuildCSS_EmptyFileIsAccepted checks an empty stylesheet contributes
+// nothing and is not treated as a failure.
+func TestBuildCSS_EmptyFileIsAccepted(t *testing.T) {
+	dir := t.TempDir()
+	empty := dir + "/empty.css"
+	if err := os.WriteFile(empty, nil, 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	c := &Converter{cfg: &Config{}}
+	base, err := c.buildCSS()
+	if err != nil {
+		t.Fatalf("buildCSS: %v", err)
+	}
+
+	c.cfg.CSSFiles = []string{empty}
+	got, err := c.buildCSS()
+	if err != nil {
+		t.Fatalf("buildCSS with an empty stylesheet: %v", err)
+	}
+	if got != base {
+		t.Errorf("an empty stylesheet changed the output:\n got: %q\nwant: %q", got, base)
+	}
+}
+
+// TestBuildCSS_RejectsStyleTagBreakout guards the inline <style> block. The page
+// is assembled with text/template, which does not escape, so a stylesheet
+// containing "</style" would otherwise close the block and inject markup.
+func TestBuildCSS_RejectsStyleTagBreakout(t *testing.T) {
+	for _, content := range []string{
+		"</style><script>alert(1)</script>",
+		"body{}\n</STYLE >\n",
+		"a{}</style\t>",
+	} {
+		dir := t.TempDir()
+		path := dir + "/evil.css"
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+
+		c := &Converter{cfg: &Config{CSSFiles: []string{path}}}
+		_, err := c.buildCSS()
+		if err == nil {
+			t.Errorf("stylesheet %q was accepted but can escape the <style> block", content)
+			continue
+		}
+		if !strings.Contains(err.Error(), "</style") {
+			t.Errorf("error %q does not explain what is wrong", err)
+		}
+	}
+}

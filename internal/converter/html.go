@@ -99,13 +99,25 @@ func (c *Converter) buildCSS() (string, error) {
 	return fontFaces + baseCSS + custom, nil
 }
 
+// styleEndTag is the byte sequence that closes a <style> element. An HTML parser
+// ends the element at "</style" regardless of what follows, so a stylesheet
+// containing it would break out of the block the CSS is embedded in.
+const styleEndTag = "</style"
+
 // readCustomCSS concatenates the -css stylesheets in the order given.
+//
+// A stylesheet containing "</style" is rejected rather than escaped: the page is
+// assembled with text/template, which does no escaping, and the sequence has no
+// legitimate meaning in CSS, so refusing it is both safe and unambiguous.
 func (c *Converter) readCustomCSS() (string, error) {
 	var sb strings.Builder
 	for _, path := range c.cfg.CSSFiles {
 		data, err := os.ReadFile(path) //nolint:gosec // G304: the caller chose this stylesheet
 		if err != nil {
 			return "", fmt.Errorf("read custom CSS: %w", err)
+		}
+		if strings.Contains(strings.ToLower(string(data)), styleEndTag) {
+			return "", fmt.Errorf("custom CSS %s contains %q, which would end the inline <style> block", path, styleEndTag)
 		}
 		sb.Write(data)
 	}
