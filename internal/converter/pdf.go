@@ -3,7 +3,9 @@ package converter
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/chromedp/cdproto/page"
@@ -14,6 +16,16 @@ import (
 // printTimeout bounds the whole browser session. A document that cannot be
 // printed within it is treated as a failure rather than hanging the CLI.
 const printTimeout = 120 * time.Second
+
+// browserStartTimeout is how long to wait for the browser to publish its
+// DevTools websocket URL.
+//
+// chromedp defaults to 20s, which is not enough for a genuinely cold start: on
+// a fresh CI runner the first Chrome launch sets up a profile and lost the race,
+// while a second launch in the same run finished comfortably. The overall
+// printTimeout still bounds the operation, so a browser that never comes up
+// fails rather than hangs.
+const browserStartTimeout = 60 * time.Second
 
 // printOptions holds everything Page.printToPDF needs, in the inches it expects.
 type printOptions struct {
@@ -115,6 +127,7 @@ func renderPDF(browser, htmlPath string, opts printOptions, timeout time.Duratio
 		// generated itself.
 		chromedp.NoSandbox,
 		chromedp.DisableGPU,
+		chromedp.WSURLReadTimeout(browserStartTimeout),
 	)
 
 	allocCtx, cancelAlloc := chromedp.NewExecAllocator(context.Background(), allocOpts...)
@@ -124,14 +137,20 @@ func renderPDF(browser, htmlPath string, opts printOptions, timeout time.Duratio
 	ctx, cancelTimeout := context.WithTimeout(browserCtx, timeout)
 	defer cancelTimeout()
 
-	var pdf []byte
+	var (
+		pdf         []byte
+		fontsLoaded bool
+	)
 	err := chromedp.Run(ctx,
-		chromedp.Navigate("file://"+htmlPath),
+		chromedp.Navigate(fileURL(htmlPath)),
 		// document.fonts.ready resolves to a Promise, so it has to be awaited
-		// rather than merely evaluated.
-		chromedp.Evaluate("document.fonts.ready", nil, func(p *runtime.EvaluateParams) *runtime.EvaluateParams {
-			return p.WithAwaitPromise(true)
-		}),
+		// rather than merely evaluated. It resolves *to the FontFaceSet*, which
+		// CDP cannot reliably serialize by value, so the promise is mapped to a
+		// primitive before it comes back.
+		chromedp.Evaluate("document.fonts.ready.then(() => true)", &fontsLoaded,
+			func(p *runtime.EvaluateParams) *runtime.EvaluateParams {
+				return p.WithAwaitPromise(true)
+			}),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			var err error
 			pdf, _, err = page.PrintToPDF().
@@ -153,4 +172,18 @@ func renderPDF(browser, htmlPath string, opts printOptions, timeout time.Duratio
 		return nil, fmt.Errorf("drive headless browser: %w", err)
 	}
 	return pdf, nil
+}
+
+// fileURL turns a local path into a file:// URL.
+//
+// Concatenating "file://" with the path is wrong in two ways that matter: a
+// Windows path yields file://C:\... , where Chromium reads the drive letter as
+// a host, and any "#" in a filename would start a URL fragment and truncate the
+// path. Building the URL escapes both.
+func fileURL(path string) string {
+	slashed := strings.ReplaceAll(path, `\`, "/")
+	if !strings.HasPrefix(slashed, "/") {
+		slashed = "/" + slashed
+	}
+	return (&url.URL{Scheme: "file", Path: slashed}).String()
 }

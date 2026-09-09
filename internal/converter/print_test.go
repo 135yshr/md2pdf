@@ -140,3 +140,54 @@ func TestPrintPDF_ReportsABadPageSizeBeforeLaunching(t *testing.T) {
 		t.Errorf("error does not name the bad size: %v", err)
 	}
 }
+
+// TestFileURL covers the two ways concatenating "file://" with a path goes
+// wrong: a Windows drive letter read as a host, and "#" starting a fragment.
+func TestFileURL(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		want string
+	}{
+		{"unix path", "/tmp/doc.html", "file:///tmp/doc.html"},
+		{"windows path gets a root and forward slashes", `C:\Users\me\doc.html`, "file:///C:/Users/me/doc.html"},
+		{"spaces are escaped", "/tmp/my doc.html", "file:///tmp/my%20doc.html"},
+		{"a hash is escaped rather than starting a fragment", "/tmp/a#b.html", "file:///tmp/a%23b.html"},
+		{"a question mark is escaped", "/tmp/a?b.html", "file:///tmp/a%3Fb.html"},
+		{"non-ASCII is percent-encoded", "/tmp/\u65e5\u672c\u8a9e.html", "file:///tmp/%E6%97%A5%E6%9C%AC%E8%AA%9E.html"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := fileURL(tc.path); got != tc.want {
+				t.Errorf("fileURL(%q) = %q, want %q", tc.path, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestPrintPDF_HandlesAwkwardFilenames prints from a path containing a space
+// and a "#", which the previous string concatenation would have truncated.
+func TestPrintPDF_HandlesAwkwardFilenames(t *testing.T) {
+	if _, err := chromiumPath(); err != nil {
+		t.Skipf("no Chromium available: %v", err)
+	}
+
+	dir := t.TempDir()
+	htmlPath := filepath.Join(dir, "my #1 report.html")
+	pdfPath := filepath.Join(dir, "out.pdf")
+	if err := os.WriteFile(htmlPath, []byte("<!DOCTYPE html><html><body><h1>X</h1></body></html>"), 0o644); err != nil {
+		t.Fatalf("write html: %v", err)
+	}
+
+	c := newTestConverter(t, &Config{PageSize: "A4"})
+	if err := c.printPDF(htmlPath, pdfPath); err != nil {
+		t.Fatalf("printPDF with an awkward filename: %v", err)
+	}
+	data, err := os.ReadFile(pdfPath)
+	if err != nil {
+		t.Fatalf("read pdf: %v", err)
+	}
+	if !strings.HasPrefix(string(data), "%PDF-") {
+		t.Error("output is not a PDF")
+	}
+}

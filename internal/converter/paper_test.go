@@ -79,6 +79,11 @@ func TestLengthInches(t *testing.T) {
 		{name: "text is rejected", value: "wide", wantErrSub: "wide"},
 		{name: "a negative length is rejected", value: "-5mm", wantErrSub: "negative"},
 		{name: "a missing number is rejected", value: "mm", wantErrSub: "mm"},
+		// ParseFloat accepts these, so they need rejecting explicitly.
+		{name: "NaN is rejected", value: "NaN", wantErrSub: "finite"},
+		{name: "positive infinity is rejected", value: "+Inf", wantErrSub: "finite"},
+		{name: "negative infinity is rejected", value: "-Inf", wantErrSub: "finite"},
+		{name: "infinity with a unit is rejected", value: "Infmm", wantErrSub: "finite"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

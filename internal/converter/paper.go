@@ -2,6 +2,7 @@ package converter
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -94,6 +95,11 @@ func lengthInches(value string) (float64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("invalid length %q: expected a number optionally followed by %s",
 			value, strings.Join(lengthUnitNames(), ", "))
+	}
+	// ParseFloat accepts "NaN" and "+Inf" without complaint, and either would
+	// reach Chromium as a paper measurement.
+	if math.IsNaN(parsed) || math.IsInf(parsed, 0) {
+		return 0, fmt.Errorf("invalid length %q: not a finite measurement", value)
 	}
 	if parsed < 0 {
 		return 0, fmt.Errorf("invalid length %q: a negative length is not meaningful", value)
