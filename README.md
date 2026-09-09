@@ -225,9 +225,11 @@ Notes:
 - Inline images **bypass the pager**: neither the kitty nor the iTerm2 sequences
   survive a trip through `less`. Use `-mermaid-render source` when you would
   rather page a long document than see the diagrams.
-- Sixel detection is environment-based. Querying the terminal directly would
-  require putting it into raw mode, so a Sixel terminal that is not listed above
-  can be forced with `-mermaid-render image`.
+- Sixel detection is environment-based, because querying the terminal directly
+  would require putting it into raw mode and waiting for a reply. A Sixel
+  terminal that sets none of the markers above is therefore not detected, and
+  its diagrams stay as source; `-mermaid-render image` reports the missing
+  capability rather than forcing a protocol.
 
 ## Comparison with other tools
 

@@ -241,6 +241,8 @@ func TestEncodeTerminalImage_LeavesNarrowImagesAtNaturalSize(t *testing.T) {
 	}
 }
 
+// firstBytes truncates s for error messages, since image escape sequences are
+// far too long to print in full.
 func firstBytes(s string, n int) string {
 	if len(s) <= n {
 		return s
@@ -314,6 +316,8 @@ func TestSpliceConsoleDiagrams_NoDiagramsIsIdentity(t *testing.T) {
 	}
 }
 
+// newTestConverter builds a Converter with a real temporary working directory
+// and registers its cleanup with t.
 func newTestConverter(t *testing.T, cfg *Config) *Converter {
 	t.Helper()
 	c, err := New(cfg)
