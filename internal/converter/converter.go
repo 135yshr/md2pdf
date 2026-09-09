@@ -11,6 +11,7 @@
 package converter
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -33,8 +34,10 @@ const (
 
 // Config holds all runtime options for the converter.
 type Config struct {
-	// InputFile is the path to the source Markdown file.
-	InputFile string
+	// InputFiles are the source Markdown paths, in the order given on the
+	// command line. A single entry of StdinPath means the document is read from
+	// standard input. Only console format accepts more than one entry.
+	InputFiles []string
 	// OutputFile is the destination output path (PDF or DOCX).
 	OutputFile string
 	// Format selects the output format: "pdf" (default), "docx" or "console".
@@ -97,6 +100,9 @@ type Converter struct {
 	// invocation without depending on what is installed on the machine.
 	rasterizeMermaid func(idx int, source string) (string, error)
 	mermaidAvailable func() bool
+	// stdin is where StdinPath reads from. Nil means os.Stdin; tests set it to
+	// supply a document without touching the process's standard input.
+	stdin io.Reader
 }
 
 // New creates a new Converter and prepares a temporary working directory.
@@ -116,27 +122,39 @@ func (c *Converter) Close() {
 	_ = os.RemoveAll(c.workDir)
 }
 
-// Convert runs the conversion pipeline for the given input file, writing the
-// result to outputPath. PDF output flows through the Markdown → HTML → Chromium
+// Convert runs the conversion pipeline for the given inputs, writing the result
+// to outputPath. PDF output flows through the Markdown → HTML → Chromium
 // stages; DOCX output is produced directly from Markdown by pandoc so the result
 // uses clean, Word-native styling instead of HTML-derived markup. Console output
 // is written to standard output instead of outputPath, which is ignored.
-func (c *Converter) Convert(inputPath, outputPath string) error {
-	mdBytes, err := os.ReadFile(inputPath)
-	if err != nil {
-		return fmt.Errorf("read input: %w", err)
+//
+// Console format renders every input in order; the other formats take exactly
+// one, which the CLI enforces before calling this.
+func (c *Converter) Convert(inputs []string, outputPath string) error {
+	if len(inputs) == 0 {
+		return errors.New("no input documents")
 	}
 
 	if strings.EqualFold(c.cfg.Format, FormatConsole) {
-		if err := c.renderConsole(mdBytes, os.Stdout); err != nil {
+		if err := c.renderConsole(inputs, os.Stdout); err != nil {
 			return fmt.Errorf("render console: %w", err)
 		}
 		return nil
 	}
 
-	srcDir, err := filepath.Abs(filepath.Dir(inputPath))
+	if len(inputs) > 1 {
+		return fmt.Errorf("%s output takes a single input document, got %d", c.cfg.Format, len(inputs))
+	}
+	inputPath := inputs[0]
+
+	mdBytes, err := c.readInput(inputPath)
 	if err != nil {
-		return fmt.Errorf("resolve input dir: %w", err)
+		return err
+	}
+
+	srcDir, err := inputDir(inputPath)
+	if err != nil {
+		return err
 	}
 
 	absOut, err := filepath.Abs(outputPath)

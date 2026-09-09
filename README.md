@@ -111,7 +111,7 @@ md2pdf [options] <input.md>
 
 | Flag | Default | Description |
 |---|---|---|
-| `-o <path>` | `<input>.pdf` | Output path (`.docx` extension implies `-format docx`; not allowed with `-format console`) |
+| `-o <path>` | `<input>.pdf` | Output path (`.docx` extension implies `-format docx`; not allowed with `-format console`; **required when reading from stdin** for `pdf`/`docx`) |
 | `-format <fmt>` | `pdf` | Output format: `pdf`, `docx`, or `console` (aliases `term`, `terminal`; inferred from `-o` extension when omitted) |
 | `-font <path>` | auto-detected | Noto Sans CJK JP Regular font |
 | `-font-bold <path>` | auto-detected | Noto Sans CJK JP Bold font |
@@ -154,6 +154,10 @@ md2pdf -format console -mermaid-render image document.md   # require inline diag
 md2pdf -format console -mermaid-render ascii document.md   # always draw text art
 md2pdf -format console -mermaid-render source document.md  # always show Mermaid source
 
+cat doc.md | md2pdf -format console -                       # read from stdin
+gh pr view 41 --json body -q .body | md2pdf -o pr.pdf -     # pipe into a PDF
+md2pdf -format console docs/*.md                            # several files at once
+
 # Explicit font path
 md2pdf -font /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc document.md
 
@@ -195,6 +199,48 @@ Each format reads from the source that renders best for it.
 - **PDF** (default) — goldmark converts Markdown to HTML (GFM tables, fenced code blocks), Mermaid blocks are rendered to inline SVG via `mmdc`, a self-contained HTML file is assembled with GitHub-flavored CSS and `@font-face` declarations for Noto Sans CJK JP, and a headless Chromium browser (via Playwright) prints it to PDF.
 - **Console** — the Markdown is rendered to styled ANSI text by [glamour](https://github.com/charmbracelet/glamour) (the library behind [glow](https://github.com/charmbracelet/glow)), wrapped to the terminal width and paged through `$PAGER`. The theme follows the terminal background unless `-style` says otherwise; color is dropped entirely when `NO_COLOR` is set or the output is piped. Mermaid blocks are drawn as inline images when the terminal supports one of the image protocols below, as box-drawing text art when it does not, and otherwise stay visible as their source — so console output still needs no conversion tools of its own.
 - **DOCX** — the Markdown is sent **directly to `pandoc`** (its `gfm` reader, no HTML in between), so pandoc produces clean, Word-native paragraph and list styles. Mermaid blocks are rasterised to PNG and spliced back in as image references (Word cannot reliably display pandoc-embedded SVG). A generated reference document gives the output a readable, Japanese-friendly look: a 10.5pt body, compact blue headings, bordered GFM tables, and the `Yu Gothic` font (override with `-docx-font`).
+
+### Inputs
+
+A single `.md` path works for every format. Two extras relax that:
+
+**Standard input.** `-` reads the document from standard input instead of a file:
+
+```sh
+cat doc.md | md2pdf -format console -
+gh issue view 30 --json body -q .body | md2pdf -o issue.pdf -
+```
+
+- Relative paths inside the document (images, resources) resolve against the
+  **current directory**, since a piped document has no location of its own.
+- `-o` is **required** for `pdf` and `docx`, because there is no input filename
+  to derive the output name from.
+- Empty input is an **error**, not an empty document. Empty standard input
+  almost always means the command upstream in the pipe produced nothing, and
+  failing loudly makes the pipeline fail too. Whitespace-only counts as empty.
+- Passing `-` when standard input is a terminal fails immediately rather than
+  waiting silently for something to be typed.
+
+**Several files, console only.** Multiple paths render in order, separated by a
+rule:
+
+```sh
+md2pdf -format console docs/*.md
+md2pdf -format console intro.md guide.md appendix.md
+```
+
+- Only `-format console` accepts more than one path. Merging documents into one
+  PDF or DOCX would need decisions about heading level shifts, page breaks and
+  per-file image bases, so `pdf` and `docx` keep the single-document contract
+  and say so explicitly.
+- Every path is checked before anything is rendered, so a typo in the third of
+  three files fails immediately and names that file.
+- Repeats are kept: the same file passed twice renders twice.
+- `-` cannot be combined with file paths.
+
+The separator is glamour's own horizontal rule, so it follows the theme — dimmed
+under a dark style, plain ASCII under `-style ascii`, colorless under
+`NO_COLOR` — and looks like a `---` written in the document itself.
 
 ### Mermaid diagrams in the terminal
 
