@@ -1,3 +1,8 @@
+# [v0.14.1](https://github.com/135yshr/md2pdf/compare/v0.14.0...v0.14.1) (2026-09-09)
+
+## 🐛 Bug Fixes
+- [`17abcfc`](https://github.com/135yshr/md2pdf/commit/17abcfc)  fix: find Noto Sans CJK where it is actually installed (#61) (Issues: [`#61`](https://github.com/135yshr/md2pdf/issues/61))
+
 # [v0.14.0](https://github.com/135yshr/md2pdf/compare/v0.13.0...v0.14.0) (2026-09-09)
 
 ## ✨ New Features
