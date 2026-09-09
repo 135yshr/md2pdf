@@ -41,7 +41,7 @@ Homebrew formula is not allowed to depend on a cask:
 
 ```sh
 brew install --cask chromium              # needed for PDF and for Mermaid
-brew install --cask font-noto-sans-cjk-jp # needed for Japanese text in PDF
+brew install --cask font-noto-sans-cjk    # needed for Japanese text in PDF
 ```
 
 Google Chrome counts as the browser; point md2pdf at any location with
@@ -113,7 +113,7 @@ Installed for you by `brew install 135yshr/tap/md2pdf`:
 | [mmdc](https://github.com/mermaid-js/mermaid-cli) | Mermaid → SVG/PNG | `brew install mermaid-cli`, or `npm install -g @mermaid-js/mermaid-cli` |
 | A Chromium browser | HTML → PDF | `brew install --cask chromium` / `apt install chromium` (Google Chrome also works; override with `CHROME_PATH`) |
 | [pandoc](https://pandoc.org/) | Markdown → DOCX (only for `-format docx`) | `brew install pandoc` / `apt install pandoc` |
-| Noto Sans CJK JP | Japanese font (optional) | See above |
+| Noto Sans CJK | Japanese font (optional) | `brew install --cask font-noto-sans-cjk` / `apt install fonts-noto-cjk` |
 | Go 1.26+ | Build from source only | https://go.dev |
 
 `-format console` needs none of these — it renders in-process and only uses a pager if one is installed.
@@ -129,7 +129,7 @@ mmdc           missing  brew install mermaid-cli, or npm install -g @mermaid-js/
                         Mermaid diagrams in pdf, html and docx output — only needed for documents containing Mermaid diagrams
 pandoc         missing  brew install pandoc, or apt install pandoc
                         -format docx
-Noto CJK font  missing  brew install --cask font-noto-sans-cjk-jp, or apt install fonts-noto-cjk
+Noto CJK font  missing  brew install --cask font-noto-sans-cjk, or apt install fonts-noto-cjk
                         Japanese text in pdf and html output — output still works without it
 
 pdf      ready
