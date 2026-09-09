@@ -131,7 +131,7 @@ func diagnose(cfg *Config, deps diagnoseDeps) Report {
 			Path:     cfg.FontRegular,
 			Found:    deps.fontExists(cfg.FontRegular),
 			Purpose:  "Japanese text in pdf and html output",
-			Hint:     "brew install --cask font-noto-sans-cjk-jp, or apt install fonts-noto-cjk",
+			Hint:     "brew install --cask font-noto-sans-cjk, or apt install fonts-noto-cjk",
 			Optional: true,
 		},
 	}

@@ -13,19 +13,6 @@ import (
 	"github.com/135yshr/md2pdf/internal/converter"
 )
 
-// defaultFontPaths lists common locations for Noto Sans CJK JP fonts,
-// searched in order when no explicit -font flag is provided.
-var defaultFontPaths = []string{
-	// Linux (Debian/Ubuntu)
-	"/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-	"/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-	// macOS (Homebrew)
-	"/opt/homebrew/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
-	"/usr/local/share/fonts/noto/NotoSansCJK-Regular.ttc",
-	// Fallback: no custom font (system default)
-	"",
-}
-
 // mmdcDefaultPaths lists common install locations for the Mermaid CLI (mmdc).
 var mmdcDefaultPaths = []string{
 	"mmdc", // found in $PATH
@@ -154,18 +141,11 @@ func parseFlags(args []string) (*converter.Config, error) {
 	regular := resolveFontRegular(*fontRegular)
 	bold := *fontBold
 	if bold == "" {
-		// Derive bold from regular path by replacing "Regular" with "Bold".
-		bold = strings.ReplaceAll(regular, "Regular", "Bold")
-		if _, err := os.Stat(bold); err != nil {
-			bold = regular // fallback: use regular weight
-		}
+		bold = deriveFontWeight(regular, "Bold")
 	}
 	medium := *fontMedium
 	if medium == "" {
-		medium = strings.ReplaceAll(regular, "Regular", "Medium")
-		if _, err := os.Stat(medium); err != nil {
-			medium = regular
-		}
+		medium = deriveFontWeight(regular, "Medium")
 	}
 
 	// Resolve mmdc path.
@@ -248,13 +228,13 @@ func normalizeFormat(format string) string {
 }
 
 // resolveFontRegular returns the regular-weight font to use: the -font flag, or
-// the first of the well-known locations that exists. Shared with -doctor so the
-// report names the same font a conversion would load.
+// the first Noto Sans CJK file found in the well-known font directories. Shared
+// with -doctor so the report names the same font a conversion would load.
 func resolveFontRegular(explicit string) string {
 	if explicit != "" {
 		return explicit
 	}
-	return findFirst(defaultFontPaths)
+	return findCJKFont(fontSearchDirs(userHomeDir()))
 }
 
 // resolveMmdcPath returns the mmdc binary to use: the -mmdc flag, or the first
