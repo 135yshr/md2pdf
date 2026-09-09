@@ -1,3 +1,8 @@
+# [v0.14.0](https://github.com/135yshr/md2pdf/compare/v0.13.0...v0.14.0) (2026-09-09)
+
+## ✨ New Features
+- [`54a0b0c`](https://github.com/135yshr/md2pdf/commit/54a0b0c)  feat: add a -doctor flag that reports missing runtime dependencies (#60) (Issues: [`#60`](https://github.com/135yshr/md2pdf/issues/60) [`#54`](https://github.com/135yshr/md2pdf/issues/54) [`#59`](https://github.com/135yshr/md2pdf/issues/59) [`#55`](https://github.com/135yshr/md2pdf/issues/55) [`#58`](https://github.com/135yshr/md2pdf/issues/58) [`#56`](https://github.com/135yshr/md2pdf/issues/56) [`#59`](https://github.com/135yshr/md2pdf/issues/59))
+
 # [v0.13.0](https://github.com/135yshr/md2pdf/compare/v0.12.0...v0.13.0) (2026-09-09)
 
 ## ✨ New Features
