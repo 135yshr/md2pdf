@@ -33,7 +33,10 @@ type htmlData struct {
 // buildHTML assembles the final HTML file at destPath from the parsed document.
 // Each Mermaid placeholder comment is replaced with its rendered SVG.
 func (c *Converter) buildHTML(doc *parsedDoc, destPath string) error {
-	css := c.buildCSS()
+	css, err := c.buildCSS()
+	if err != nil {
+		return err
+	}
 
 	body := doc.HTML
 	for _, block := range doc.mermaidBlocks {
@@ -74,8 +77,10 @@ func (c *Converter) buildHTML(doc *parsedDoc, destPath string) error {
 }
 
 // buildCSS returns the complete stylesheet string, with @font-face declarations
-// pointing at the configured local font files.
-func (c *Converter) buildCSS() string {
+// pointing at the configured local font files, followed by any user stylesheets
+// from -css. User CSS comes last on purpose: it is embedded in the same <style>
+// block, so later rules override the built-in ones.
+func (c *Converter) buildCSS() (string, error) {
 	var fontFaces string
 	if c.cfg.FontRegular != "" {
 		fontFaces += fontFace("Noto Sans JP", 400, c.cfg.FontRegular)
@@ -87,7 +92,36 @@ func (c *Converter) buildCSS() string {
 		fontFaces += fontFace("Noto Sans JP", 700, c.cfg.FontBold)
 	}
 
-	return fontFaces + baseCSS
+	custom, err := c.readCustomCSS()
+	if err != nil {
+		return "", err
+	}
+	return fontFaces + baseCSS + custom, nil
+}
+
+// styleEndTag is the byte sequence that closes a <style> element. An HTML parser
+// ends the element at "</style" regardless of what follows, so a stylesheet
+// containing it would break out of the block the CSS is embedded in.
+const styleEndTag = "</style"
+
+// readCustomCSS concatenates the -css stylesheets in the order given.
+//
+// A stylesheet containing "</style" is rejected rather than escaped: the page is
+// assembled with text/template, which does no escaping, and the sequence has no
+// legitimate meaning in CSS, so refusing it is both safe and unambiguous.
+func (c *Converter) readCustomCSS() (string, error) {
+	var sb strings.Builder
+	for _, path := range c.cfg.CSSFiles {
+		data, err := os.ReadFile(path) //nolint:gosec // G304: the caller chose this stylesheet
+		if err != nil {
+			return "", fmt.Errorf("read custom CSS: %w", err)
+		}
+		if strings.Contains(strings.ToLower(string(data)), styleEndTag) {
+			return "", fmt.Errorf("custom CSS %s contains %q, which would end the inline <style> block", path, styleEndTag)
+		}
+		sb.Write(data)
+	}
+	return sb.String(), nil
 }
 
 // fontFace returns a single @font-face rule for the given family, weight and path.

@@ -112,7 +112,8 @@ md2pdf [options] <input.md>
 | Flag | Default | Description |
 |---|---|---|
 | `-o <path>` | `<input>.pdf` | Output path (`.docx` extension implies `-format docx`; not allowed with `-format console`; **required when reading from stdin** for `pdf`/`docx`) |
-| `-format <fmt>` | `pdf` | Output format: `pdf`, `docx`, or `console` (aliases `term`, `terminal`; inferred from `-o` extension when omitted) |
+| `-format <fmt>` | `pdf` | Output format: `pdf`, `html`, `docx`, or `console` (aliases `term`, `terminal`; inferred from `-o` extension when omitted, including `.html`/`.htm`) |
+| `-css <path>` | — | Custom CSS applied after the built-in stylesheet, so its rules win. Repeatable; later files override earlier ones. Used by `pdf` and `html` |
 | `-font <path>` | auto-detected | Noto Sans CJK JP Regular font |
 | `-font-bold <path>` | auto-detected | Noto Sans CJK JP Bold font |
 | `-font-medium <path>` | auto-detected | Noto Sans CJK JP Medium font |
@@ -147,6 +148,9 @@ md2pdf -format docx document.md
 md2pdf -o report.docx document.md   # format inferred from extension
 
 # Read the document in the terminal
+md2pdf -format html document.md                              # stop at HTML, no Chromium
+md2pdf -format html -css brand.css document.md               # iterate on CSS in a browser
+md2pdf -css brand.css -css client.css -o report.pdf document.md
 md2pdf -format console document.md
 md2pdf -format console -style dark -width 100 document.md
 md2pdf -format console -pager=false document.md | cat   # plain text, no color
@@ -199,6 +203,49 @@ Each format reads from the source that renders best for it.
 - **PDF** (default) — goldmark converts Markdown to HTML (GFM tables, fenced code blocks), Mermaid blocks are rendered to inline SVG via `mmdc`, a self-contained HTML file is assembled with GitHub-flavored CSS and `@font-face` declarations for Noto Sans CJK JP, and a headless Chromium browser (via Playwright) prints it to PDF.
 - **Console** — the Markdown is rendered to styled ANSI text by [glamour](https://github.com/charmbracelet/glamour) (the library behind [glow](https://github.com/charmbracelet/glow)), wrapped to the terminal width and paged through `$PAGER`. The theme follows the terminal background unless `-style` says otherwise; color is dropped entirely when `NO_COLOR` is set or the output is piped. Mermaid blocks are drawn as inline images when the terminal supports one of the image protocols below, as box-drawing text art when it does not, and otherwise stay visible as their source — so console output still needs no conversion tools of its own.
 - **DOCX** — the Markdown is sent **directly to `pandoc`** (its `gfm` reader, no HTML in between), so pandoc produces clean, Word-native paragraph and list styles. Mermaid blocks are rasterised to PNG and spliced back in as image references (Word cannot reliably display pandoc-embedded SVG). A generated reference document gives the output a readable, Japanese-friendly look: a 10.5pt body, compact blue headings, bordered GFM tables, and the `Yu Gothic` font (override with `-docx-font`).
+
+### Custom CSS and HTML output
+
+**Custom CSS.** `-css` injects a stylesheet **after** the built-in
+GitHub-flavored CSS, in the same inline `<style>` block, so your rules win the
+cascade:
+
+```sh
+md2pdf -css brand.css document.md
+```
+
+It is repeatable, and later files override earlier ones — useful for a shared
+house style plus a per-client override:
+
+```sh
+md2pdf -css house.css -css client-acme.css -o acme.pdf document.md
+```
+
+Precedence is: built-in stylesheet → first `-css` → … → last `-css`.
+
+A stylesheet containing `</style` is rejected, since it would close the inline
+block the CSS is embedded in. A missing `-css` file fails immediately, naming it.
+
+`-css` applies to `pdf` and `html`. DOCX styling goes through pandoc's reference
+document instead (see `-docx-font`), and console output is styled by `-style`.
+
+**HTML output.** `-format html` stops the pipeline after the HTML is assembled
+and writes that file, so **Chromium is never started**:
+
+```sh
+md2pdf -format html document.md          # -> document.html
+md2pdf -o page.html document.md          # .html/.htm also infers the format
+```
+
+This is the fast way to iterate on custom CSS — reload in a browser instead of
+re-rendering a PDF each time — and it is useful on its own for publishing to a
+static site.
+
+The HTML is self-contained in the same sense the PDF pipeline needs: the
+stylesheet is inlined and Mermaid diagrams are embedded as inline SVG.
+**Image paths are left exactly as written in the Markdown**, so they resolve
+relative to the HTML file. That works for the default output location beside the
+input; if you send the HTML elsewhere with `-o`, copy the images along with it.
 
 ### Inputs
 

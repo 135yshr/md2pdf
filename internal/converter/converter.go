@@ -30,6 +30,9 @@ const (
 	FormatDOCX = "docx"
 	// FormatConsole renders the document as styled ANSI text for a terminal.
 	FormatConsole = "console"
+	// FormatHTML writes the self-contained HTML that PDF output is built from,
+	// stopping before headless Chromium runs.
+	FormatHTML = "html"
 )
 
 // Config holds all runtime options for the converter.
@@ -65,6 +68,9 @@ type Config struct {
 	// passed to mmdc via its -p flag. When empty the converter auto-generates
 	// a temporary config pointing at the system Chromium.
 	PuppeteerConfig string
+	// CSSFiles are extra stylesheet paths injected after the built-in
+	// GitHub-flavored CSS, in the order given, so later files win the cascade.
+	CSSFiles []string
 	// PageSize controls the PDF paper size (A4, Letter, A3).
 	PageSize string
 	// MarginTop, MarginBottom, MarginLeft, MarginRight set PDF page margins.
@@ -124,9 +130,10 @@ func (c *Converter) Close() {
 
 // Convert runs the conversion pipeline for the given inputs, writing the result
 // to outputPath. PDF output flows through the Markdown → HTML → Chromium
-// stages; DOCX output is produced directly from Markdown by pandoc so the result
-// uses clean, Word-native styling instead of HTML-derived markup. Console output
-// is written to standard output instead of outputPath, which is ignored.
+// stages; HTML output stops after the HTML stage and emits that file directly;
+// DOCX output is produced directly from Markdown by pandoc so the result uses
+// clean, Word-native styling instead of HTML-derived markup. Console output is
+// written to standard output instead of outputPath, which is ignored.
 //
 // Console format renders every input in order; the other formats take exactly
 // one, which the CLI enforces before calling this.
@@ -181,10 +188,22 @@ func (c *Converter) Convert(inputs []string, outputPath string) error {
 		return fmt.Errorf("render mermaid: %w", err)
 	}
 
-	c.logf("Building HTML...")
+	// HTML output is the PDF pipeline's own intermediate, so it goes straight to
+	// the caller's path and Chromium is never started. Image paths are left
+	// exactly as the Markdown had them, which resolves correctly for the default
+	// output location beside the input file.
+	htmlOnly := strings.EqualFold(c.cfg.Format, FormatHTML)
 	htmlPath := filepath.Join(c.workDir, "document.html")
+	if htmlOnly {
+		htmlPath = absOut
+	}
+
+	c.logf("Building HTML...")
 	if err := c.buildHTML(doc, htmlPath); err != nil {
 		return fmt.Errorf("build html: %w", err)
+	}
+	if htmlOnly {
+		return nil
 	}
 
 	c.logf("Copying images to working directory...")
