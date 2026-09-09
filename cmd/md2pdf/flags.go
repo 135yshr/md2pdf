@@ -54,7 +54,7 @@ func parseFlags(args []string) (*converter.Config, error) {
 	consoleWidth := fs.Int("width", 0, "Console word-wrap width in columns (0: follow terminal, max 120)")
 	consoleStyle := fs.String("style", "", "Console color theme: auto (default), dark, light, notty, ... or a JSON stylesheet path")
 	consolePager := fs.Bool("pager", true, "Send console output through $PAGER (default: less -R -F) on a terminal")
-	mermaidRender := fs.String("mermaid-render", "", "Console Mermaid rendering: auto (default), image or source")
+	mermaidRender := fs.String("mermaid-render", "", "Console Mermaid rendering: auto (default), image, ascii or source")
 	marginTop := fs.String("margin-top", "18mm", "Top margin (e.g. 18mm, 1in)")
 	marginBottom := fs.String("margin-bottom", "18mm", "Bottom margin")
 	marginLeft := fs.String("margin-left", "14mm", "Left margin")
@@ -267,13 +267,14 @@ Options:
   -pager                  Page console output through $PAGER on a terminal
                           (default: true; use -pager=false to disable)
   -mermaid-render <mode>  How to draw Mermaid diagrams in console output:
-                          auto (default) draws them as inline images on
-                          terminals that support kitty, iTerm2 or Sixel and
-                          otherwise prints the source; image forces inline
-                          images and fails if the terminal cannot show them;
+                          auto (default) tries an inline image on terminals
+                          that support kitty, iTerm2 or Sixel, then falls back
+                          to box-drawing text art, then to the source;
+                          image forces inline images and fails if the terminal
+                          cannot show them; ascii always draws text art;
                           source always prints the Mermaid source.
-                          Inline images bypass the pager, which cannot
-                          display them.
+                          Inline images bypass the pager, which cannot display
+                          them; text art pages normally.
   -v                      Verbose output
   -version                Print version and exit
 
@@ -286,6 +287,7 @@ Examples:
   md2pdf -format console -style dark -width 100 document.md
   md2pdf -format console -pager=false document.md | cat
   md2pdf -format console -mermaid-render image document.md
+  md2pdf -format console -mermaid-render ascii document.md
   md2pdf -format console -mermaid-render source document.md
   md2pdf -font /path/to/NotoSansCJK-Regular.ttc document.md
 `)

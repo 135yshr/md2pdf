@@ -90,13 +90,15 @@ func detectConsoleEnv(out *os.File) consoleEnv {
 
 // renderConsole renders the Markdown document as styled ANSI text, sending the
 // result through the user's pager when writing to an interactive terminal.
-// Mermaid blocks are drawn as inline images on terminals that support an image
-// protocol, and otherwise left as fenced code so their source stays readable.
 //
-// The pager is skipped whenever images are drawn: neither the kitty graphics
-// sequences nor the iTerm2 inline-image sequences survive a trip through less,
-// so paging them would show nothing at all. Use -mermaid-render source to keep
-// paging on an image-capable terminal.
+// Mermaid blocks walk a fallback chain: an inline image on terminals that
+// support an image protocol, then box-drawing text art, then the fenced Mermaid
+// source. Only the image step needs anything external (mmdc) or a capable
+// terminal, so a plain terminal and a redirected stream both still get diagrams.
+//
+// The pager is skipped only when inline images are drawn: neither the kitty
+// graphics sequences nor the iTerm2 inline-image sequences survive a trip
+// through less. Text art is plain text, so it pages normally.
 func (c *Converter) renderConsole(md []byte, out *os.File) error {
 	env := detectConsoleEnv(out)
 	width := resolveConsoleWidth(c.cfg.ConsoleWidth, env.isTTY, env.width)
@@ -107,6 +109,7 @@ func (c *Converter) renderConsole(md []byte, out *os.File) error {
 	if err != nil {
 		return err
 	}
+	plan.pureASCII = consoleWantsPureASCII(c.cfg.ConsoleStyle, env.envStyle, style)
 
 	doc, diagrams, err := c.prepareConsoleMermaid(md, plan, width)
 	if err != nil {
@@ -118,7 +121,7 @@ func (c *Converter) renderConsole(md []byte, out *os.File) error {
 		return err
 	}
 	if len(diagrams) > 0 {
-		spliced, missing := spliceConsoleDiagrams(string(rendered), diagrams)
+		spliced, missing := spliceConsoleDiagrams(string(rendered), diagrams, width)
 		for _, token := range missing {
 			c.logf("  warning: could not place diagram %s in the rendered output", token)
 		}
@@ -127,9 +130,9 @@ func (c *Converter) renderConsole(md []byte, out *os.File) error {
 
 	if c.cfg.ConsolePager && env.isTTY {
 		switch {
-		case len(diagrams) > 0:
-			c.logf("Skipping the pager so the inline diagrams survive; " +
-				"use -mermaid-render source to page the document instead.")
+		case plan.emitsImages() && len(diagrams) > 0:
+			c.logf("Skipping the pager so the inline images survive; " +
+				"use -mermaid-render ascii or source to page the document instead.")
 		default:
 			if argv, ok := resolvePager(); ok {
 				c.logf("Paging output through %s...", strings.Join(argv, " "))
