@@ -1,10 +1,13 @@
-// Package converter orchestrates the Markdown → HTML → PDF pipeline.
+// Package converter turns Markdown into PDF, DOCX, or styled terminal output.
 //
-// The pipeline consists of three stages:
+// The PDF pipeline consists of three stages:
 //  1. Parse Markdown and extract fenced Mermaid code blocks.
 //  2. Render each Mermaid block to an SVG file using the mmdc CLI.
 //  3. Build a self-contained GitHub-styled HTML file and print it to PDF
 //     using a headless Chromium browser (via the Playwright Python driver).
+//
+// DOCX output is produced directly from Markdown by pandoc, and console output
+// is rendered to ANSI text by glamour; both bypass the HTML stage.
 package converter
 
 import (
@@ -18,13 +21,23 @@ import (
 	"strings"
 )
 
+// Supported output formats.
+const (
+	// FormatPDF prints the document to PDF with headless Chromium.
+	FormatPDF = "pdf"
+	// FormatDOCX converts the document to a Word document with pandoc.
+	FormatDOCX = "docx"
+	// FormatConsole renders the document as styled ANSI text for a terminal.
+	FormatConsole = "console"
+)
+
 // Config holds all runtime options for the converter.
 type Config struct {
 	// InputFile is the path to the source Markdown file.
 	InputFile string
 	// OutputFile is the destination output path (PDF or DOCX).
 	OutputFile string
-	// Format selects the output format: "pdf" (default) or "docx".
+	// Format selects the output format: "pdf" (default), "docx" or "console".
 	// An empty value is treated as "pdf".
 	Format string
 	// FontRegular is the file path to the Noto Sans CJK JP Regular font.
@@ -56,6 +69,17 @@ type Config struct {
 	MarginBottom string
 	MarginLeft   string
 	MarginRight  string
+	// ConsoleWidth overrides the word-wrap width of console output. Zero
+	// follows the terminal width (capped at 120 columns) and falls back to 80
+	// columns when the output is not a terminal.
+	ConsoleWidth int
+	// ConsoleStyle selects the console color theme: a built-in style name
+	// ("auto", "dark", "light", "notty", ...) or a path to a JSON stylesheet.
+	// An empty value is treated as "auto".
+	ConsoleStyle string
+	// ConsolePager sends console output through $PAGER (default: less -R -F)
+	// when writing to an interactive terminal.
+	ConsolePager bool
 	// Verbose enables detailed progress logging.
 	Verbose bool
 }
@@ -83,11 +107,19 @@ func (c *Converter) Close() {
 // Convert runs the conversion pipeline for the given input file, writing the
 // result to outputPath. PDF output flows through the Markdown → HTML → Chromium
 // stages; DOCX output is produced directly from Markdown by pandoc so the result
-// uses clean, Word-native styling instead of HTML-derived markup.
+// uses clean, Word-native styling instead of HTML-derived markup. Console output
+// is written to standard output instead of outputPath, which is ignored.
 func (c *Converter) Convert(inputPath, outputPath string) error {
 	mdBytes, err := os.ReadFile(inputPath)
 	if err != nil {
 		return fmt.Errorf("read input: %w", err)
+	}
+
+	if strings.EqualFold(c.cfg.Format, FormatConsole) {
+		if err := c.renderConsole(mdBytes, os.Stdout); err != nil {
+			return fmt.Errorf("render console: %w", err)
+		}
+		return nil
 	}
 
 	srcDir, err := filepath.Abs(filepath.Dir(inputPath))
@@ -100,7 +132,7 @@ func (c *Converter) Convert(inputPath, outputPath string) error {
 		return fmt.Errorf("resolve output path: %w", err)
 	}
 
-	if strings.EqualFold(c.cfg.Format, "docx") {
+	if strings.EqualFold(c.cfg.Format, FormatDOCX) {
 		c.logf("Converting Markdown to DOCX with pandoc...")
 		if err := c.convertMarkdownDOCX(mdBytes, srcDir, absOut); err != nil {
 			return fmt.Errorf("convert docx: %w", err)
@@ -138,10 +170,12 @@ func (c *Converter) Convert(inputPath, outputPath string) error {
 	return nil
 }
 
-// logf prints a formatted message when verbose mode is enabled.
+// logf prints a formatted message to standard error when verbose mode is
+// enabled. Logging to stderr keeps progress output separate from the rendered
+// document that console format writes to stdout.
 func (c *Converter) logf(format string, args ...any) {
 	if c.cfg.Verbose {
-		fmt.Printf("  "+format+"\n", args...)
+		fmt.Fprintf(os.Stderr, "  "+format+"\n", args...)
 	}
 }
 

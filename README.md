@@ -21,6 +21,7 @@ without font breakage. Single Go binary, drop-in for CI.
 - 🇯🇵 **Japanese / CJK text out of the box** — Noto Sans CJK JP preconfigured
 - 📝 **GitHub-flavored Markdown** — tables, fenced code blocks, strikethrough
 - 📃 **PDF or DOCX output** — `-format docx` exports editable Word documents (via pandoc)
+- 👀 **Read it in the terminal** — `-format console` renders the document as styled, wrapped ANSI text and pages it through `less` (no conversion tools needed)
 - 🤖 **CI-friendly single binary** — `go install` and you're done
 - 📄 **Configurable** — page size, margins, fonts
 
@@ -94,9 +95,11 @@ instead, run `md2pdf -format docx document.md`.
 |---|---|---|
 | [mmdc](https://github.com/mermaid-js/mermaid-cli) | Mermaid → SVG/PNG | `npm install -g @mermaid-js/mermaid-cli` |
 | Python 3 + [Playwright](https://playwright.dev/python/) | HTML → PDF | `pip install playwright && playwright install chromium` |
-| [pandoc](https://pandoc.org/) | HTML → DOCX (only for `-format docx`) | `brew install pandoc` / `apt install pandoc` |
+| [pandoc](https://pandoc.org/) | Markdown → DOCX (only for `-format docx`) | `brew install pandoc` / `apt install pandoc` |
 | Noto Sans CJK JP | Japanese font (optional) | See above |
 | Go 1.26+ | Build from source only | https://go.dev |
+
+`-format console` needs none of these — it renders in-process and only uses a pager if one is installed.
 
 ## Usage
 
@@ -108,8 +111,8 @@ md2pdf [options] <input.md>
 
 | Flag | Default | Description |
 |---|---|---|
-| `-o <path>` | `<input>.pdf` | Output path (`.docx` extension implies `-format docx`) |
-| `-format <fmt>` | `pdf` | Output format: `pdf` or `docx` (inferred from `-o` extension when omitted) |
+| `-o <path>` | `<input>.pdf` | Output path (`.docx` extension implies `-format docx`; not allowed with `-format console`) |
+| `-format <fmt>` | `pdf` | Output format: `pdf`, `docx`, or `console` (aliases `term`, `terminal`; inferred from `-o` extension when omitted) |
 | `-font <path>` | auto-detected | Noto Sans CJK JP Regular font |
 | `-font-bold <path>` | auto-detected | Noto Sans CJK JP Bold font |
 | `-font-medium <path>` | auto-detected | Noto Sans CJK JP Medium font |
@@ -123,7 +126,10 @@ md2pdf [options] <input.md>
 | `-margin-bottom <m>` | `18mm` | Bottom margin |
 | `-margin-left <m>` | `14mm` | Left margin |
 | `-margin-right <m>` | `14mm` | Right margin |
-| `-v` | false | Verbose output |
+| `-width <cols>` | terminal width | Console word-wrap width, capped at 120 columns (`-format console`) |
+| `-style <name\|path>` | `auto` | Console theme: `auto`, `dark`, `light`, `notty`, `ascii`, `dracula`, `pink`, `tokyo-night`, or a JSON stylesheet path (env: `GLAMOUR_STYLE`) |
+| `-pager` | true | Page console output through `$PAGER` (default `less -R -F`); `-pager=false` writes straight to stdout |
+| `-v` | false | Verbose output (progress logs go to stderr) |
 | `-version` | — | Print version and exit |
 
 ### Examples
@@ -138,6 +144,11 @@ md2pdf -o report.pdf document.md
 # Export to Word (DOCX)
 md2pdf -format docx document.md
 md2pdf -o report.docx document.md   # format inferred from extension
+
+# Read the document in the terminal
+md2pdf -format console document.md
+md2pdf -format console -style dark -width 100 document.md
+md2pdf -format console -pager=false document.md | cat   # plain text, no color
 
 # Explicit font path
 md2pdf -font /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc document.md
@@ -171,11 +182,14 @@ flowchart TD
     E -->|docx| J[Mermaid → PNG]
     J --> H["pandoc (gfm reader)"]
     H --> I[DOCX output]
+    E -->|console| K["glamour (ANSI renderer)"]
+    K --> L["Terminal / $PAGER"]
 ```
 
-PDF and DOCX take separate paths so each format reads from the source that renders best.
+Each format reads from the source that renders best for it.
 
 - **PDF** (default) — goldmark converts Markdown to HTML (GFM tables, fenced code blocks), Mermaid blocks are rendered to inline SVG via `mmdc`, a self-contained HTML file is assembled with GitHub-flavored CSS and `@font-face` declarations for Noto Sans CJK JP, and a headless Chromium browser (via Playwright) prints it to PDF.
+- **Console** — the Markdown is rendered to styled ANSI text by [glamour](https://github.com/charmbracelet/glamour) (the library behind [glow](https://github.com/charmbracelet/glow)), wrapped to the terminal width and paged through `$PAGER`. The theme follows the terminal background unless `-style` says otherwise; color is dropped entirely when `NO_COLOR` is set or the output is piped. Mermaid blocks stay visible as their source, so no conversion tools are required — the pager is the only external program involved.
 - **DOCX** — the Markdown is sent **directly to `pandoc`** (its `gfm` reader, no HTML in between), so pandoc produces clean, Word-native paragraph and list styles. Mermaid blocks are rasterised to PNG and spliced back in as image references (Word cannot reliably display pandoc-embedded SVG). A generated reference document gives the output a readable, Japanese-friendly look: a 10.5pt body, compact blue headings, bordered GFM tables, and the `Yu Gothic` font (override with `-docx-font`).
 
 ## Comparison with other tools

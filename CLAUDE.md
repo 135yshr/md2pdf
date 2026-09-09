@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-md2pdf is a Go CLI tool that converts Markdown files to PDF with GitHub-flavored styling. It supports Mermaid diagrams (rendered as inline SVG) and Japanese text via Noto Sans CJK JP fonts.
+md2pdf is a Go CLI tool that converts Markdown files to PDF with GitHub-flavored styling. It supports Mermaid diagrams (rendered as inline SVG) and Japanese text via Noto Sans CJK JP fonts. It also exports DOCX and renders documents as styled ANSI text for reading in a terminal.
 
 ## Build & Run
 
@@ -32,7 +32,7 @@ Uses golangci-lint with config in `.golangci.yml`. Key enabled linters: errcheck
 
 ## Architecture
 
-`converter.go`'s `Convert` branches on `Config.Format`: PDF and DOCX take **different pipelines** because each format reads best from a different source.
+`converter.go`'s `Convert` branches on `Config.Format` (`FormatPDF` / `FormatDOCX` / `FormatConsole`): each format takes a **different pipeline** because each reads best from a different source.
 
 ### PDF pipeline (Markdown → HTML → Chromium)
 
@@ -49,18 +49,31 @@ DOCX is produced **directly from Markdown** by pandoc's `gfm` reader rather than
 2. **mermaid.go** — `renderMermaidPNGs` rasterises each block to a PNG (Word cannot reliably display pandoc-embedded SVG); placeholders are then rewritten to `![](…)` image references
 3. **docx.go** — pandoc converts the processed Markdown with `-f gfm`, running with the working directory set (generated diagrams resolve there) and `--resource-path` pointing at the source dir (user images resolve there). It also builds a styled reference document (`buildReferenceDoc` → `patchReferenceDoc`): table borders (`injectTableBorders`), a 10.5pt body (`setBodyFontSize`), compact headings (`shrinkHeadings`), and a Japanese-friendly font for both Latin and East Asian runs via the theme (`setThemeFonts`, default `Yu Gothic`, overridable with `-docx-font`). Reference-doc styling is best-effort and falls back to pandoc defaults on failure.
 
-**converter.go** orchestrates both pipelines and manages a temporary working directory for intermediate files. **Config** struct holds all runtime options including `Format` ("pdf"|"docx") and `DOCXFont`.
+### Console pipeline (Markdown → glamour → terminal)
 
-**cmd/md2pdf/** — CLI entry point. `flags.go` handles argument parsing and auto-detection of font/mmdc paths; `resolveFormat` derives the output format from `-format` or the `-o` extension. Pandoc is resolved in `docx.go` (`findPandoc`) unless `-pandoc` is provided. `main.go` wires flags to the converter.
+Console output is rendered **directly from Markdown** to styled ANSI text by [glamour](https://github.com/charmbracelet/glamour) (`charm.land/glamour/v2`), which is itself goldmark-based, so no HTML stage is involved (`console.go`).
+
+1. **console.go** — `detectConsoleEnv` inspects the output file: TTY status, terminal size, `NO_COLOR`, `GLAMOUR_STYLE`, and the color profile
+2. `resolveConsoleWidth` follows the terminal width less a 2-column margin, capped at 120 and floored at 20; non-terminals get a fixed 80
+3. `resolveConsoleStyle` forces `notty` when `NO_COLOR` is set or the output is not a terminal; otherwise `-style` wins over `GLAMOUR_STYLE`, and `auto` resolves to `dark`/`light` via `lipgloss.HasDarkBackground`
+4. `renderConsoleMarkdown` renders through glamour; Mermaid blocks are deliberately left as fenced code (no `mmdc` needed)
+5. Output goes through `$PAGER` (default `less -R -F`, with `-R` injected when the user's `less` lacks it) when writing to a TTY and `-pager` is on; colors are downsampled by `colorprofile` to what the terminal supports
+
+Because console format writes the document to stdout, `Converter.logf` writes verbose logs to **stderr** and `main.go` suppresses the "Converting…/saved to…" lines for this format.
+
+**converter.go** orchestrates all three pipelines and manages a temporary working directory for intermediate files. **Config** struct holds all runtime options including `Format` ("pdf"|"docx"|"console"), `DOCXFont`, and the console options (`ConsoleWidth`, `ConsoleStyle`, `ConsolePager`).
+
+**cmd/md2pdf/** — CLI entry point. `flags.go` handles argument parsing and auto-detection of font/mmdc paths; `resolveFormat` derives the output format from `-format` or the `-o` extension, folds the `term`/`terminal` aliases onto `console`, and rejects `-o` combined with console. Console `-style` values are validated up front by `converter.ValidateConsoleStyle`. Pandoc is resolved in `docx.go` (`findPandoc`) unless `-pandoc` is provided. `main.go` wires flags to the converter.
 
 ## External Dependencies
 
-Runtime: `mmdc` (Mermaid CLI via npm), Python 3 + Playwright + Chromium, Noto Sans CJK JP fonts. DOCX output additionally requires `pandoc`.
-Go modules: `github.com/yuin/goldmark` (Markdown parsing).
+Runtime: `mmdc` (Mermaid CLI via npm), Python 3 + Playwright + Chromium, Noto Sans CJK JP fonts. DOCX output additionally requires `pandoc`. Console output needs **no external tools** (a pager is used when available).
+Go modules: `github.com/yuin/goldmark` (Markdown parsing), `charm.land/glamour/v2` (terminal rendering), `charm.land/lipgloss/v2` (terminal background detection), `github.com/charmbracelet/colorprofile` (color downsampling), `github.com/charmbracelet/x/term` (TTY detection and size).
 
 ## Code Style
 
 - All exported symbols require GoDoc comments ending with a period (godot linter)
 - Comments and GoDoc in English
 - Errors crossing package boundaries must be wrapped (wrapcheck)
-- Go 1.22+, CI tests against Go 1.22 and 1.23
+- Go 1.26 (see `go.mod`); CI tests against Go 1.26
+- Unit tests must not start with `TestC`: CI's unit-test job selects them with `-run 'Test[^C]'` to skip the integration tests
