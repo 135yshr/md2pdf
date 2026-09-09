@@ -1,3 +1,8 @@
+# [v0.7.0](https://github.com/135yshr/md2pdf/compare/v0.6.0...v0.7.0) (2026-09-09)
+
+## ✨ New Features
+- [`759286e`](https://github.com/135yshr/md2pdf/commit/759286e)  feat: add console output format for reading Markdown in the terminal (#41) (Issues: [`#41`](https://github.com/135yshr/md2pdf/issues/41))
+
 # [v0.6.0](https://github.com/135yshr/md2pdf/compare/v0.5.0...v0.6.0) (2026-06-20)
 
 ## ✨ New Features
