@@ -45,13 +45,18 @@ archives:
       - goos: windows
         formats:
           - zip
+    # The Windows archive carries two binaries (md2pdf.exe and mdview.exe) while
+    # the others carry one, because only Windows cannot use a symlink for the
+    # second name. GoReleaser refuses that by default, on the grounds that an
+    # uneven archive confuses users; here it is the documented difference, so
+    # allow it rather than splitting this into two archive entries.
+    allow_different_binary_count: true
 
 brews:
-    # Homebrew only ever installs the darwin and linux archives, which carry the
-    # md2pdf build alone; naming it keeps that true if a third build is added.
-  - ids:
-      - md2pdf
-    repository:
+    # No `ids` filter here: it selects *archive* ids, not build ids, and the
+    # single archive entry above is the default one. Homebrew already takes only
+    # the darwin and linux archives, which carry the md2pdf binary alone.
+  - repository:
       owner: 135yshr
       name: homebrew-tap
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
