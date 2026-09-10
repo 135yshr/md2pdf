@@ -75,3 +75,23 @@ func TestWrapLabelText_KeepsUnbreakableTokenWhole(t *testing.T) {
 		t.Errorf("wrapLabelText broke the unbreakable token: %q, lines %q", got, lines)
 	}
 }
+
+// TestWrapLabelText_RespectsAuthoredBreaks covers a label the author already
+// broke by hand. Each segment is wrapped on its own so the authored boundary
+// survives, and every <br> spelling mermaid-ascii accepts is recognised.
+func TestWrapLabelText_RespectsAuthoredBreaks(t *testing.T) {
+	for _, br := range []string{"<br>", "<br/>", "<br />", "<BR>"} {
+		t.Run(br, func(t *testing.T) {
+			got := wrapLabelText("メインダッシュボード"+br+"/dashboard/main", 12)
+			lines := strings.Split(got, labelBreak)
+			if !slices.Contains(lines, "/dashboard/main") {
+				t.Errorf("authored break at %q was not honoured: %q", br, got)
+			}
+			for _, line := range lines {
+				if strings.ContainsAny(line, "<>") {
+					t.Errorf("a break tag leaked into the text: %q", got)
+				}
+			}
+		})
+	}
+}

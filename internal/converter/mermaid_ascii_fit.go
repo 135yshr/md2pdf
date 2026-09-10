@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"regexp"
 	"strings"
 	"unicode"
 
@@ -12,11 +13,16 @@ import (
 // emitted so wrapping costs the layout as few columns as possible.
 const labelBreak = "<br>"
 
+// labelBreakRe matches the <br> spellings mermaid-ascii treats as line breaks.
+// It mirrors the library's own pattern (pkg/graph/label.go) so wrapping splits a
+// label exactly where the renderer will.
+var labelBreakRe = regexp.MustCompile(`(?i)<br\s*/?>`)
+
 // labelToken is one piece of a label that wrapping never splits.
 //
-// A run of narrow characters is one token, because breaking a word or a URL
+// A run of narrow characters is one token, because breaking a word or a path
 // mid-way would make it unreadable. A wide character is a token of its own,
-// which is what lets a Japanese label with no spaces in it wrap at all.
+// which is what lets a Japanese label containing no spaces wrap at all.
 type labelToken struct {
 	text string
 	// spaced records that a space separated this token from the previous one.
@@ -25,45 +31,69 @@ type labelToken struct {
 	spaced bool
 }
 
-// labelTokens splits label text into the pieces wrapping may reorder onto
-// separate lines.
+// labelTokens splits label text into the pieces wrapping may move onto separate
+// lines.
 func labelTokens(text string) []labelToken {
 	var tokens []labelToken
 	spaced := false
+	narrowRun := false
 	for _, r := range text {
 		switch {
 		case unicode.IsSpace(r):
 			spaced = true
+			narrowRun = false
 		case ansi.StringWidth(string(r)) > 1:
 			tokens = append(tokens, labelToken{text: string(r), spaced: spaced})
-			spaced = false
-		case len(tokens) > 0 && !spaced && isNarrowRun(tokens[len(tokens)-1].text):
+			spaced, narrowRun = false, false
+		case narrowRun:
 			tokens[len(tokens)-1].text += string(r)
 		default:
 			tokens = append(tokens, labelToken{text: string(r), spaced: spaced})
-			spaced = false
+			spaced, narrowRun = false, true
 		}
 	}
 	return tokens
 }
 
-// isNarrowRun reports whether text is a run of narrow characters, so the next
-// narrow character may join it instead of starting a new token.
-func isNarrowRun(text string) bool {
-	return ansi.StringWidth(text) == len([]rune(text))
+// wrapLabelText breaks a Mermaid node label into lines at most maxWidth columns
+// wide, joined with the <br> tags mermaid-ascii treats as line breaks.
+//
+// Breaks the author wrote are boundaries rather than text: each segment between
+// them is wrapped on its own, so a hand-tuned label is never reflowed into one
+// line. Text that already fits is returned byte-for-byte unchanged.
+func wrapLabelText(text string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return text
+	}
+
+	segments := labelBreakRe.Split(text, -1)
+	if len(segments) == 1 && ansi.StringWidth(text) <= maxWidth {
+		return text
+	}
+
+	wrapped := make([]string, len(segments))
+	changed := false
+	for i, segment := range segments {
+		wrapped[i] = wrapLabelSegment(segment, maxWidth)
+		changed = changed || wrapped[i] != segment
+	}
+	if !changed {
+		return text
+	}
+	return strings.Join(wrapped, labelBreak)
 }
 
-// wrapLabelText breaks a Mermaid node label into lines at most maxWidth columns
-// wide, joined with the <br> tags mermaid-ascii treats as line breaks. Text that
-// already fits is returned unchanged.
-func wrapLabelText(text string, maxWidth int) string {
-	if maxWidth <= 0 || ansi.StringWidth(text) <= maxWidth {
-		return text
+// wrapLabelSegment greedily packs one break-free stretch of label text into
+// lines of at most maxWidth columns. A single token wider than maxWidth gets a
+// line to itself and is left to overflow, since splitting it would corrupt it.
+func wrapLabelSegment(segment string, maxWidth int) string {
+	if ansi.StringWidth(segment) <= maxWidth {
+		return segment
 	}
 
 	var lines []string
 	current := ""
-	for _, token := range labelTokens(text) {
+	for _, token := range labelTokens(segment) {
 		separator := ""
 		if token.spaced {
 			separator = " "
