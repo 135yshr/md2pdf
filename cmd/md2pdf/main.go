@@ -36,10 +36,41 @@ var (
 )
 
 func main() {
-	// Interrupting the command cancels the external tools it started. Without
-	// this, Ctrl-C leaves mmdc, pandoc and the headless browser running.
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+	os.Exit(run())
+}
 
-	os.Exit(cli.Run(ctx, os.Args, cli.BuildInfo{Version: version, Commit: commit, Date: date}))
+// run executes the command line under a context an interrupt cancels, and
+// returns the exit code. It is separate from main so that its defers run:
+// os.Exit does not execute them.
+func run() int {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// The first interrupt cancels the context, which stops the external tools
+	// the run started: without it, Ctrl-C leaves mmdc, pandoc and the headless
+	// browser running. The second one exits outright.
+	//
+	// The second one has to be handled here rather than left to the runtime.
+	// Neither signal.Stop nor signal.Reset restores the default behavior once
+	// the process has asked to be notified — the signal is swallowed from then
+	// on — so a stage that cannot observe the context, such as reading a
+	// standard input that never reaches EOF, would otherwise leave the command
+	// impossible to interrupt at all.
+	sig := make(chan os.Signal, 2)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sig)
+
+	go func() {
+		<-sig
+		cancel()
+
+		second := <-sig
+		code := 130 // 128 + SIGINT, the shell's convention for an interrupt.
+		if s, ok := second.(syscall.Signal); ok {
+			code = 128 + int(s)
+		}
+		os.Exit(code)
+	}()
+
+	return cli.Run(ctx, os.Args, cli.BuildInfo{Version: version, Commit: commit, Date: date})
 }

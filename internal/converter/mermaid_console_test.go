@@ -3,6 +3,7 @@ package converter
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -669,5 +670,65 @@ func TestPrepareConsoleMermaid_TooNarrowFallsBackToSource(t *testing.T) {
 	}
 	if calls != 0 {
 		t.Errorf("rasterizer ran %d times at an unusable width, want 0", calls)
+	}
+}
+
+// TestPrepareConsoleMermaid_CanceledRunDoesNotFallBack pins that an interrupted
+// run stops rather than quietly degrading. Text art is drawn in-process, so
+// without this the fallback chain would succeed after the reader asked to stop
+// and the command would exit 0 having printed a document anyway.
+func TestPrepareConsoleMermaid_CanceledRunDoesNotFallBack(t *testing.T) {
+	md := []byte("# T\n\n```mermaid\ngraph TD\n  A --> B\n```\n")
+
+	tests := []struct {
+		name string
+		plan consoleMermaidPlan
+	}{
+		{"image plan", consoleMermaidPlan{mode: MermaidRenderImage, protocol: imageProtocolKitty}},
+		{"text-art plan", consoleMermaidPlan{mode: MermaidRenderASCII}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			c := newTestConverter(t, &Config{Format: FormatConsole})
+			calls := 0
+			useStubRasterizer(t, c, t.TempDir(), &calls)
+
+			ctx, cancel := context.WithCancel(t.Context())
+			cancel()
+
+			_, _, err := c.prepareConsoleMermaid(ctx, md, tc.plan, 80)
+			if err == nil {
+				t.Fatal("prepareConsoleMermaid on a canceled context = nil, want an error")
+			}
+			if !errors.Is(err, context.Canceled) {
+				t.Errorf("error does not wrap context.Canceled: %v", err)
+			}
+		})
+	}
+}
+
+// TestRenderConsoleBlock_CancelDuringRasterizeIsNotADrawingFailure pins the
+// other half: when the interrupt lands while mmdc is running, the rasterizer's
+// error must be reported as the cancellation it is, not treated as a diagram
+// that could not be drawn.
+func TestRenderConsoleBlock_CancelDuringRasterizeIsNotADrawingFailure(t *testing.T) {
+	c := newTestConverter(t, &Config{Format: FormatConsole})
+	ctx, cancel := context.WithCancel(t.Context())
+
+	c.mermaidAvailable = func() bool { return true }
+	c.rasterizeMermaid = func(context.Context, int, string) (string, error) {
+		// Stand in for mmdc being killed by the interrupt.
+		cancel()
+		return "", errStubRasterFailure
+	}
+
+	plan := consoleMermaidPlan{mode: MermaidRenderImage, protocol: imageProtocolKitty}
+	_, err := c.renderConsoleBlock(ctx, 0, "graph TD\n  A --> B\n", plan, 80, true)
+	if err == nil {
+		t.Fatal("renderConsoleBlock = nil error, want the cancellation")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("error does not wrap context.Canceled: %v", err)
 	}
 }

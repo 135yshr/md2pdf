@@ -377,6 +377,14 @@ var errShowMermaidSource = errors.New("no renderer could draw this diagram")
 // returns the rasterization error, so asking for an image never quietly yields
 // something else.
 func (c *Converter) renderConsoleBlock(ctx context.Context, idx int, source string, plan consoleMermaidPlan, width int, useImages bool) (consoleDiagram, error) {
+	// An interrupted run must not walk the fallback chain. Every step below
+	// succeeds without the context — text art is drawn in-process — so degrading
+	// to one would finish with exit status 0 and print a document after the
+	// reader asked for the run to stop.
+	if err := ctx.Err(); err != nil {
+		return consoleDiagram{}, fmt.Errorf("diagram %d: %w", idx, err)
+	}
+
 	if useImages {
 		sequence, err := c.renderConsoleDiagram(ctx, idx, source, plan.protocol, width)
 		if err == nil {
@@ -386,6 +394,11 @@ func (c *Converter) renderConsoleBlock(ctx context.Context, idx int, source stri
 		if plan.strict {
 			return consoleDiagram{}, fmt.Errorf(
 				"-mermaid-render image could not draw diagram %d as a %s image: %w", idx, plan.protocol, err)
+		}
+		// The image step is the only one that can be interrupted, so a context
+		// that expired during it means the failure is the cancellation itself.
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return consoleDiagram{}, fmt.Errorf("diagram %d: %w", idx, ctxErr)
 		}
 		c.logf("  diagram %d could not be drawn as an image (%v); trying text art", idx, err)
 	}
