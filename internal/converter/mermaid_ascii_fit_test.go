@@ -541,3 +541,35 @@ func TestClippedArtWarning(t *testing.T) {
 		}
 	}
 }
+
+// TestFitMermaidLabels_LeavesQuotedEdgeLabelsAlone covers a bracket inside a
+// quoted edge label. The characters before it look like a node id, but the
+// bracket is text the author quoted, not a shape delimiter, so rewriting it
+// would change the diagram instead of narrowing it.
+func TestFitMermaidLabels_LeavesQuotedEdgeLabelsAlone(t *testing.T) {
+	tests := []struct {
+		name   string
+		source string
+		want   string
+	}{
+		{
+			name:   "bracket inside a quoted edge label",
+			source: "graph LR\n  A -- \"read [the long documentation]\" --> B\n",
+			want:   "graph LR\n  A -- \"read [the long documentation]\" --> B\n",
+		},
+		{
+			// A quoted node label still has its delimiter outside the quotes,
+			// so it must keep being rewritten.
+			name:   "quoted node label is still rewritten",
+			source: "graph LR\n  A[\"Alpha Beta Gamma\"] --> B\n",
+			want:   "graph LR\n  A[\"Alpha<br>Beta<br>Gamma\"] --> B\n",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := fitMermaidLabels(tc.source, 8); got != tc.want {
+				t.Errorf("fitMermaidLabels()\n got: %q\nwant: %q", got, tc.want)
+			}
+		})
+	}
+}
