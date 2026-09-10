@@ -260,6 +260,29 @@ func fitLabelsInLine(line string, maxWidth int) string {
 	return out.String()
 }
 
+// frontmatterEnd returns the index of the first diagram line after a leading
+// YAML frontmatter block, or 0 when the source has none. The block is data for
+// the renderer rather than diagram text, so a bracket inside it is not a label.
+//
+// It reads the source the way diagram.StripFrontmatter does: blank lines may
+// precede the opening delimiter, and an unterminated block is not frontmatter at
+// all but part of the diagram.
+func frontmatterEnd(lines []string) int {
+	start := 0
+	for start < len(lines) && strings.TrimSpace(lines[start]) == "" {
+		start++
+	}
+	if start >= len(lines) || strings.TrimSpace(lines[start]) != "---" {
+		return 0
+	}
+	for i := start + 1; i < len(lines); i++ {
+		if strings.TrimSpace(lines[i]) == "---" {
+			return i + 1
+		}
+	}
+	return 0
+}
+
 // fitMermaidLabels rewrites Mermaid source so that no node label line is wider
 // than maxWidth columns, by inserting the <br> breaks mermaid-ascii honours.
 // Narrowing the labels narrows the boxes, which is the only way to make an
@@ -267,11 +290,11 @@ func fitLabelsInLine(line string, maxWidth int) string {
 // reflows a layout.
 func fitMermaidLabels(source string, maxWidth int) string {
 	lines := strings.Split(source, "\n")
-	for i, line := range lines {
-		if !rewritableLine(line) {
+	for i := frontmatterEnd(lines); i < len(lines); i++ {
+		if !rewritableLine(lines[i]) {
 			continue
 		}
-		lines[i] = fitLabelsInLine(line, maxWidth)
+		lines[i] = fitLabelsInLine(lines[i], maxWidth)
 	}
 	return strings.Join(lines, "\n")
 }

@@ -203,3 +203,40 @@ func TestFitMermaidLabels_LeavesNonNodeLinesAlone(t *testing.T) {
 		})
 	}
 }
+
+// TestFitMermaidLabels_LeavesFrontmatterAlone covers the YAML title/config block
+// Mermaid allows above a diagram. It is data for the renderer, not diagram text,
+// so a bracket inside it is not a node label. Leading blank lines and an
+// unterminated block follow the renderer's own reading (diagram.StripFrontmatter).
+func TestFitMermaidLabels_LeavesFrontmatterAlone(t *testing.T) {
+	tests := []struct {
+		name   string
+		source string
+		want   string
+	}{
+		{
+			name:   "title block",
+			source: "---\ntitle: A[Alpha Beta Gamma] board\n---\ngraph LR\n  A[Alpha Beta Gamma]\n",
+			want:   "---\ntitle: A[Alpha Beta Gamma] board\n---\ngraph LR\n  A[Alpha<br>Beta<br>Gamma]\n",
+		},
+		{
+			name:   "leading blank line before the block",
+			source: "\n---\ntitle: A[Alpha Beta Gamma] board\n---\ngraph LR\n  A[Alpha Beta Gamma]\n",
+			want:   "\n---\ntitle: A[Alpha Beta Gamma] board\n---\ngraph LR\n  A[Alpha<br>Beta<br>Gamma]\n",
+		},
+		{
+			// Unterminated: the renderer keeps the whole input as diagram text,
+			// so this rewrite must read it the same way.
+			name:   "unterminated block is not frontmatter",
+			source: "---\ngraph LR\n  A[Alpha Beta Gamma]\n",
+			want:   "---\ngraph LR\n  A[Alpha<br>Beta<br>Gamma]\n",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := fitMermaidLabels(tc.source, 8); got != tc.want {
+				t.Errorf("fitMermaidLabels()\n got: %q\nwant: %q", got, tc.want)
+			}
+		})
+	}
+}
