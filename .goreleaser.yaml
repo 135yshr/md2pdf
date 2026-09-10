@@ -1,7 +1,8 @@
 version: 2
 
 builds:
-  - main: ./cmd/md2pdf
+  - id: md2pdf
+    main: ./cmd/md2pdf
     binary: md2pdf
     env:
       - CGO_ENABLED=0
@@ -17,6 +18,26 @@ builds:
       - darwin_arm64
       - windows_amd64
 
+  # Invoked under the name mdview, the same binary defaults to -format console.
+  # Everywhere a symlink works, that name is one: the Homebrew formula below
+  # creates it, and the README tells archive and `go install` users the single
+  # `ln -s` to run. A zip cannot carry a symlink and Windows does not create one
+  # without extra privileges, so Windows — and only Windows — gets a second real
+  # binary in its archive. Nothing here selects the format: the binary reads the
+  # name it was invoked as.
+  - id: mdview
+    main: ./cmd/md2pdf
+    binary: mdview
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.ShortCommit}}
+      - -X main.date={{.Date}}
+    targets:
+      - windows_amd64
+
 archives:
   - formats:
       - tar.gz
@@ -24,8 +45,17 @@ archives:
       - goos: windows
         formats:
           - zip
+    # The Windows archive carries two binaries (md2pdf.exe and mdview.exe) while
+    # the others carry one, because only Windows cannot use a symlink for the
+    # second name. GoReleaser refuses that by default, on the grounds that an
+    # uneven archive confuses users; here it is the documented difference, so
+    # allow it rather than splitting this into two archive entries.
+    allow_different_binary_count: true
 
 brews:
+    # No `ids` filter here: it selects *archive* ids, not build ids, and the
+    # single archive entry above is the default one. Homebrew already takes only
+    # the darwin and linux archives, which carry the md2pdf binary alone.
   - repository:
       owner: 135yshr
       name: homebrew-tap
@@ -48,8 +78,17 @@ brews:
       - name: mermaid-cli
       - name: pandoc
         type: optional
+    # The second name is a symlink rather than a second binary: it is the same
+    # program, and it decides its default output format from the name it was
+    # invoked as. If a real ./cmd/mdview binary is ever added, delete this —
+    # the formula would otherwise try to symlink over an installed file.
+    extra_install: |
+      bin.install_symlink bin/"md2pdf" => "mdview"
+    # Assert both names, so a broken symlink fails the release rather than the
+    # first user to try it.
     test: |
-      system "#{bin}/md2pdf", "-version"
+      assert_match "md2pdf version", shell_output("#{bin}/md2pdf -version")
+      assert_match "mdview version", shell_output("#{bin}/mdview -version")
 
 changelog:
   sort: asc

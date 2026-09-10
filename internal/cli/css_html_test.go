@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"os"
@@ -26,7 +26,7 @@ func TestResolveFormat_HTML(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := resolveFormat(tc.format, tc.output)
+			got, err := resolveFormat(tc.format, tc.output, converter.FormatPDF)
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("resolveFormat(%q, %q) = %q, want an error", tc.format, tc.output, got)

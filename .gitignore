@@ -1,5 +1,6 @@
 # Binaries
 /md2pdf
+/mdview
 dist/
 
 # Test output (converter temp files)
