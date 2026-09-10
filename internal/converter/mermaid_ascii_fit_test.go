@@ -240,3 +240,14 @@ func TestFitMermaidLabels_LeavesFrontmatterAlone(t *testing.T) {
 		})
 	}
 }
+
+// TestFitMermaidLabels_LeavesEdgeLabelsAlone pins that arrow labels are out of
+// scope. They contribute little to a diagram's width and sit outside the shape
+// delimiters this rewrite understands.
+func TestFitMermaidLabels_LeavesEdgeLabelsAlone(t *testing.T) {
+	const source = "graph LR\n  A[Alpha Beta Gamma] -->|a very long edge label| B\n"
+	const want = "graph LR\n  A[Alpha<br>Beta<br>Gamma] -->|a very long edge label| B\n"
+	if got := fitMermaidLabels(source, 8); got != want {
+		t.Errorf("fitMermaidLabels()\n got: %q\nwant: %q", got, want)
+	}
+}
