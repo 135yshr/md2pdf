@@ -128,3 +128,14 @@ func TestFitMermaidLabels_RewritesOnlyLabelText(t *testing.T) {
 		t.Errorf("fitMermaidLabels()\n got: %q\nwant: %q", got, want)
 	}
 }
+
+// TestFitMermaidLabels_RewritesEveryNodeOnALine covers an edge written on one
+// line where both ends need wrapping, so the scan must not stop at the first
+// label it finds.
+func TestFitMermaidLabels_RewritesEveryNodeOnALine(t *testing.T) {
+	const source = "graph LR\n  A[Alpha Beta Gamma] --> B[Delta Epsilon Zeta]\n"
+	const want = "graph LR\n  A[Alpha<br>Beta<br>Gamma] --> B[Delta<br>Epsilon<br>Zeta]\n"
+	if got := fitMermaidLabels(source, 8); got != want {
+		t.Errorf("fitMermaidLabels()\n got: %q\nwant: %q", got, want)
+	}
+}
