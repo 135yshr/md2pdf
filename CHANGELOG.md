@@ -1,3 +1,8 @@
+# [v0.19.0](https://github.com/135yshr/md2pdf/compare/v0.18.0...v0.19.0) (2026-09-10)
+
+## ✨ New Features
+- [`1e6a5fc`](https://github.com/135yshr/md2pdf/commit/1e6a5fc)  feat: add -mermaid-scale to size inline console diagrams (#68) (Issues: [`#68`](https://github.com/135yshr/md2pdf/issues/68) [`#64`](https://github.com/135yshr/md2pdf/issues/64) [`#66`](https://github.com/135yshr/md2pdf/issues/66) [`#67`](https://github.com/135yshr/md2pdf/issues/67))
+
 # [v0.18.0](https://github.com/135yshr/md2pdf/compare/v0.17.0...v0.18.0) (2026-09-10)
 
 ## ✨ New Features
