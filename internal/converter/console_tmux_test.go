@@ -216,3 +216,75 @@ func TestDetectImageTransport(t *testing.T) {
 		})
 	}
 }
+
+// TestEncodeTerminalImage_TunnelsThroughTmux covers the last step: the same
+// image, wrapped for tmux or not depending on how it has to travel.
+func TestEncodeTerminalImage_TunnelsThroughTmux(t *testing.T) {
+	data := stubPNG(t, 16, 16)
+
+	direct, err := encodeTerminalImage(terminalImageTransport{protocol: imageProtocolKitty}, data, 40)
+	if err != nil {
+		t.Fatalf("direct: %v", err)
+	}
+	if strings.HasPrefix(direct, "\x1bPtmux;") {
+		t.Errorf("a sequence going straight to the terminal was wrapped for tmux: %q", direct[:32])
+	}
+
+	tunnelled, err := encodeTerminalImage(
+		terminalImageTransport{protocol: imageProtocolKitty, viaTmux: true}, data, 40)
+	if err != nil {
+		t.Fatalf("tunnelled: %v", err)
+	}
+	if tunnelled != wrapTmuxPassthrough(direct) {
+		t.Error("the tmux sequence is not the direct one wrapped for passthrough")
+	}
+	if strings.Contains(tunnelled[len("\x1bPtmux;"):len(tunnelled)-2], "\x1b\x1b\x1b") {
+		t.Error("ESC doubling went wrong inside the payload")
+	}
+}
+
+// TestResolveConsoleMermaidPlan_TmuxPassthroughOff covers the error a user can
+// act on. Inside tmux with passthrough off, images are one setting away from
+// working, so -mermaid-render image must say which setting rather than blame the
+// terminal for lacking a protocol it does have.
+func TestResolveConsoleMermaidPlan_TmuxPassthroughOff(t *testing.T) {
+	getenv := mapGetenv(map[string]string{
+		"TMUX":         "/tmp/tmux-501/default,1,0",
+		"TERM_PROGRAM": "tmux",
+		"TERM":         "screen-256color",
+	})
+	query := stubTmuxCommands("TERM_PROGRAM=iTerm.app\n", "off\n")
+
+	t.Run("auto degrades to text art", func(t *testing.T) {
+		plan, err := resolveConsoleMermaidPlan(MermaidRenderAuto, true, false, getenv, query)
+		if err != nil {
+			t.Fatalf("resolveConsoleMermaidPlan: %v", err)
+		}
+		if plan.mode != MermaidRenderASCII {
+			t.Errorf("mode = %q, want %q", plan.mode, MermaidRenderASCII)
+		}
+	})
+
+	t.Run("explicit image names the setting", func(t *testing.T) {
+		_, err := resolveConsoleMermaidPlan(MermaidRenderImage, true, false, getenv, query)
+		if err == nil {
+			t.Fatal("expected an error with tmux passthrough off")
+		}
+		for _, want := range []string{"allow-passthrough", "tmux"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error %q does not mention %q", err, want)
+			}
+		}
+	})
+
+	t.Run("passthrough on reaches the outer terminal", func(t *testing.T) {
+		plan, err := resolveConsoleMermaidPlan(MermaidRenderImage, true, false, getenv,
+			stubTmuxCommands("TERM_PROGRAM=iTerm.app\n", "on\n"))
+		if err != nil {
+			t.Fatalf("resolveConsoleMermaidPlan: %v", err)
+		}
+		if plan.transport.protocol != imageProtocolITerm2 || !plan.transport.viaTmux {
+			t.Errorf("transport = %+v, want iTerm2 through tmux", plan.transport)
+		}
+	})
+}

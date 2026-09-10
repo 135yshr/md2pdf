@@ -320,9 +320,9 @@ func TestPrepareConsoleMermaid_DoesNotPanWhenImagesMaySkipThePager(t *testing.T)
 	}
 
 	plan := consoleMermaidPlan{
-		mode:     MermaidRenderImage,
-		protocol: imageProtocolKitty,
-		canPan:   true,
+		mode:      MermaidRenderImage,
+		transport: terminalImageTransport{protocol: imageProtocolKitty},
+		canPan:    true,
 	}
 	rewritten, diagrams, err := c.prepareConsoleMermaid(md, plan, width)
 	if err != nil {

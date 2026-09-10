@@ -130,7 +130,7 @@ func TestResolveConsoleMermaidPlan(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			plan, err := resolveConsoleMermaidPlan(tc.mode, tc.isTTY, tc.noColor, tc.getenv)
+			plan, err := resolveConsoleMermaidPlan(tc.mode, tc.isTTY, tc.noColor, tc.getenv, nil)
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("resolveConsoleMermaidPlan() = %+v, want an error", plan)
@@ -143,8 +143,8 @@ func TestResolveConsoleMermaidPlan(t *testing.T) {
 			if got := plan.emitsImages(); got != tc.wantImages {
 				t.Errorf("emitsImages() = %t, want %t", got, tc.wantImages)
 			}
-			if plan.protocol != tc.wantProtocol {
-				t.Errorf("protocol = %v, want %v", plan.protocol, tc.wantProtocol)
+			if plan.transport.protocol != tc.wantProtocol {
+				t.Errorf("protocol = %v, want %v", plan.transport.protocol, tc.wantProtocol)
 			}
 		})
 	}
@@ -153,7 +153,7 @@ func TestResolveConsoleMermaidPlan(t *testing.T) {
 // TestResolveConsoleMermaidPlan_ImageErrorNamesCapability checks the error text
 // explains what is missing rather than failing opaquely.
 func TestResolveConsoleMermaidPlan_ImageErrorNamesCapability(t *testing.T) {
-	_, err := resolveConsoleMermaidPlan("image", true, false, func(string) string { return "" })
+	_, err := resolveConsoleMermaidPlan("image", true, false, func(string) string { return "" }, nil)
 	if err == nil {
 		t.Fatal("expected an error")
 	}
@@ -178,7 +178,7 @@ func TestEncodeTerminalImage_ProtocolSequences(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := encodeTerminalImage(tc.protocol, data, 40)
+			got, err := encodeTerminalImage(terminalImageTransport{protocol: tc.protocol}, data, 40)
 			if err != nil {
 				t.Fatalf("encodeTerminalImage: %v", err)
 			}
@@ -193,14 +193,14 @@ func TestEncodeTerminalImage_ProtocolSequences(t *testing.T) {
 }
 
 func TestEncodeTerminalImage_NoneIsAnError(t *testing.T) {
-	if _, err := encodeTerminalImage(imageProtocolNone, stubPNG(t, 8, 8), 40); err == nil {
+	if _, err := encodeTerminalImage(terminalImageTransport{protocol: imageProtocolNone}, stubPNG(t, 8, 8), 40); err == nil {
 		t.Error("expected an error for imageProtocolNone")
 	}
 }
 
 func TestEncodeTerminalImage_RejectsInvalidPNG(t *testing.T) {
 	for _, p := range []terminalImageProtocol{imageProtocolKitty, imageProtocolITerm2, imageProtocolSixel} {
-		if _, err := encodeTerminalImage(p, []byte("not a png"), 40); err == nil {
+		if _, err := encodeTerminalImage(terminalImageTransport{protocol: p}, []byte("not a png"), 40); err == nil {
 			t.Errorf("protocol %v accepted invalid PNG data", p)
 		}
 	}
@@ -211,7 +211,7 @@ func TestEncodeTerminalImage_RejectsInvalidPNG(t *testing.T) {
 func TestEncodeTerminalImage_ConstrainsWideImages(t *testing.T) {
 	wide := stubPNG(t, 4000, 400)
 
-	kittySeq, err := encodeTerminalImage(imageProtocolKitty, wide, 40)
+	kittySeq, err := encodeTerminalImage(terminalImageTransport{protocol: imageProtocolKitty}, wide, 40)
 	if err != nil {
 		t.Fatalf("kitty: %v", err)
 	}
@@ -219,7 +219,7 @@ func TestEncodeTerminalImage_ConstrainsWideImages(t *testing.T) {
 		t.Errorf("kitty sequence does not clamp columns to 40: %q", firstBytes(kittySeq, 120))
 	}
 
-	itermSeq, err := encodeTerminalImage(imageProtocolITerm2, wide, 40)
+	itermSeq, err := encodeTerminalImage(terminalImageTransport{protocol: imageProtocolITerm2}, wide, 40)
 	if err != nil {
 		t.Fatalf("iterm2: %v", err)
 	}
@@ -232,7 +232,7 @@ func TestEncodeTerminalImage_ConstrainsWideImages(t *testing.T) {
 // already fits is not blown up to fill the terminal.
 func TestEncodeTerminalImage_LeavesNarrowImagesAtNaturalSize(t *testing.T) {
 	narrow := stubPNG(t, 40, 20)
-	seq, err := encodeTerminalImage(imageProtocolKitty, narrow, 100)
+	seq, err := encodeTerminalImage(terminalImageTransport{protocol: imageProtocolKitty}, narrow, 100)
 	if err != nil {
 		t.Fatalf("encodeTerminalImage: %v", err)
 	}
@@ -360,7 +360,7 @@ func TestPrepareConsoleMermaid_NoBlocksSkipsRenderingEntirely(t *testing.T) {
 	calls := 0
 	useStubRasterizer(t, c, t.TempDir(), &calls)
 
-	plan := consoleMermaidPlan{mode: MermaidRenderImage, protocol: imageProtocolKitty}
+	plan := consoleMermaidPlan{mode: MermaidRenderImage, transport: terminalImageTransport{protocol: imageProtocolKitty}}
 	got, diagrams, err := c.prepareConsoleMermaid(md, plan, 80)
 	if err != nil {
 		t.Fatalf("prepareConsoleMermaid: %v", err)
@@ -379,7 +379,7 @@ func TestPrepareConsoleMermaid_RendersEachBlockInOrder(t *testing.T) {
 	calls := 0
 	useStubRasterizer(t, c, t.TempDir(), &calls)
 
-	plan := consoleMermaidPlan{mode: MermaidRenderImage, protocol: imageProtocolKitty}
+	plan := consoleMermaidPlan{mode: MermaidRenderImage, transport: terminalImageTransport{protocol: imageProtocolKitty}}
 	rewritten, diagrams, err := c.prepareConsoleMermaid(md, plan, 80)
 	if err != nil {
 		t.Fatalf("prepareConsoleMermaid: %v", err)
@@ -421,7 +421,7 @@ func TestPrepareConsoleMermaid_FailedBlockFallsBackToItsSource(t *testing.T) {
 		return path, nil
 	}
 
-	plan := consoleMermaidPlan{mode: MermaidRenderImage, protocol: imageProtocolKitty}
+	plan := consoleMermaidPlan{mode: MermaidRenderImage, transport: terminalImageTransport{protocol: imageProtocolKitty}}
 	rewritten, diagrams, err := c.prepareConsoleMermaid(md, plan, 80)
 	if err != nil {
 		t.Fatalf("prepareConsoleMermaid returned an error for a single bad block: %v", err)
@@ -448,7 +448,7 @@ func TestPrepareConsoleMermaid_MissingMmdcFallsBackToSource(t *testing.T) {
 	})
 	// Leave rasterizeMermaid at its real implementation so the mmdc lookup runs.
 
-	plan := consoleMermaidPlan{mode: MermaidRenderImage, protocol: imageProtocolKitty}
+	plan := consoleMermaidPlan{mode: MermaidRenderImage, transport: terminalImageTransport{protocol: imageProtocolKitty}}
 	rewritten, diagrams, err := c.prepareConsoleMermaid(md, plan, 80)
 	if err != nil {
 		t.Fatalf("missing mmdc must not be an error: %v", err)
@@ -619,7 +619,7 @@ func TestPrepareConsoleMermaid_TokensSurviveNarrowGlamourWidths(t *testing.T) {
 			calls := 0
 			useStubRasterizer(t, c, t.TempDir(), &calls)
 
-			plan := consoleMermaidPlan{mode: MermaidRenderImage, protocol: imageProtocolKitty}
+			plan := consoleMermaidPlan{mode: MermaidRenderImage, transport: terminalImageTransport{protocol: imageProtocolKitty}}
 			doc, diagrams, err := c.prepareConsoleMermaid(md, plan, width)
 			if err != nil {
 				t.Fatalf("prepareConsoleMermaid: %v", err)
@@ -655,7 +655,7 @@ func TestPrepareConsoleMermaid_TooNarrowFallsBackToSource(t *testing.T) {
 	calls := 0
 	useStubRasterizer(t, c, t.TempDir(), &calls)
 
-	plan := consoleMermaidPlan{mode: MermaidRenderImage, protocol: imageProtocolKitty}
+	plan := consoleMermaidPlan{mode: MermaidRenderImage, transport: terminalImageTransport{protocol: imageProtocolKitty}}
 	doc, diagrams, err := c.prepareConsoleMermaid(md, plan, 6)
 	if err != nil {
 		t.Fatalf("prepareConsoleMermaid: %v", err)

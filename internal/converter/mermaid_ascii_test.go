@@ -223,7 +223,7 @@ func TestResolveConsoleMermaidPlan_ASCIIModes(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			plan, err := resolveConsoleMermaidPlan(tc.mode, tc.isTTY, tc.noColor, tc.getenv)
+			plan, err := resolveConsoleMermaidPlan(tc.mode, tc.isTTY, tc.noColor, tc.getenv, nil)
 			if err != nil {
 				t.Fatalf("resolveConsoleMermaidPlan: %v", err)
 			}
@@ -292,7 +292,7 @@ func TestPrepareConsoleMermaid_ImagePlanFallsBackToASCIIWithoutMmdc(t *testing.T
 	c := newTestConverter(t, &Config{Format: FormatConsole})
 	c.mermaidAvailable = func() bool { return false }
 
-	plan := consoleMermaidPlan{mode: MermaidRenderImage, protocol: imageProtocolKitty}
+	plan := consoleMermaidPlan{mode: MermaidRenderImage, transport: terminalImageTransport{protocol: imageProtocolKitty}}
 	_, diagrams, err := c.prepareConsoleMermaid(md, plan, 80)
 	if err != nil {
 		t.Fatalf("prepareConsoleMermaid: %v", err)
@@ -318,7 +318,7 @@ func TestPrepareConsoleMermaid_ImageFailureFallsBackToASCII(t *testing.T) {
 		return "", errStubRasterFailure
 	}
 
-	plan := consoleMermaidPlan{mode: MermaidRenderImage, protocol: imageProtocolKitty}
+	plan := consoleMermaidPlan{mode: MermaidRenderImage, transport: terminalImageTransport{protocol: imageProtocolKitty}}
 	_, diagrams, err := c.prepareConsoleMermaid(md, plan, 80)
 	if err != nil {
 		t.Fatalf("prepareConsoleMermaid: %v", err)
@@ -409,7 +409,7 @@ func TestPrepareConsoleMermaid_ImageFallbackIsPageable(t *testing.T) {
 	c := newTestConverter(t, &Config{Format: FormatConsole})
 	c.mermaidAvailable = func() bool { return false }
 
-	plan := consoleMermaidPlan{mode: MermaidRenderImage, protocol: imageProtocolKitty}
+	plan := consoleMermaidPlan{mode: MermaidRenderImage, transport: terminalImageTransport{protocol: imageProtocolKitty}}
 	_, diagrams, err := c.prepareConsoleMermaid(md, plan, 80)
 	if err != nil {
 		t.Fatalf("prepareConsoleMermaid: %v", err)
@@ -433,7 +433,7 @@ func TestPrepareConsoleMermaid_StrictImageModeErrorsWithoutMmdc(t *testing.T) {
 	c := newTestConverter(t, &Config{Format: FormatConsole})
 	c.mermaidAvailable = func() bool { return false }
 
-	plan := consoleMermaidPlan{mode: MermaidRenderImage, protocol: imageProtocolKitty, strict: true}
+	plan := consoleMermaidPlan{mode: MermaidRenderImage, transport: terminalImageTransport{protocol: imageProtocolKitty}, strict: true}
 	_, diagrams, err := c.prepareConsoleMermaid(md, plan, 80)
 	if err == nil {
 		t.Fatalf("expected an error in strict image mode, got %d diagrams", len(diagrams))
@@ -453,7 +453,7 @@ func TestPrepareConsoleMermaid_StrictImageModeErrorsOnRasterFailure(t *testing.T
 	c.mermaidAvailable = func() bool { return true }
 	c.rasterizeMermaid = func(int, string) (string, error) { return "", errStubRasterFailure }
 
-	plan := consoleMermaidPlan{mode: MermaidRenderImage, protocol: imageProtocolKitty, strict: true}
+	plan := consoleMermaidPlan{mode: MermaidRenderImage, transport: terminalImageTransport{protocol: imageProtocolKitty}, strict: true}
 	_, _, err := c.prepareConsoleMermaid(md, plan, 80)
 	if err == nil {
 		t.Fatal("expected an error in strict image mode when rasterisation fails")
@@ -482,7 +482,7 @@ func TestResolveConsoleMermaidPlan_StrictOnlyForExplicitImage(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.mode, func(t *testing.T) {
-			plan, err := resolveConsoleMermaidPlan(tc.mode, true, false, kitty)
+			plan, err := resolveConsoleMermaidPlan(tc.mode, true, false, kitty, nil)
 			if err != nil {
 				t.Fatalf("resolveConsoleMermaidPlan: %v", err)
 			}

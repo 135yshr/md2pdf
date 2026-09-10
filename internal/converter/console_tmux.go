@@ -118,6 +118,10 @@ func osGetenv(getenv func(string) string) func(string) string {
 type terminalImageTransport struct {
 	protocol terminalImageProtocol
 	viaTmux  bool
+	// tmuxBlocked records that no protocol was offered because tmux is not
+	// forwarding passthrough. It is worth telling apart from a terminal that
+	// simply cannot show images: this one is a single setting away from working.
+	tmuxBlocked bool
 }
 
 // tmuxTunnelledProtocols lists the protocols worth sending through tmux's
@@ -145,7 +149,7 @@ func detectImageTransport(getenv func(string) string, query tmuxQuery) terminalI
 
 	query = resolveTmuxQuery(query)
 	if !tmuxAllowsPassthrough(query) {
-		return terminalImageTransport{}
+		return terminalImageTransport{tmuxBlocked: true}
 	}
 
 	protocol := detectImageProtocol(tmuxGlobalEnv(query, getenv))
