@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"charm.land/glamour/v2/styles"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -460,5 +461,49 @@ func TestRenderMermaidASCII_FitsWithPureASCII(t *testing.T) {
 	}
 	if strings.ContainsAny(art, "┌┐└┘─│►") {
 		t.Errorf("box-drawing characters present despite pure ASCII being requested:\n%s", art)
+	}
+}
+
+// TestPrepareConsoleMermaid_FitsTheReportedDocument walks the console path end to
+// end for the document from the bug report, through the same functions
+// renderConsoleDocument uses. Every chain has to survive into the spliced output,
+// and no line may overrun the wrap width.
+func TestPrepareConsoleMermaid_FitsTheReportedDocument(t *testing.T) {
+	const width = 118
+	md := []byte("## ダッシュボード構成\n\n```mermaid\n" + overWideDashboardDiagram + "```\n")
+
+	c := newTestConverter(t, &Config{Format: FormatConsole})
+	c.mermaidAvailable = func() bool { return false }
+	c.rasterizeMermaid = func(int, string) (string, error) {
+		t.Fatal("rasterizer must not run in ascii mode")
+		return "", nil
+	}
+
+	doc, diagrams, err := c.prepareConsoleMermaid(md, consoleMermaidPlan{mode: MermaidRenderASCII}, width)
+	if err != nil {
+		t.Fatalf("prepareConsoleMermaid: %v", err)
+	}
+	if len(diagrams) != 1 {
+		t.Fatalf("got %d diagrams, want 1", len(diagrams))
+	}
+
+	rendered, err := renderConsoleMarkdown(doc, styles.NoTTYStyle, width)
+	if err != nil {
+		t.Fatalf("renderConsoleMarkdown: %v", err)
+	}
+	spliced, missing := spliceConsoleDiagrams(string(rendered), diagrams, width)
+	if len(missing) != 0 {
+		t.Fatalf("unplaced diagrams: %v", missing)
+	}
+
+	for _, want := range []string{"/dashboard/security", "/dashboard/use-case", "/dashboard/priority-process"} {
+		if !strings.Contains(spliced, want) {
+			t.Errorf("chain %q is missing from the rendered document:\n%s", want, spliced)
+		}
+	}
+	for i, line := range strings.Split(spliced, "\n") {
+		if w := ansi.StringWidth(line); w > width {
+			t.Errorf("line %d is %d columns wide, want at most %d: %q", i, w, width, line)
+		}
 	}
 }
