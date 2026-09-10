@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"os"
@@ -132,7 +132,7 @@ func TestResolveInputs(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := resolveInputs(tc.args, tc.format, tc.stdinIsTTY)
+			got, err := testProgramWithStdin(tc.stdinIsTTY).resolveInputs(tc.args, tc.format)
 			if tc.wantErrSub != "" {
 				if err == nil {
 					t.Fatalf("resolveInputs(%v) = %v, want an error containing %q",
@@ -243,12 +243,12 @@ func TestParseFlags_SingleInputUnchanged(t *testing.T) {
 }
 
 func TestStdinUsable(t *testing.T) {
-	if err := stdinUsable(false); err != nil {
-		t.Errorf("stdinUsable(false) = %v, want nil", err)
+	if err := testProgramWithStdin(false).stdinUsable(); err != nil {
+		t.Errorf("stdinUsable() with a pipe = %v, want nil", err)
 	}
-	err := stdinUsable(true)
+	err := testProgramWithStdin(true).stdinUsable()
 	if err == nil {
-		t.Fatal("stdinUsable(true) = nil, want an error")
+		t.Fatal("stdinUsable() with a terminal = nil, want an error")
 	}
 	for _, want := range []string{"terminal", "standard input"} {
 		if !strings.Contains(err.Error(), want) {

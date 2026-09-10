@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"errors"
@@ -7,8 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/charmbracelet/x/term"
 
 	"github.com/135yshr/md2pdf/internal/converter"
 )
@@ -38,10 +36,13 @@ func (f *cssFlag) Set(value string) error {
 	return nil
 }
 
-// parseFlags parses command-line arguments and returns a Config.
-func parseFlags(args []string) (*converter.Config, error) {
-	fs := flag.NewFlagSet("md2pdf", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+// parseFlags parses command-line arguments and returns a Config. The -version
+// and -doctor flags print their own output and finish the invocation here; they
+// report that as an exitError rather than exiting the process, so the caller
+// keeps ownership of the exit status.
+func (p *program) parseFlags(args []string) (*converter.Config, error) {
+	fs := flag.NewFlagSet(p.name, flag.ContinueOnError)
+	fs.SetOutput(p.stderr)
 
 	output := fs.String("o", "", "Output file path (default: <input>.pdf, or .docx with -format docx)")
 	format := fs.String("format", "", "Output format: pdf (default), html, docx or console (inferred from -o extension when omitted)")
@@ -72,8 +73,9 @@ func parseFlags(args []string) (*converter.Config, error) {
 	}
 
 	if *showVersion {
-		fmt.Printf("md2pdf version %s (commit: %s, built: %s)\n", version, commit, date)
-		os.Exit(0)
+		fmt.Fprintf(p.stdout, "%s version %s (commit: %s, built: %s)\n",
+			p.name, p.build.Version, p.build.Commit, p.build.Date)
+		return nil, exitError{code: 0}
 	}
 
 	// -doctor inspects the machine rather than converting anything, so it runs
@@ -85,10 +87,10 @@ func parseFlags(args []string) (*converter.Config, error) {
 			PandocPath:  *pandocPath,
 			FontRegular: resolveFontRegular(*fontRegular),
 		}
-		if runDoctor(os.Stdout, converter.Diagnose(cfg)) {
-			os.Exit(0)
+		if runDoctor(p.stdout, p.diagnose(cfg)) {
+			return nil, exitError{code: 0}
 		}
-		os.Exit(1)
+		return nil, exitError{code: 1}
 	}
 
 	// Resolve output format first: it decides whether several inputs are
@@ -99,7 +101,7 @@ func parseFlags(args []string) (*converter.Config, error) {
 		return nil, err
 	}
 
-	inputs, err := resolveInputs(fs.Args(), outFormat, term.IsTerminal(os.Stdin.Fd()))
+	inputs, err := p.resolveInputs(fs.Args(), outFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -261,87 +263,4 @@ func findFirst(paths []string) string {
 		}
 	}
 	return paths[0]
-}
-
-// printUsage prints a friendly usage summary to stderr.
-func printUsage() {
-	fmt.Fprintf(os.Stderr, `
-Usage:
-  md2pdf [options] <input.md>
-  md2pdf [options] -                       read the document from stdin
-  md2pdf -format console [options] <input.md>...   several files, in order
-
-Options:
-  -o <path>               Output path (default: <input>.<format>, e.g.
-                          <input>.html with -format html)
-  -format <fmt>           Output format: pdf (default), html, docx or console
-                          (console has the aliases term and terminal;
-                          inferred from -o extension when omitted, including
-                          .html and .htm)
-  -css <path>             Custom CSS applied after the built-in stylesheet,
-                          so its rules win. Repeatable; later files win over
-                          earlier ones. Used by pdf and html output.
-  -font <path>            Noto Sans CJK JP Regular font (.ttc/.ttf)
-  -font-bold <path>       Noto Sans CJK JP Bold font
-  -font-medium <path>     Noto Sans CJK JP Medium font
-  -mmdc <path>            Path to mmdc (Mermaid CLI) binary
-  -pandoc <path>          Path to pandoc binary (used for -format docx)
-  -docx-font <family>     Font family for DOCX output (default: Yu Gothic)
-  -puppeteer-config <f>   Path to Puppeteer JSON config for mmdc
-  -page-size <size>       PDF page size: A4 (default), Letter, A3
-  -margin-top <m>         Top margin    (default: 18mm)
-  -margin-bottom <m>      Bottom margin (default: 18mm)
-  -margin-left <m>        Left margin   (default: 14mm)
-  -margin-right <m>       Right margin  (default: 14mm)
-  -width <cols>           Console word-wrap width (default: terminal width,
-                          capped at 120 columns)
-  -style <name|path>      Console color theme: auto (default), dark, light,
-                          notty, ascii, dracula, pink, tokyo-night, or a path
-                          to a JSON stylesheet (env: GLAMOUR_STYLE)
-  -pager                  Page console output through $PAGER on a terminal
-                          (default: true; use -pager=false to disable)
-  -mermaid-render <mode>  How to draw Mermaid diagrams in console output:
-                          auto (default) tries an inline image on terminals
-                          that support kitty, iTerm2 or Sixel, then falls back
-                          to box-drawing text art, then to the source;
-                          image forces inline images and fails if the terminal
-                          cannot show them; ascii always draws text art;
-                          source always prints the Mermaid source.
-                          Inline images bypass the pager, which cannot display
-                          them; text art pages normally.
-  -doctor                 Report which runtime dependencies are present and
-                          which output formats can run, then exit. Exits
-                          non-zero when a format is blocked, so it works as a
-                          check in a setup script.
-  -v                      Verbose output
-  -version                Print version and exit
-
-Inputs:
-  A single .md path works for every format. "-" reads the document from
-  standard input instead; relative paths inside it resolve against the
-  current directory, and -o becomes required for pdf and docx because
-  there is no input filename to derive the output name from.
-  Several paths are accepted with -format console only, and render in
-  order separated by a rule.
-
-Examples:
-  md2pdf document.md
-  md2pdf -o report.pdf document.md
-  md2pdf -format docx document.md
-  md2pdf -o report.docx document.md
-  md2pdf -format html document.md
-  md2pdf -format html -css brand.css document.md
-  md2pdf -css brand.css -css client.css -o report.pdf document.md
-  md2pdf -format console document.md
-  md2pdf -format console -style dark -width 100 document.md
-  md2pdf -format console -pager=false document.md | cat
-  md2pdf -format console -mermaid-render image document.md
-  md2pdf -format console -mermaid-render ascii document.md
-  md2pdf -format console -mermaid-render source document.md
-  md2pdf -doctor
-  md2pdf -font /path/to/NotoSansCJK-Regular.ttc document.md
-  cat doc.md | md2pdf -format console -
-  gh pr view 41 --json body -q .body | md2pdf -o pr.pdf -
-  md2pdf -format console docs/*.md
-`)
 }

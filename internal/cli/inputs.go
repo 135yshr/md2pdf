@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"errors"
@@ -21,7 +21,7 @@ import (
 // PDF or DOCX would need decisions about heading level shifts, page breaks and
 // per-file image bases that have no obvious answer, so those formats keep the
 // single-document contract.
-func resolveInputs(args []string, format string, stdinIsTerminal bool) ([]string, error) {
+func (p *program) resolveInputs(args []string, format string) ([]string, error) {
 	if len(args) == 0 {
 		return nil, errors.New("at least one input Markdown file is required")
 	}
@@ -45,7 +45,7 @@ func resolveInputs(args []string, format string, stdinIsTerminal bool) ([]string
 	}
 
 	if stdinCount == 1 {
-		if err := stdinUsable(stdinIsTerminal); err != nil {
+		if err := p.stdinUsable(); err != nil {
 			return nil, err
 		}
 		return []string{converter.StdinPath}, nil
@@ -82,8 +82,8 @@ func validateInputFile(path string) error {
 // stdinUsable reports whether standard input can be read from. Reading a
 // terminal would block with no indication of what md2pdf is waiting for, so
 // that case fails immediately with instructions instead.
-func stdinUsable(stdinIsTerminal bool) error {
-	if stdinIsTerminal {
+func (p *program) stdinUsable() error {
+	if p.stdinIsTerminal {
 		return fmt.Errorf(
 			"reading from standard input (%q), but standard input is a terminal; "+
 				"pipe or redirect a document into md2pdf, for example: cat doc.md | md2pdf %s",
