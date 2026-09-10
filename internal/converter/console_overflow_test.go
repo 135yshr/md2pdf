@@ -3,6 +3,9 @@ package converter
 import (
 	"strings"
 	"testing"
+
+	"charm.land/glamour/v2/styles"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // TestPagerCanPan pins which pagers can scroll horizontally. Only less is
@@ -214,4 +217,121 @@ func TestAnyPanDiagram(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestSpliceConsoleDiagrams_NonPannedArtNeverExceedsTheWidth pins the invariant
+// that made clipping unnecessary. Art not being panned has already been fitted
+// inside the wrap width, and the splice gives up the indent before it gives up
+// columns, so a spliced line cannot overrun. Panned art is the deliberate
+// exception.
+func TestSpliceConsoleDiagrams_NonPannedArtNeverExceedsTheWidth(t *testing.T) {
+	const width = 20
+	tests := []struct {
+		name      string
+		art       string
+		pan       bool
+		wantWider bool
+	}{
+		{"art narrower than the width keeps its indent", strings.Repeat("X", 10), false, false},
+		{"art exactly the width gives up the indent", strings.Repeat("X", width), false, false},
+		{"panned art is allowed to overrun", strings.Repeat("X", 60), true, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out, missing := spliceConsoleDiagrams("  MD2PDFDG0\n", []consoleDiagram{
+				{placeholder: "MD2PDFDG0", content: tc.art, kind: diagramTextArt, pan: tc.pan},
+			}, width)
+			if len(missing) != 0 {
+				t.Fatalf("unplaced diagrams: %v", missing)
+			}
+			if !strings.Contains(out, tc.art) {
+				t.Errorf("art was altered by the splice: %q", out)
+			}
+			wider := false
+			for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+				if ansi.StringWidth(line) > width {
+					wider = true
+				}
+			}
+			if wider != tc.wantWider {
+				t.Errorf("spliced output wider than %d = %t, want %t: %q", width, wider, tc.wantWider, out)
+			}
+		})
+	}
+}
+
+// TestPagerArgvFor covers the pager command line a panned document needs: lines
+// chopped rather than folded, and -F given up so less stays interactive long
+// enough to scroll.
+func TestPagerArgvFor(t *testing.T) {
+	tests := []struct {
+		name   string
+		argv   []string
+		panned bool
+		want   []string
+	}{
+		{"no panning leaves the default alone", []string{"less", "-R", "-F"}, false, []string{"less", "-R", "-F"}},
+		{"panning chops lines and drops -F", []string{"less", "-R", "-F"}, true, []string{"less", "-R", "-S"}},
+		{"panning through a cluster", []string{"less", "-RF"}, true, []string{"less", "-R", "-S"}},
+		{"panning through a non-less pager is left alone", []string{"more"}, true, []string{"more"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := pagerArgvFor(append([]string(nil), tc.argv...), tc.panned)
+			if strings.Join(got, " ") != strings.Join(tc.want, " ") {
+				t.Errorf("pagerArgvFor(%v, %t) = %v, want %v", tc.argv, tc.panned, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRenderConsoleDocument_PansTheReportedDiagramEndToEnd walks the whole
+// console path for a diagram no label cap can fit, through the same function
+// renderConsole calls. Every chain has to reach the rendered document, the run
+// has to report that it panned so the pager stops folding, and with nowhere to
+// scroll the same document must fall back to the Mermaid source instead.
+func TestRenderConsoleDocument_PansTheReportedDiagramEndToEnd(t *testing.T) {
+	const width = 40
+	md := []byte("## Structure\n\n```mermaid\n" + overWideDashboardDiagram + "```\n")
+	chains := []string{"/dashboard/security", "/dashboard/use-case", "/dashboard/priority-process"}
+
+	t.Run("output that can pan gets the whole diagram", func(t *testing.T) {
+		c := newTestConverter(t, &Config{Format: FormatConsole})
+		c.mermaidAvailable = func() bool { return false }
+
+		plan := consoleMermaidPlan{mode: MermaidRenderASCII, canPan: true}
+		rendered, drawn, err := c.renderConsoleDocument(md, styles.NoTTYStyle, width, plan)
+		if err != nil {
+			t.Fatalf("renderConsoleDocument: %v", err)
+		}
+		if !drawn.panned {
+			t.Error("the run did not report panning, so the pager would fold the diagram")
+		}
+		if drawn.images {
+			t.Error("text art reported itself as an image")
+		}
+		for _, want := range chains {
+			if !strings.Contains(string(rendered), want) {
+				t.Errorf("chain %q is missing from the rendered document:\n%s", want, rendered)
+			}
+		}
+	})
+
+	t.Run("output that cannot pan gets the source", func(t *testing.T) {
+		c := newTestConverter(t, &Config{Format: FormatConsole})
+		c.mermaidAvailable = func() bool { return false }
+
+		plan := consoleMermaidPlan{mode: MermaidRenderASCII, canPan: false}
+		rendered, drawn, err := c.renderConsoleDocument(md, styles.NoTTYStyle, width, plan)
+		if err != nil {
+			t.Fatalf("renderConsoleDocument: %v", err)
+		}
+		if drawn.panned {
+			t.Error("a source fallback reported itself as panned")
+		}
+		// The source keeps the arrows the art would have drawn as boxes.
+		if !strings.Contains(string(rendered), "-->") {
+			t.Errorf("the block did not fall back to its Mermaid source:\n%s", rendered)
+		}
+	})
 }

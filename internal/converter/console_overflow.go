@@ -91,3 +91,17 @@ func resolveConsolePan(pagerEnabled, isTTY bool, pagerArgv []string, pagerAvaila
 	}
 	return pagerEnabled && pagerAvailable && pagerCanPan(pagerArgv)
 }
+
+// pagerArgvFor returns the pager command line for a document, adjusted for a
+// diagram being shown wider than the screen.
+//
+// Two changes are needed together: -S so less chops the long lines instead of
+// folding them, and no -F so it does not print the document and exit before the
+// reader can scroll. A pager md2pdf does not recognise is left untouched —
+// resolveConsolePan has already ruled out panning in that case.
+func pagerArgvFor(argv []string, panned bool) []string {
+	if !panned {
+		return argv
+	}
+	return stripQuitIfOneScreen(ensureLessNoWrap(argv))
+}

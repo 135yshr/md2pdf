@@ -101,6 +101,11 @@ func detectConsoleEnv(out *os.File) consoleEnv {
 // kitty graphics sequences nor the iTerm2 inline-image sequences survive a trip
 // through less. Text art is plain text and pages normally, including when an
 // image plan fell back to it.
+//
+// The pager is resolved before the diagrams are drawn, not after, because it
+// decides what happens to a diagram no label cap could fit: an output that can
+// scroll sideways gets the diagram in full, and one that cannot gets its Mermaid
+// source. Nothing is ever shown with its right edge cut off.
 func (c *Converter) renderConsole(inputs []string, out *os.File) error {
 	env := detectConsoleEnv(out)
 	width := resolveConsoleWidth(c.cfg.ConsoleWidth, env.isTTY, env.width)
@@ -108,29 +113,40 @@ func (c *Converter) renderConsole(inputs []string, out *os.File) error {
 	c.logf("Rendering %d document(s) for the console (style: %s, width: %d)...",
 		len(inputs), style, width)
 
+	// The pager is resolved here rather than at delivery time because the
+	// diagrams need to know about it: whether the output can scroll sideways
+	// decides what happens to a diagram too wide for the wrap width, and that
+	// is settled while the diagrams are being drawn.
+	var pagerArgv []string
+	pagerAvailable := false
+	if c.cfg.ConsolePager && env.isTTY {
+		pagerArgv, pagerAvailable = resolvePager()
+	}
+
 	// The plan depends on the terminal, not on the document, so it is resolved
-	// once and shared. Whether an image was actually drawn is not: that is
-	// collected across documents, because a single image anywhere means the
-	// pager has to be skipped for all of them.
+	// once and shared. What the diagrams turned out to be is not: that is
+	// collected across documents, because the pager is started once for all of
+	// them.
 	plan, err := resolveConsoleMermaidPlan(c.cfg.MermaidRender, env.isTTY, env.noColor, os.Getenv)
 	if err != nil {
 		return err
 	}
 	plan.pureASCII = consoleWantsPureASCII(c.cfg.ConsoleStyle, env.envStyle, style)
+	plan.canPan = resolveConsolePan(c.cfg.ConsolePager, env.isTTY, pagerArgv, pagerAvailable)
 
 	docs := make([][]byte, 0, len(inputs))
-	drewImages := false
+	var drawn consoleDrawn
 	for _, input := range inputs {
 		md, err := c.readInput(input)
 		if err != nil {
 			return err
 		}
-		rendered, hadImages, err := c.renderConsoleDocument(md, style, width, plan)
+		rendered, documentDrawn, err := c.renderConsoleDocument(md, style, width, plan)
 		if err != nil {
 			return err
 		}
 		docs = append(docs, rendered)
-		drewImages = drewImages || hadImages
+		drawn = drawn.or(documentDrawn)
 	}
 
 	separator, err := c.consoleSeparator(len(docs), style, width)
@@ -141,34 +157,52 @@ func (c *Converter) renderConsole(inputs []string, out *os.File) error {
 
 	if c.cfg.ConsolePager && env.isTTY {
 		switch {
-		case drewImages:
+		case drawn.images:
 			c.logf("Skipping the pager so the inline images survive; " +
 				"use -mermaid-render ascii or source to page the document instead.")
+		case pagerAvailable:
+			argv := pagerArgvFor(pagerArgv, drawn.panned)
+			c.logf("Paging output through %s...", strings.Join(argv, " "))
+			return runPager(argv, rendered, env.profile)
 		default:
-			if argv, ok := resolvePager(); ok {
-				c.logf("Paging output through %s...", strings.Join(argv, " "))
-				return runPager(argv, rendered, env.profile)
-			}
 			c.logf("No pager found; writing straight to the terminal.")
 		}
 	}
 	return writeConsole(out, rendered, env.profile)
 }
 
+// consoleDrawn records what the diagrams in a rendered document turned out to
+// be, which decides how the document reaches the reader.
+type consoleDrawn struct {
+	// images is set when a diagram was written as an inline image escape
+	// sequence, which does not survive the pager.
+	images bool
+	// panned is set when a diagram is wider than the wrap width, which the
+	// pager has to be told to chop rather than fold.
+	panned bool
+}
+
+// or combines what two documents drew. Both facts are aggregated across a run
+// because the pager is started once for the whole output.
+func (d consoleDrawn) or(other consoleDrawn) consoleDrawn {
+	return consoleDrawn{
+		images: d.images || other.images,
+		panned: d.panned || other.panned,
+	}
+}
+
 // renderConsoleDocument renders one Markdown document to styled ANSI text,
-// drawing its Mermaid blocks and splicing them into place. It reports whether
-// any diagram came out as an inline image, which decides whether the pager can
-// still be used. Documents are rendered independently so their Mermaid
-// placeholder tokens cannot collide.
-func (c *Converter) renderConsoleDocument(md []byte, style string, width int, plan consoleMermaidPlan) ([]byte, bool, error) {
+// drawing its Mermaid blocks and splicing them into place. Documents are
+// rendered independently so their Mermaid placeholder tokens cannot collide.
+func (c *Converter) renderConsoleDocument(md []byte, style string, width int, plan consoleMermaidPlan) ([]byte, consoleDrawn, error) {
 	doc, diagrams, err := c.prepareConsoleMermaid(md, plan, width)
 	if err != nil {
-		return nil, false, err
+		return nil, consoleDrawn{}, err
 	}
 
 	rendered, err := renderConsoleMarkdown(doc, style, width)
 	if err != nil {
-		return nil, false, err
+		return nil, consoleDrawn{}, err
 	}
 	if len(diagrams) > 0 {
 		spliced, missing := spliceConsoleDiagrams(string(rendered), diagrams, width)
@@ -177,7 +211,10 @@ func (c *Converter) renderConsoleDocument(md []byte, style string, width int, pl
 		}
 		rendered = []byte(spliced)
 	}
-	return rendered, anyImageDiagram(diagrams), nil
+	return rendered, consoleDrawn{
+		images: anyImageDiagram(diagrams),
+		panned: anyPanDiagram(diagrams),
+	}, nil
 }
 
 // consoleSeparator returns the rule placed between consecutive documents, or
