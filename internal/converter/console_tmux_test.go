@@ -58,6 +58,7 @@ type tmuxStub struct {
 	env         string
 	passthrough string
 	client      string
+	clients     string
 	err         error
 }
 
@@ -73,25 +74,23 @@ func (s tmuxStub) query(_ context.Context, args ...string) (string, error) {
 		return s.env, nil
 	case args[0] == "display-message":
 		return s.client, nil
+	case args[0] == "list-clients":
+		return s.clients, nil
 	default:
 		return s.passthrough, nil
 	}
 }
 
-// visibleClient is a display-message answer for an attached, visible pane whose
-// terminal did not identify itself beyond TERM.
-func visibleClient(termName string) string {
-	return termName + "||1|1|0|1"
+// visiblePane is a display-message answer for an attached, visible pane.
+const visiblePane = "0|1|1|0|1"
+
+// clientList is a list-clients answer for terminals attached to the session.
+func clientList(clients ...string) string {
+	return strings.Join(clients, "\n") + "\n"
 }
 
-// visibleClientType is a display-message answer for an attached, visible pane
-// whose terminal answered tmux's version query, the way iTerm2 and kitty do.
-func visibleClientType(termName, termType string) string {
-	return termName + "|" + termType + "|1|1|0|1"
-}
-
-// stubTmuxCommands answers show-environment and the allow-passthrough lookup,
-// with a visible client reporting the TERM tmux's global environment holds.
+// stubTmuxCommands answers the passthrough lookup with a visible pane and a
+// single attached client reporting the TERM tmux's global environment holds.
 func stubTmuxCommands(env, passthrough string) tmuxQuery {
 	term := ""
 	for _, line := range strings.Split(env, "\n") {
@@ -99,7 +98,12 @@ func stubTmuxCommands(env, passthrough string) tmuxQuery {
 			term = value
 		}
 	}
-	return tmuxStub{env: env, passthrough: passthrough, client: visibleClient(term)}.query
+	return tmuxStub{
+		env:         env,
+		passthrough: passthrough,
+		client:      visiblePane,
+		clients:     clientList(term + "|"),
+	}.query
 }
 
 // TestDetectImageTransport covers where an image escape sequence has to go.
@@ -113,6 +117,7 @@ func TestDetectImageTransport(t *testing.T) {
 		env          map[string]string
 		tmuxEnv      string
 		client       string
+		clients      string
 		passthrough  string
 		wantProtocol terminalImageProtocol
 		wantViaTmux  bool
@@ -131,7 +136,8 @@ func TestDetectImageTransport(t *testing.T) {
 			name:         "tmux over iTerm2 with passthrough on",
 			env:          map[string]string{"TMUX": "/tmp/tmux-501/default,1,0", "TERM_PROGRAM": "tmux", "TERM": "screen-256color"},
 			tmuxEnv:      insideEnv + "\nTERM_PROGRAM=iTerm.app\n",
-			client:       visibleClientType("xterm-256color", "iTerm2 3.6.11"),
+			client:       visiblePane,
+			clients:      clientList("xterm-256color|iTerm2 3.6.11"),
 			passthrough:  "on\n",
 			wantProtocol: imageProtocolITerm2,
 			wantViaTmux:  true,
@@ -174,7 +180,8 @@ func TestDetectImageTransport(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			query := stubTmuxCommands(tc.tmuxEnv, tc.passthrough)
 			if tc.client != "" {
-				query = tmuxStub{env: tc.tmuxEnv, client: tc.client, passthrough: tc.passthrough}.query
+				query = tmuxStub{env: tc.tmuxEnv, client: tc.client, clients: tc.clients,
+					passthrough: tc.passthrough}.query
 			}
 			got := detectImageTransport(t.Context(), mapGetenv(tc.env), query)
 			if got.protocol != tc.wantProtocol {
@@ -249,7 +256,8 @@ func TestResolveConsoleMermaidPlan_TmuxPassthroughOff(t *testing.T) {
 
 	t.Run("passthrough on reaches the outer terminal", func(t *testing.T) {
 		plan, err := resolveConsoleMermaidPlan(t.Context(), MermaidRenderImage, true, false, getenv,
-			tmuxStub{client: visibleClientType("xterm-256color", "iTerm2 3.6.11"), passthrough: "on\n"}.query)
+			tmuxStub{client: visiblePane, clients: clientList("xterm-256color|iTerm2 3.6.11"),
+				passthrough: "on\n"}.query)
 		if err != nil {
 			t.Fatalf("resolveConsoleMermaidPlan: %v", err)
 		}
@@ -259,34 +267,32 @@ func TestResolveConsoleMermaidPlan_TmuxPassthroughOff(t *testing.T) {
 	})
 }
 
-// TestTmuxClientState covers reading the pane md2pdf is actually drawing into.
-// The global environment describes whatever started the server, which can be a
-// different terminal from the one attached now.
-func TestTmuxClientState(t *testing.T) {
+// TestTmuxPaneState covers reading the pane md2pdf is drawing into: which
+// session it belongs to, and whether tmux is currently showing it.
+func TestTmuxPaneState(t *testing.T) {
 	tests := []struct {
 		name        string
 		answer      string
-		wantTerm    string
+		wantSession string
 		wantVisible bool
 		wantOK      bool
 	}{
-		{"attached and visible", "xterm-kitty||1|1|0|1", "xterm-kitty", true, true},
-		{"visible split pane", "xterm-256color||1|1|0|0", "xterm-256color", true, true},
-		{"background window", "xterm-kitty||0|1|0|1", "xterm-kitty", false, true},
-		{"detached session", "xterm-kitty||1|0|0|1", "xterm-kitty", false, true},
-		{"hidden behind a zoomed pane", "xterm-kitty||1|1|1|0", "xterm-kitty", false, true},
-		{"the zoomed pane itself is visible", "xterm-kitty||1|1|1|1", "xterm-kitty", true, true},
-		{"no attached client", "||1|0|0|1", "", false, true},
+		{"attached and visible", "0|1|1|0|1", "0", true, true},
+		{"visible split pane", "work|1|1|0|0", "work", true, true},
+		{"background window", "0|0|1|0|1", "0", false, true},
+		{"detached session", "0|1|0|0|1", "0", false, true},
+		{"hidden behind a zoomed pane", "0|1|1|1|0", "0", false, true},
+		{"the zoomed pane itself is visible", "0|1|1|1|1", "0", true, true},
 		{"unparseable answer", "nonsense", "", false, false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, ok := tmuxClientState(t.Context(), tmuxStub{client: tc.answer}.query)
+			got, ok := tmuxPaneState(t.Context(), tmuxStub{client: tc.answer}.query)
 			if ok != tc.wantOK {
 				t.Fatalf("ok = %t, want %t", ok, tc.wantOK)
 			}
-			if got.termName != tc.wantTerm {
-				t.Errorf("termName = %q, want %q", got.termName, tc.wantTerm)
+			if got.session != tc.wantSession {
+				t.Errorf("session = %q, want %q", got.session, tc.wantSession)
 			}
 			if got.visible != tc.wantVisible {
 				t.Errorf("visible = %t, want %t", got.visible, tc.wantVisible)
@@ -303,22 +309,22 @@ func TestTmuxForwardsPassthrough(t *testing.T) {
 	tests := []struct {
 		name        string
 		passthrough string
-		client      string
+		pane        string
 		err         error
 		want        bool
 	}{
-		{"all with a visible pane", "all\n", visibleClient("xterm-kitty"), nil, true},
-		{"all with a hidden pane", "all\n", "xterm-kitty||0|1|0|1", nil, true},
-		{"on with a visible pane", "on\n", visibleClient("xterm-kitty"), nil, true},
-		{"on with a background window", "on\n", "xterm-kitty||0|1|0|1", nil, false},
-		{"on with a detached session", "on\n", "xterm-kitty||1|0|0|1", nil, false},
-		{"off", "off\n", visibleClient("xterm-kitty"), nil, false},
-		{"empty", "\n", visibleClient("xterm-kitty"), nil, false},
+		{"all with a visible pane", "all\n", visiblePane, nil, true},
+		{"all with a hidden pane", "all\n", "0|0|1|0|1", nil, true},
+		{"on with a visible pane", "on\n", visiblePane, nil, true},
+		{"on with a background window", "on\n", "0|0|1|0|1", nil, false},
+		{"on with a detached session", "on\n", "0|1|0|0|1", nil, false},
+		{"off", "off\n", visiblePane, nil, false},
+		{"empty", "\n", visiblePane, nil, false},
 		{"tmux too old to know the option", "", "", errStubTmuxFailure, false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			query := tmuxStub{passthrough: tc.passthrough, client: tc.client, err: tc.err}.query
+			query := tmuxStub{passthrough: tc.passthrough, client: tc.pane, err: tc.err}.query
 			reason, got := tmuxForwardsPassthrough(t.Context(), query)
 			if got != tc.want {
 				t.Errorf("tmuxForwardsPassthrough() = %t, want %t (reason %q)", got, tc.want, reason)
@@ -344,7 +350,8 @@ func TestDetectImageTransport_FollowsTheAttachedClient(t *testing.T) {
 	tests := []struct {
 		name         string
 		env          string
-		client       string
+		pane         string
+		clients      string
 		passthrough  string
 		wantProtocol terminalImageProtocol
 		wantViaTmux  bool
@@ -354,7 +361,8 @@ func TestDetectImageTransport_FollowsTheAttachedClient(t *testing.T) {
 			// would show escape garbage instead of a diagram.
 			name:         "server started under iTerm2, attached from kitty",
 			env:          "TERM=xterm-256color\nTERM_PROGRAM=iTerm.app\n",
-			client:       visibleClient("xterm-kitty"),
+			pane:         visiblePane,
+			clients:      clientList("xterm-kitty|"),
 			passthrough:  "on\n",
 			wantProtocol: imageProtocolKitty,
 			wantViaTmux:  true,
@@ -363,21 +371,24 @@ func TestDetectImageTransport_FollowsTheAttachedClient(t *testing.T) {
 			// The stale KITTY_WINDOW_ID must not make this look like kitty.
 			name:         "server started under kitty, attached from a plain terminal",
 			env:          "TERM=xterm-kitty\nKITTY_WINDOW_ID=7\n",
-			client:       visibleClient("xterm-256color"),
+			pane:         visiblePane,
+			clients:      clientList("xterm-256color|"),
 			passthrough:  "on\n",
 			wantProtocol: imageProtocolNone,
 		},
 		{
 			name:         "hidden pane with passthrough on",
 			env:          "TERM_PROGRAM=iTerm.app\n",
-			client:       "xterm-256color|0|1|0|1",
+			pane:         "0|0|1|0|1",
+			clients:      clientList("xterm-256color|iTerm2 3.6.11"),
 			passthrough:  "on\n",
 			wantProtocol: imageProtocolNone,
 		},
 		{
 			name:         "hidden pane with passthrough all",
 			env:          "TERM_PROGRAM=iTerm.app\n",
-			client:       "xterm-256color|iTerm2 3.6.11|0|1|0|1",
+			pane:         "0|0|1|0|1",
+			clients:      clientList("xterm-256color|iTerm2 3.6.11"),
 			passthrough:  "all\n",
 			wantProtocol: imageProtocolITerm2,
 			wantViaTmux:  true,
@@ -385,7 +396,8 @@ func TestDetectImageTransport_FollowsTheAttachedClient(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			query := tmuxStub{env: tc.env, client: tc.client, passthrough: tc.passthrough}.query
+			query := tmuxStub{env: tc.env, client: tc.pane, clients: tc.clients,
+				passthrough: tc.passthrough}.query
 			got := detectImageTransport(t.Context(), inTmux, query)
 			if got.protocol != tc.wantProtocol {
 				t.Errorf("protocol = %v, want %v", got.protocol, tc.wantProtocol)
@@ -417,7 +429,7 @@ func TestResolveConsoleMermaidPlan_TmuxBlockedReasonsAreActionable(t *testing.T)
 		{
 			name:        "off points at turning it on",
 			passthrough: "off\n",
-			client:      visibleClient("xterm-256color"),
+			client:      visiblePane,
 			want:        "allow-passthrough on`",
 		},
 		{
@@ -447,8 +459,8 @@ func TestResolveConsoleMermaidPlan_TmuxBlockedReasonsAreActionable(t *testing.T)
 // A server started under iTerm2 and attached from a plain terminal used to keep
 // the server's TERM_PROGRAM, so an OSC 1337 image was tunneled to a client that
 // cannot show one — it disappears. Nothing protocol-identifying may come from
-// the server snapshot; tmux reports the client's own answer to its version query
-// as #{client_termtype}, which is what iTerm2 and kitty are recognized by.
+// the server snapshot; tmux reports each client's own answer to its version
+// query as #{client_termtype}, which is what iTerm2 and kitty are recognized by.
 func TestDetectImageTransport_NeverMixesClientAndServerMetadata(t *testing.T) {
 	inTmux := mapGetenv(map[string]string{
 		"TMUX":         "/tmp/tmux-501/default,1,0",
@@ -459,28 +471,28 @@ func TestDetectImageTransport_NeverMixesClientAndServerMetadata(t *testing.T) {
 	tests := []struct {
 		name         string
 		env          string
-		client       string
+		clients      string
 		wantProtocol terminalImageProtocol
 		wantViaTmux  bool
 	}{
 		{
 			name:         "the client identifies itself as iTerm2",
 			env:          "TERM_PROGRAM=iTerm.app\n",
-			client:       visibleClientType("xterm-256color", "iTerm2 3.6.11"),
+			clients:      clientList("xterm-256color|iTerm2 3.6.11"),
 			wantProtocol: imageProtocolITerm2,
 			wantViaTmux:  true,
 		},
 		{
 			name:         "the client identifies itself as WezTerm",
 			env:          "",
-			client:       visibleClientType("xterm-256color", "WezTerm 20240203"),
+			clients:      clientList("xterm-256color|WezTerm 20240203"),
 			wantProtocol: imageProtocolITerm2,
 			wantViaTmux:  true,
 		},
 		{
 			name:         "the client identifies itself as kitty",
 			env:          "TERM_PROGRAM=iTerm.app\n",
-			client:       visibleClientType("xterm-256color", "kitty(0.35.2)"),
+			clients:      clientList("xterm-256color|kitty(0.35.2)"),
 			wantProtocol: imageProtocolKitty,
 			wantViaTmux:  true,
 		},
@@ -490,7 +502,7 @@ func TestDetectImageTransport_NeverMixesClientAndServerMetadata(t *testing.T) {
 			// for nothing.
 			name:         "a plain client does not inherit the server's iTerm2",
 			env:          "TERM_PROGRAM=iTerm.app\n",
-			client:       visibleClient("xterm-256color"),
+			clients:      clientList("xterm-256color|"),
 			wantProtocol: imageProtocolNone,
 		},
 		{
@@ -498,26 +510,128 @@ func TestDetectImageTransport_NeverMixesClientAndServerMetadata(t *testing.T) {
 			// themselves that way rather than through the version query.
 			name:         "a client whose TERM names kitty is still kitty",
 			env:          "TERM_PROGRAM=iTerm.app\n",
-			client:       visibleClient("xterm-kitty"),
+			clients:      clientList("xterm-kitty|"),
 			wantProtocol: imageProtocolKitty,
 			wantViaTmux:  true,
 		},
 		{
 			name:         "a stale server KITTY_WINDOW_ID counts for nothing",
 			env:          "TERM=xterm-kitty\nKITTY_WINDOW_ID=7\n",
-			client:       visibleClient("xterm-256color"),
+			clients:      clientList("xterm-256color|"),
 			wantProtocol: imageProtocolNone,
+		},
+		{
+			// Two terminals watching the same session: passthrough reaches
+			// both, so neither protocol may be claimed.
+			name:         "two clients that disagree get no protocol",
+			env:          "",
+			clients:      clientList("xterm-kitty|kitty(0.35.2)", "xterm-256color|iTerm2 3.6.11"),
+			wantProtocol: imageProtocolNone,
+		},
+		{
+			name:         "two clients that agree do",
+			env:          "",
+			clients:      clientList("xterm-kitty|kitty(0.35.2)", "xterm-kitty|"),
+			wantProtocol: imageProtocolKitty,
+			wantViaTmux:  true,
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			query := tmuxStub{env: tc.env, client: tc.client, passthrough: "on\n"}.query
+			query := tmuxStub{env: tc.env, client: visiblePane, clients: tc.clients,
+				passthrough: "on\n"}.query
 			got := detectImageTransport(t.Context(), inTmux, query)
 			if got.protocol != tc.wantProtocol {
 				t.Errorf("protocol = %v, want %v", got.protocol, tc.wantProtocol)
 			}
 			if got.viaTmux != tc.wantViaTmux {
 				t.Errorf("viaTmux = %t, want %t", got.viaTmux, tc.wantViaTmux)
+			}
+		})
+	}
+}
+
+// TestTmuxSessionClients covers reading every client attached to the session.
+// A pane's passthrough output goes to all of them, so one client's answer is
+// not the whole picture.
+func TestTmuxSessionClients(t *testing.T) {
+	tests := []struct {
+		name   string
+		out    string
+		err    error
+		want   []tmuxClient
+		wantOK bool
+	}{
+		{
+			name:   "one client",
+			out:    "xterm-256color|iTerm2 3.6.11\n",
+			want:   []tmuxClient{{termName: "xterm-256color", termType: "iTerm2 3.6.11"}},
+			wantOK: true,
+		},
+		{
+			name: "two clients",
+			out:  "xterm-kitty|kitty(0.35.2)\nxterm-256color|iTerm2 3.6.11\n",
+			want: []tmuxClient{
+				{termName: "xterm-kitty", termType: "kitty(0.35.2)"},
+				{termName: "xterm-256color", termType: "iTerm2 3.6.11"},
+			},
+			wantOK: true,
+		},
+		{
+			name:   "a client that answered no version query",
+			out:    "xterm-256color|\n",
+			want:   []tmuxClient{{termName: "xterm-256color"}},
+			wantOK: true,
+		},
+		{name: "no clients", out: "\n", want: nil, wantOK: true},
+		{name: "tmux cannot be asked", out: "", err: errStubTmuxFailure, want: nil, wantOK: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := tmuxSessionClients(t.Context(), tmuxStub{clients: tc.out, err: tc.err}.query, "0")
+			if ok != tc.wantOK {
+				t.Fatalf("ok = %t, want %t", ok, tc.wantOK)
+			}
+			if len(got) != len(tc.want) {
+				t.Fatalf("got %d clients, want %d: %+v", len(got), len(tc.want), got)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Errorf("client %d = %+v, want %+v", i, got[i], tc.want[i])
+				}
+			}
+		})
+	}
+}
+
+// TestTmuxClientsProtocol is the fix for a session watched from two terminals at
+// once. Passthrough reaches every client showing the pane, so a protocol may
+// only be claimed when they all speak it: emitting kitty graphics because one
+// client is kitty would leave an iTerm2 viewer with no diagram at all, and the
+// Mermaid source already replaced.
+func TestTmuxClientsProtocol(t *testing.T) {
+	kitty := tmuxClient{termName: "xterm-kitty", termType: "kitty(0.35.2)"}
+	kittyByTerm := tmuxClient{termName: "xterm-kitty"}
+	iterm := tmuxClient{termName: "xterm-256color", termType: "iTerm2 3.6.11"}
+	plain := tmuxClient{termName: "xterm-256color"}
+
+	tests := []struct {
+		name    string
+		clients []tmuxClient
+		want    terminalImageProtocol
+	}{
+		{"no clients", nil, imageProtocolNone},
+		{"one kitty", []tmuxClient{kitty}, imageProtocolKitty},
+		{"one iTerm2", []tmuxClient{iterm}, imageProtocolITerm2},
+		{"two clients that agree", []tmuxClient{kitty, kittyByTerm}, imageProtocolKitty},
+		{"two clients that disagree", []tmuxClient{kitty, iterm}, imageProtocolNone},
+		{"one capable, one not", []tmuxClient{kitty, plain}, imageProtocolNone},
+		{"none capable", []tmuxClient{plain, plain}, imageProtocolNone},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tmuxClientsProtocol(tc.clients); got != tc.want {
+				t.Errorf("tmuxClientsProtocol(%+v) = %v, want %v", tc.clients, got, tc.want)
 			}
 		})
 	}
