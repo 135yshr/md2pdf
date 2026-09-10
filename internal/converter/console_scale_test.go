@@ -1,7 +1,7 @@
 package converter
 
 import (
-	"bytes"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -27,6 +27,12 @@ func TestValidateMermaidScale(t *testing.T) {
 		{"below the minimum", mermaidScaleMin / 2, true},
 		{"above the maximum", mermaidScaleMax * 2, true},
 		{"negative", -1, true},
+		// Every ordered comparison against NaN is false, so a range check alone
+		// lets it through; math.Round then converts it to an implementation
+		// defined integer rather than reporting anything.
+		{"NaN", math.NaN(), true},
+		{"positive infinity", math.Inf(1), true},
+		{"negative infinity", math.Inf(-1), true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -41,28 +47,41 @@ func TestValidateMermaidScale(t *testing.T) {
 	}
 }
 
-// TestScaleColumnBudget covers how the scale turns the wrap width into the
-// columns an image may occupy. An unset scale has to leave the budget exactly as
-// it was, or every existing diagram would move.
-func TestScaleColumnBudget(t *testing.T) {
+// TestFitColumns covers how a scale turns a diagram's own width into the
+// columns it occupies.
+//
+// The factor applies to the image, not to the terminal-width ceiling. Scaling
+// only the ceiling would do nothing at all for a diagram already narrower than
+// the wrap width, which is most of them: a 40-column diagram asked to halve
+// would stay at 40 because 40 still fits under the lowered ceiling.
+func TestFitColumns(t *testing.T) {
+	// consoleImageCellWidthPx is 10, so pixels/10 is the natural column count.
 	tests := []struct {
-		name  string
-		width int
-		scale float64
-		want  int
+		name       string
+		pixelWidth int
+		maxColumns int
+		scale      float64
+		wantCols   int
+		wantSized  bool
 	}{
-		{"unset keeps the width", 118, 0, 118},
-		{"natural keeps the width", 118, 1, 118},
-		{"half", 118, 0.5, 59},
-		{"rounds to the nearest column", 101, 0.5, 51},
-		{"double", 60, 2, 120},
-		{"a tiny scale still leaves one column", 4, 0.1, 1},
-		{"no width means no budget", 0, 0.5, 0},
+		{"natural size fits and is left alone", 400, 118, 0, 40, false},
+		{"scale one is the same as unset", 400, 118, 1, 40, false},
+		{"a diagram narrower than the width still halves", 400, 118, 0.5, 20, true},
+		{"and still doubles", 400, 118, 2, 80, true},
+		{"enlarging stops at the wrap width", 400, 118, 4, 118, true},
+		{"a diagram wider than the width is brought back to it", 2000, 118, 0, 118, true},
+		{"and scales from its own width, not the ceiling", 2000, 118, 0.5, 100, true},
+		{"a tiny scale still leaves one column", 400, 118, 0.1, 4, true},
+		{"no ceiling means no clamping", 400, 0, 2, 80, true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := scaleColumnBudget(tc.width, tc.scale); got != tc.want {
-				t.Errorf("scaleColumnBudget(%d, %v) = %d, want %d", tc.width, tc.scale, got, tc.want)
+			cols, sized := fitColumns(tc.pixelWidth, tc.maxColumns, tc.scale)
+			if cols != tc.wantCols {
+				t.Errorf("cols = %d, want %d", cols, tc.wantCols)
+			}
+			if sized != tc.wantSized {
+				t.Errorf("sized = %t, want %t", sized, tc.wantSized)
 			}
 		})
 	}
@@ -76,11 +95,11 @@ func TestEncodeTerminalImage_HonoursTheScaledBudget(t *testing.T) {
 	data := stubPNG(t, 2000, 400)
 	transport := terminalImageTransport{protocol: imageProtocolITerm2}
 
-	full, err := encodeTerminalImage(transport, data, scaleColumnBudget(118, 1))
+	full, err := encodeTerminalImage(transport, data, 118, 1)
 	if err != nil {
 		t.Fatalf("full: %v", err)
 	}
-	half, err := encodeTerminalImage(transport, data, scaleColumnBudget(118, 0.5))
+	half, err := encodeTerminalImage(transport, data, 118, 0.5)
 	if err != nil {
 		t.Fatalf("half: %v", err)
 	}
@@ -89,8 +108,9 @@ func TestEncodeTerminalImage_HonoursTheScaledBudget(t *testing.T) {
 	if fullCols != 118 {
 		t.Errorf("unscaled image occupies %d columns, want the full 118", fullCols)
 	}
-	if halfCols != 59 {
-		t.Errorf("halved image occupies %d columns, want 59", halfCols)
+	// 2000px is 200 natural columns, halved to 100, which still fits 118.
+	if halfCols != 100 {
+		t.Errorf("halved image occupies %d columns, want 100", halfCols)
 	}
 }
 
@@ -99,7 +119,8 @@ func iterm2Columns(t *testing.T, sequence string) int {
 	t.Helper()
 	_, rest, ok := strings.Cut(sequence, "width=")
 	if !ok {
-		t.Fatalf("no width parameter in the sequence: %q", sequence[:min(len(sequence), 120)])
+		// No width parameter means the image is drawn at its natural size.
+		return 0
 	}
 	digits := rest
 	for i, r := range rest {
@@ -162,10 +183,10 @@ func TestPrepareConsoleMermaid_ScalesInlineImages(t *testing.T) {
 		scale float64
 		want  int
 	}{
-		{"unset fills the wrap width", 0, width},
-		{"natural fills the wrap width", 1, width},
-		{"half", 0.5, 59},
-		{"quarter", 0.25, 30},
+		{"unset clamps 200 natural columns to the width", 0, width},
+		{"natural clamps to the width", 1, width},
+		{"half of the diagram's own 200 columns", 0.5, 100},
+		{"a quarter of them", 0.25, 50},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -173,41 +194,5 @@ func TestPrepareConsoleMermaid_ScalesInlineImages(t *testing.T) {
 				t.Errorf("scale %v gave %d columns, want %d", tc.scale, got, tc.want)
 			}
 		})
-	}
-}
-
-// TestPrepareConsoleMermaid_ReportsAScaleWiderThanTheScreen covers the one
-// scale that cannot deliver what it promises. An inline image cannot be
-// scrolled, so anything past the wrap width is simply off screen — the run says
-// so rather than letting the diagram look mysteriously cropped.
-func TestPrepareConsoleMermaid_ReportsAScaleWiderThanTheScreen(t *testing.T) {
-	const width = 118
-	md := []byte("```mermaid\nflowchart LR\n  A --> B\n```\n")
-
-	logsFor := func(t *testing.T, scale float64) string {
-		t.Helper()
-		var stderr bytes.Buffer
-		c := newTestConverter(t, &Config{Format: FormatConsole, Verbose: true})
-		c.stderr = &stderr
-		stubWideRasterizer(t, c, t.TempDir())
-
-		plan := consoleMermaidPlan{
-			mode:      MermaidRenderImage,
-			transport: terminalImageTransport{protocol: imageProtocolITerm2},
-			scale:     scale,
-		}
-		if _, _, err := c.prepareConsoleMermaid(md, plan, width); err != nil {
-			t.Fatalf("prepareConsoleMermaid: %v", err)
-		}
-		return stderr.String()
-	}
-
-	if logged := logsFor(t, 2); !strings.Contains(logged, "off screen") {
-		t.Errorf("a scale past the wrap width was not reported: %q", logged)
-	}
-	for _, scale := range []float64{0, 1, 0.5} {
-		if logged := logsFor(t, scale); strings.Contains(logged, "off screen") {
-			t.Errorf("scale %v reported going off screen: %q", scale, logged)
-		}
 	}
 }

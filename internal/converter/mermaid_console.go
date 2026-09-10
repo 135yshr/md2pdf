@@ -369,11 +369,6 @@ func (c *Converter) prepareConsoleMermaid(md []byte, plan consoleMermaidPlan, wi
 
 	if useImages {
 		c.logf("Drawing %d Mermaid diagram(s) as %s images...", len(blocks), plan.transport.protocol)
-		if budget := scaleColumnBudget(width, plan.scale); budget > width {
-			c.logf("  -mermaid-scale %g asks for %d columns but the wrap width is %d; "+
-				"the rest of each diagram is off screen, and an inline image cannot be scrolled",
-				plan.scale, budget, width)
-		}
 	} else {
 		c.logf("Drawing %d Mermaid diagram(s) as text art...", len(blocks))
 	}
@@ -409,8 +404,7 @@ var errShowMermaidSource = errors.New("no renderer could draw this diagram")
 // something else.
 func (c *Converter) renderConsoleBlock(idx int, source string, plan consoleMermaidPlan, width int, useImages bool) (consoleDiagram, error) {
 	if useImages {
-		sequence, err := c.renderConsoleDiagram(idx, source, plan.transport,
-			scaleColumnBudget(width, plan.scale))
+		sequence, err := c.renderConsoleDiagram(idx, source, plan.transport, width, plan.scale)
 		if err == nil {
 			c.logf("  diagram %d drawn (%d bytes of %s escape sequence)",
 				idx, len(sequence), plan.transport.protocol)
@@ -450,7 +444,7 @@ func (c *Converter) renderConsoleBlock(idx int, source string, plan consoleMerma
 
 // renderConsoleDiagram rasterises one Mermaid block and encodes the PNG for the
 // terminal.
-func (c *Converter) renderConsoleDiagram(idx int, source string, transport terminalImageTransport, width int) (string, error) {
+func (c *Converter) renderConsoleDiagram(idx int, source string, transport terminalImageTransport, width int, scale float64) (string, error) {
 	pngPath, err := c.rasterizeMermaid(idx, source)
 	if err != nil {
 		return "", err
@@ -459,7 +453,7 @@ func (c *Converter) renderConsoleDiagram(idx int, source string, transport termi
 	if err != nil {
 		return "", fmt.Errorf("read rendered diagram: %w", err)
 	}
-	return encodeTerminalImage(transport, data, width)
+	return encodeTerminalImage(transport, data, width, scale)
 }
 
 // consoleDiagramPNG rasterises a Mermaid block to a PNG and returns its
@@ -515,21 +509,36 @@ func fencedMermaid(source string) string {
 const consoleImageCellWidthPx = 10
 
 // fitColumns returns the number of terminal columns a diagram of the given pixel
-// width should occupy, clamped to maxColumns. The second result reports whether
-// the diagram had to be shrunk, so images that already fit keep their natural
-// size instead of being stretched across the terminal.
-func fitColumns(pixelWidth, maxColumns int) (cols int, clamped bool) {
+// width should occupy: its natural size multiplied by scale, then held to
+// maxColumns. The second result reports whether that differs from the natural
+// size, which is what decides whether a sizing parameter is written at all —
+// an image left alone keeps whatever size the terminal gives it rather than
+// being stretched across the screen.
+//
+// The scale applies to the diagram, not to maxColumns. Scaling the ceiling
+// instead would do nothing for any diagram already narrower than it, which is
+// most of them: a 40-column diagram asked to halve would stay at 40, since 40
+// still fits under the lowered ceiling.
+//
+// Enlarging stops at maxColumns because an inline image cannot be scrolled the
+// way panned text art can, so columns past the wrap width have nowhere to go.
+func fitColumns(pixelWidth, maxColumns int, scale float64) (cols int, sized bool) {
 	natural := max(1, (pixelWidth+consoleImageCellWidthPx-1)/consoleImageCellWidthPx)
-	if maxColumns > 0 && natural > maxColumns {
-		return maxColumns, true
+
+	target := natural
+	if scale > 0 && scale != 1 {
+		target = max(1, int(math.Round(float64(natural)*scale)))
 	}
-	return natural, false
+	if maxColumns > 0 && target > maxColumns {
+		target = maxColumns
+	}
+	return target, target != natural
 }
 
 // encodeTerminalImage encodes a PNG diagram as an inline image escape sequence
 // for the given protocol, scaled down to at most maxColumns terminal columns.
-func encodeTerminalImage(transport terminalImageTransport, data []byte, maxColumns int) (string, error) {
-	sequence, err := encodeImageSequence(transport.protocol, data, maxColumns)
+func encodeTerminalImage(transport terminalImageTransport, data []byte, maxColumns int, scale float64) (string, error) {
+	sequence, err := encodeImageSequence(transport.protocol, data, maxColumns, scale)
 	if err != nil {
 		return "", err
 	}
@@ -541,12 +550,12 @@ func encodeTerminalImage(transport terminalImageTransport, data []byte, maxColum
 
 // encodeImageSequence encodes a PNG diagram as the protocol's own inline image
 // escape sequence, scaled down to at most maxColumns terminal columns.
-func encodeImageSequence(protocol terminalImageProtocol, data []byte, maxColumns int) (string, error) {
+func encodeImageSequence(protocol terminalImageProtocol, data []byte, maxColumns int, scale float64) (string, error) {
 	img, err := png.Decode(bytes.NewReader(data))
 	if err != nil {
 		return "", fmt.Errorf("decode diagram PNG: %w", err)
 	}
-	cols, clamped := fitColumns(img.Bounds().Dx(), maxColumns)
+	cols, sized := fitColumns(img.Bounds().Dx(), maxColumns, scale)
 
 	switch protocol {
 	case imageProtocolKitty:
@@ -557,7 +566,7 @@ func encodeImageSequence(protocol terminalImageProtocol, data []byte, maxColumns
 			Quiet:        2,
 			Chunk:        true,
 		}
-		if clamped {
+		if sized {
 			opts.Columns = cols
 		}
 		var buf bytes.Buffer
@@ -571,13 +580,13 @@ func encodeImageSequence(protocol terminalImageProtocol, data []byte, maxColumns
 			Inline:  true,
 			Content: []byte(base64.StdEncoding.EncodeToString(data)),
 		}
-		if clamped {
+		if sized {
 			file.Width = iterm2.Cells(cols)
 		}
 		return ansi.ITerm2(file), nil
 
 	case imageProtocolSixel:
-		if clamped {
+		if sized {
 			img = downscaleImage(img, cols*consoleImageCellWidthPx)
 		}
 		var payload bytes.Buffer

@@ -196,7 +196,7 @@ func TestDetectImageTransport(t *testing.T) {
 func TestEncodeTerminalImage_TunnelsThroughTmux(t *testing.T) {
 	data := stubPNG(t, 16, 16)
 
-	direct, err := encodeTerminalImage(terminalImageTransport{protocol: imageProtocolKitty}, data, 40)
+	direct, err := encodeTerminalImage(terminalImageTransport{protocol: imageProtocolKitty}, data, 40, 1)
 	if err != nil {
 		t.Fatalf("direct: %v", err)
 	}
@@ -205,7 +205,7 @@ func TestEncodeTerminalImage_TunnelsThroughTmux(t *testing.T) {
 	}
 
 	tunnelled, err := encodeTerminalImage(
-		terminalImageTransport{protocol: imageProtocolKitty, viaTmux: true}, data, 40)
+		terminalImageTransport{protocol: imageProtocolKitty, viaTmux: true}, data, 40, 1)
 	if err != nil {
 		t.Fatalf("tunnelled: %v", err)
 	}

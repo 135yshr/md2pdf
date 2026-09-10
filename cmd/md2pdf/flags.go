@@ -329,11 +329,11 @@ Options:
                           and printed as source when it cannot; it is never
                           shown with its right edge cut off.
   -mermaid-scale <n>      Scale inline console diagram images, where 1 is the
-                          natural size within the wrap width (default). 0.5
-                          halves a diagram; values above 1 go off screen,
-                          since an inline image cannot be scrolled. Applies
-                          to images only, so it cannot be combined with
-                          -mermaid-render ascii or source.
+                          natural size (default). 0.5 halves a diagram and 2
+                          doubles it; enlarging stops at the wrap width,
+                          since an inline image cannot be scrolled. Accepts
+                          0.1 to 4. Applies to images only, so it cannot be
+                          combined with -mermaid-render ascii or source.
   -doctor                 Report which runtime dependencies are present and
                           which output formats can run, then exit. Exits
                           non-zero when a format is blocked, so it works as a

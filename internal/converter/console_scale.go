@@ -20,23 +20,17 @@ func ValidateMermaidScale(scale float64) error {
 	if scale == 0 {
 		return nil
 	}
+	// NaN has to be rejected on its own: every ordered comparison against it is
+	// false, so the range check below would pass it through, and math.Round
+	// would then convert it to an implementation-defined integer instead of
+	// anything reporting a problem. The flag parser accepts the spelling.
+	if math.IsNaN(scale) || math.IsInf(scale, 0) {
+		return fmt.Errorf("-mermaid-scale must be a finite number between %g and %g, got %g",
+			mermaidScaleMin, mermaidScaleMax, scale)
+	}
 	if scale < mermaidScaleMin || scale > mermaidScaleMax {
 		return fmt.Errorf("-mermaid-scale must be between %g and %g, got %g",
 			mermaidScaleMin, mermaidScaleMax, scale)
 	}
 	return nil
-}
-
-// scaleColumnBudget turns the wrap width into the number of columns an inline
-// image may occupy.
-//
-// An unset scale returns the width untouched, so every diagram drawn before this
-// flag existed keeps its size. A scaled budget is at least one column, because a
-// budget of zero would mean "no limit" to fitColumns and quietly undo the
-// shrinking that was asked for.
-func scaleColumnBudget(width int, scale float64) int {
-	if scale == 0 || scale == 1 || width <= 0 {
-		return width
-	}
-	return max(1, int(math.Round(float64(width)*scale)))
 }
