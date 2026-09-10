@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -296,19 +297,22 @@ func TestRenderMermaidASCII_LeavesFittingDiagramsUntouched(t *testing.T) {
 	}
 }
 
+// overWideDashboardDiagram is the diagram from the bug report: four independent
+// chains that mermaid-ascii lays side by side, coming to 152 columns.
+const overWideDashboardDiagram = "graph TB\n" +
+	"    A[メインダッシュボード<br>/] --> B[AI Enablement Index・利用サマリー・リスク・成果]\n" +
+	"    E[セキュリティダッシュボード<br>/dashboard/security] --> F[リスク分析・アラート監視]\n" +
+	"    C[ユースケースダッシュボード<br>/dashboard/use-case] --> D[ユースケース分析・カテゴリ分析]\n" +
+	"    G[優先改善プロセスダッシュボード<br>/dashboard/priority-process] --> H[業務プロセス改善・利用促進]\n"
+
 // TestRenderMermaidASCII_FitsAnOverWideDiagram is the reported defect. Four
 // independent chains laid side by side came to 152 columns, and clipping to the
 // wrap width dropped the fourth one entirely with no warning. Wrapping the
 // labels has to bring the whole diagram inside the width instead.
 func TestRenderMermaidASCII_FitsAnOverWideDiagram(t *testing.T) {
-	const source = "graph TB\n" +
-		"    A[メインダッシュボード<br>/] --> B[AI Enablement Index・利用サマリー・リスク・成果]\n" +
-		"    E[セキュリティダッシュボード<br>/dashboard/security] --> F[リスク分析・アラート監視]\n" +
-		"    C[ユースケースダッシュボード<br>/dashboard/use-case] --> D[ユースケース分析・カテゴリ分析]\n" +
-		"    G[優先改善プロセスダッシュボード<br>/dashboard/priority-process] --> H[業務プロセス改善・利用促進]\n"
 	const width = 118
 
-	art, err := renderMermaidASCII(source, width, false)
+	art, err := renderMermaidASCII(overWideDashboardDiagram, width, false)
 	if err != nil {
 		t.Fatalf("renderMermaidASCII: %v", err)
 	}
@@ -347,5 +351,114 @@ func TestSpliceConsoleDiagrams_HangsWideArtIntoTheMargin(t *testing.T) {
 		if w := ansi.StringWidth(line); w > width {
 			t.Errorf("line %d is %d columns wide, want at most %d: %q", i, w, width, line)
 		}
+	}
+}
+
+// TestRenderMermaidASCII_ReturnsNarrowestArtWhenNothingFits covers a diagram no
+// label cap can bring inside the width. Fitting must still hand back the most
+// compact art it managed rather than failing: a diagram too wide to fit is not
+// an error, and the caller can still clip it.
+func TestRenderMermaidASCII_ReturnsNarrowestArtWhenNothingFits(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("graph TB\n")
+	for i := range 8 {
+		fmt.Fprintf(&b, "  N%d[Node %d with a fairly long label] --> M%d[Target %d]\n", i, i, i, i)
+	}
+	source := b.String()
+	const width = 30
+
+	art, err := renderMermaidASCII(source, width, false)
+	if err != nil {
+		t.Fatalf("renderMermaidASCII: %v", err)
+	}
+	unfitted, err := renderMermaidArt(source, width, false)
+	if err != nil {
+		t.Fatalf("renderMermaidArt: %v", err)
+	}
+	if mermaidArtWidth(art) > width {
+		t.Logf("still %d columns wide, which this diagram cannot avoid", mermaidArtWidth(art))
+	}
+	if mermaidArtWidth(art) >= mermaidArtWidth(unfitted) {
+		t.Errorf("art was not compacted at all: %d columns, unfitted is %d",
+			mermaidArtWidth(art), mermaidArtWidth(unfitted))
+	}
+}
+
+// TestDiagramSupportsLabelFitting pins which diagram types may have their labels
+// rewritten. A sequence diagram has no bracketed node labels, so a rewrite there
+// could only corrupt the source.
+func TestDiagramSupportsLabelFitting(t *testing.T) {
+	tests := []struct {
+		name   string
+		source string
+		want   bool
+	}{
+		{"graph", "graph TB\n  A --> B\n", true},
+		{"flowchart", "flowchart LR\n  A --> B\n", true},
+		{"bare graph", "graph\n  A --> B\n", true},
+		{"frontmatter over a graph", "---\ntitle: T\n---\ngraph LR\n  A --> B\n", true},
+		{"sequence diagram", "sequenceDiagram\n  A->>B: hi\n", false},
+		{"empty", "", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := diagramSupportsLabelFitting(tc.source); got != tc.want {
+				t.Errorf("diagramSupportsLabelFitting(%q) = %t, want %t", tc.source, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRenderMermaidASCII_DoesNotFitSequenceDiagrams checks the gate end to end:
+// a sequence diagram wider than the width comes out exactly as the renderer drew
+// it, with no rewrite attempted.
+func TestRenderMermaidASCII_DoesNotFitSequenceDiagrams(t *testing.T) {
+	const source = "sequenceDiagram\n" +
+		"  participant A as A participant with a very long name\n" +
+		"  participant B as Another participant with a very long name\n" +
+		"  A->>B: a message\n"
+	const width = 40
+
+	art, err := renderMermaidASCII(source, width, false)
+	if err != nil {
+		t.Fatalf("renderMermaidASCII: %v", err)
+	}
+	unfitted, err := renderMermaidArt(source, width, false)
+	if err != nil {
+		t.Fatalf("renderMermaidArt: %v", err)
+	}
+	if art != unfitted {
+		t.Errorf("sequence diagram art was altered by fitting:\n%s", art)
+	}
+}
+
+// TestFitMermaidArt_KeepsWorkingArtWhenNothingToWrap covers the guarantee that
+// fitting never costs a diagram: with every label already inside the narrowest
+// cap there is no candidate to render, so the art handed in comes back as it is.
+func TestFitMermaidArt_KeepsWorkingArtWhenNothingToWrap(t *testing.T) {
+	const source = "graph TB\n  A[a] --> B[b]\n"
+	const art = "sentinel art that is far wider than the width it is given"
+	if got := fitMermaidArt(source, art, 10, false); got != art {
+		t.Errorf("fitMermaidArt() = %q, want the art it was given", got)
+	}
+}
+
+// TestRenderMermaidASCII_FitsWithPureASCII covers -style ascii: a terminal that
+// cannot show box-drawing characters still gets the whole diagram.
+func TestRenderMermaidASCII_FitsWithPureASCII(t *testing.T) {
+	const width = 118
+
+	art, err := renderMermaidASCII(overWideDashboardDiagram, width, true)
+	if err != nil {
+		t.Fatalf("renderMermaidASCII: %v", err)
+	}
+	if w := mermaidArtWidth(art); w > width {
+		t.Errorf("art is %d columns wide, want at most %d:\n%s", w, width, art)
+	}
+	if !strings.Contains(art, "/dashboard/priority-process") {
+		t.Errorf("the fourth chain is missing from the art:\n%s", art)
+	}
+	if strings.ContainsAny(art, "┌┐└┘─│►") {
+		t.Errorf("box-drawing characters present despite pure ASCII being requested:\n%s", art)
 	}
 }
