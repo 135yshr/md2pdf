@@ -286,6 +286,7 @@ func spliceConsoleDiagrams(rendered string, diagrams []consoleDiagram, width int
 
 		content := diagram.content
 		if diagram.clippable() && width > 0 {
+			indent = fitDiagramIndent(indent, mermaidArtWidth(content), width)
 			content = clipConsoleArt(content, max(1, width-len(indent)))
 		}
 		for _, contentLine := range strings.Split(content, "\n") {

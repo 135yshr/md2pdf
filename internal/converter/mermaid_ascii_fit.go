@@ -378,3 +378,18 @@ func fitMermaidArt(source, art string, width int, pureASCII bool) string {
 	}
 	return narrowest
 }
+
+// fitDiagramIndent trims the indent glamour placed a diagram at down to the
+// columns the diagram can spare.
+//
+// Text art is a figure, not a paragraph. Art fitted to the full wrap width would
+// lose its rightmost columns to the document indent — the very clipping fitting
+// set out to avoid — so it is allowed to hang into the left margin instead. Art
+// that fits with the indent intact keeps it, so nothing moves unnecessarily.
+func fitDiagramIndent(indent string, artWidth, width int) string {
+	spare := width - artWidth
+	if spare >= len(indent) {
+		return indent
+	}
+	return indent[:max(0, spare)]
+}

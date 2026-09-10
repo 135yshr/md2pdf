@@ -326,3 +326,26 @@ func TestRenderMermaidASCII_FitsAnOverWideDiagram(t *testing.T) {
 		t.Errorf("top row has %d boxes, want 4:\n%s", boxes, art)
 	}
 }
+
+// TestSpliceConsoleDiagrams_HangsWideArtIntoTheMargin covers art fitted to the
+// full wrap width. Glamour indents the document, so keeping that indent would
+// cost the diagram its rightmost columns — exactly the clipping fitting set out
+// to avoid. Text art is a figure, not a paragraph: it may hang into the margin.
+func TestSpliceConsoleDiagrams_HangsWideArtIntoTheMargin(t *testing.T) {
+	const width = 20
+	art := strings.Repeat("X", width)
+	out, missing := spliceConsoleDiagrams("  MD2PDFDG0\n", []consoleDiagram{
+		{placeholder: "MD2PDFDG0", content: art, kind: diagramTextArt},
+	}, width)
+	if len(missing) != 0 {
+		t.Fatalf("unplaced diagrams: %v", missing)
+	}
+	if !strings.Contains(out, art) {
+		t.Errorf("art that exactly fits the wrap width was clipped: %q", out)
+	}
+	for i, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+		if w := ansi.StringWidth(line); w > width {
+			t.Errorf("line %d is %d columns wide, want at most %d: %q", i, w, width, line)
+		}
+	}
+}
