@@ -39,3 +39,26 @@ func TestWrapLabelText_BreaksASCIIAtSpaces(t *testing.T) {
 		t.Errorf("words were altered: %q reassembles to %q", got, joined)
 	}
 }
+
+// TestWrapLabelText_BreaksCJKAnywhere covers a Japanese label with no spaces to
+// break at. Mermaid's own renderer breaks CJK between characters, and measuring
+// columns rather than bytes is what keeps the resulting box aligned.
+func TestWrapLabelText_BreaksCJKAnywhere(t *testing.T) {
+	const (
+		text     = "優先改善プロセスダッシュボード"
+		maxWidth = 12
+	)
+	got := wrapLabelText(text, maxWidth)
+	lines := strings.Split(got, "<br>")
+	if len(lines) < 2 {
+		t.Fatalf("wrapLabelText(%q, %d) did not wrap: %q", text, maxWidth, got)
+	}
+	for i, line := range lines {
+		if w := ansi.StringWidth(line); w > maxWidth {
+			t.Errorf("line %d %q is %d columns wide, want at most %d", i, line, w, maxWidth)
+		}
+	}
+	if joined := strings.Join(lines, ""); joined != text {
+		t.Errorf("characters were altered: %q reassembles to %q", got, joined)
+	}
+}
