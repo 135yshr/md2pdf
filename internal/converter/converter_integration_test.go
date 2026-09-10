@@ -126,9 +126,9 @@ Integration test complete.
 		Verbose:      true,
 	}
 
-	c, err := converter.New(cfg)
-	if err != nil {
-		t.Fatalf("New(): %v", err)
+	c, newErr := converter.New(cfg)
+	if newErr != nil {
+		t.Fatalf("New(): %v", newErr)
 	}
 	defer c.Close()
 

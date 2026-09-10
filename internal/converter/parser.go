@@ -65,7 +65,7 @@ func parseMarkdown(src []byte) (*parsedDoc, error) {
 
 	// Walk the AST to find fenced code blocks tagged as "mermaid".
 	// We replace their source text with a placeholder before rendering.
-	ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+	walkErr := ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
 			return ast.WalkContinue, nil
 		}
@@ -103,6 +103,11 @@ func parseMarkdown(src []byte) (*parsedDoc, error) {
 		_ = rawHTML
 		return ast.WalkContinue, nil
 	})
+	// The walker above never fails, so this only guards against a future one
+	// that does.
+	if walkErr != nil {
+		return nil, fmt.Errorf("walk markdown AST: %w", walkErr)
+	}
 
 	// Render the full document to HTML.
 	var htmlBuf bytes.Buffer

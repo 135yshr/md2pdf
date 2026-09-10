@@ -164,19 +164,19 @@ func (c *Converter) Convert(ctx context.Context, inputs []string, outputPath str
 	}
 	inputPath := inputs[0]
 
-	mdBytes, err := c.readInput(inputPath)
-	if err != nil {
-		return err
+	mdBytes, readErr := c.readInput(inputPath)
+	if readErr != nil {
+		return readErr
 	}
 
-	srcDir, err := inputDir(inputPath)
-	if err != nil {
-		return err
+	srcDir, dirErr := inputDir(inputPath)
+	if dirErr != nil {
+		return dirErr
 	}
 
-	absOut, err := filepath.Abs(outputPath)
-	if err != nil {
-		return fmt.Errorf("resolve output path: %w", err)
+	absOut, absErr := filepath.Abs(outputPath)
+	if absErr != nil {
+		return fmt.Errorf("resolve output path: %w", absErr)
 	}
 
 	if strings.EqualFold(c.cfg.Format, FormatDOCX) {
@@ -301,23 +301,31 @@ func (c *Converter) copyImages(html, srcDir string) error {
 }
 
 // copyFile copies the file at src to dst.
+//
+// The messages name which step failed rather than the file, because the caller
+// already puts the filename in front of whatever comes back from here.
 func copyFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("open source: %w", err)
 	}
 	defer in.Close()
 
 	out, err := os.Create(dst)
 	if err != nil {
-		return err
+		return fmt.Errorf("create destination: %w", err)
 	}
 	defer out.Close()
 
 	if _, err := io.Copy(out, in); err != nil {
-		return err
+		return fmt.Errorf("copy contents: %w", err)
 	}
-	return out.Close()
+	// Closed explicitly as well as deferred, so a failure to flush is reported
+	// rather than discarded.
+	if err := out.Close(); err != nil {
+		return fmt.Errorf("close destination: %w", err)
+	}
+	return nil
 }
 
 // ChromiumPath locates the Chromium executable md2pdf drives, honouring

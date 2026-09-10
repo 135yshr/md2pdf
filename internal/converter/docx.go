@@ -65,13 +65,13 @@ var tableStyleRe = regexp.MustCompile(`(?s)<w:style [^>]*w:styleId="Table".*?</w
 // reference document (Japanese-friendly font, compact headings, bordered tables)
 // is generated and applied when possible, falling back to pandoc's defaults.
 //
-// pandoc runs with its working directory set to the converter's temporary
+// It runs pandoc with the working directory set to the converter's temporary
 // directory so generated diagrams resolve there; user images are resolved
 // against srcDir via --resource-path.
 func (c *Converter) convertMarkdownDOCX(ctx context.Context, mdBytes []byte, srcDir, docxPath string) error {
-	pandoc, err := c.findPandoc()
-	if err != nil {
-		return err
+	pandoc, findErr := c.findPandoc()
+	if findErr != nil {
+		return findErr
 	}
 
 	markdown, blocks := extractMermaidFromMarkdown(string(mdBytes))

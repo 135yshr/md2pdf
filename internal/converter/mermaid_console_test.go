@@ -470,9 +470,9 @@ func TestRenderConsole_PipedOutputEmitsNoImageSequences(t *testing.T) {
 
 	dir := t.TempDir()
 	outPath := filepath.Join(dir, "out.txt")
-	f, err := os.Create(outPath)
-	if err != nil {
-		t.Fatalf("create: %v", err)
+	f, createErr := os.Create(outPath)
+	if createErr != nil {
+		t.Fatalf("create: %v", createErr)
 	}
 	defer f.Close()
 
@@ -532,16 +532,16 @@ func TestRenderConsole_ByteIdenticalToPreFeatureRendering(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			want, err := renderConsoleMarkdown(tc.md, "notty", consoleFallbackWidth)
-			if err != nil {
-				t.Fatalf("baseline render: %v", err)
+			want, renderErr := renderConsoleMarkdown(tc.md, "notty", consoleFallbackWidth)
+			if renderErr != nil {
+				t.Fatalf("baseline render: %v", renderErr)
 			}
 
 			t.Setenv("TERM", "dumb")
 			outPath := filepath.Join(t.TempDir(), "out.txt")
-			f, err := os.Create(outPath)
-			if err != nil {
-				t.Fatalf("create: %v", err)
+			f, createErr := os.Create(outPath)
+			if createErr != nil {
+				t.Fatalf("create: %v", createErr)
 			}
 			defer f.Close()
 

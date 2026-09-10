@@ -276,16 +276,16 @@ func TestWriteConsole_KeepsColorForTrueColor(t *testing.T) {
 }
 
 func TestRenderConsole_WritesRenderedDocument(t *testing.T) {
-	c, err := New(&Config{Format: FormatConsole, ConsoleWidth: 60})
-	if err != nil {
-		t.Fatalf("New: %v", err)
+	c, newErr := New(&Config{Format: FormatConsole, ConsoleWidth: 60})
+	if newErr != nil {
+		t.Fatalf("New: %v", newErr)
 	}
 	defer c.Close()
 
 	out := filepath.Join(t.TempDir(), "out.txt")
-	f, err := os.Create(out)
-	if err != nil {
-		t.Fatalf("create output: %v", err)
+	f, createErr := os.Create(out)
+	if createErr != nil {
+		t.Fatalf("create output: %v", createErr)
 	}
 	defer f.Close()
 

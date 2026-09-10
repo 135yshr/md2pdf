@@ -96,8 +96,8 @@ func (c *Converter) renderSingleDiagram(ctx context.Context, idx int, source, pu
 }
 
 // runMmdc writes the Mermaid source to mmdFile and invokes mmdc to render it to
-// outFile. extraArgs are appended after the standard flags (e.g. PNG scaling),
-// and the Puppeteer config is passed when non-empty.
+// outFile. Any extraArgs are appended after the standard flags (e.g. PNG
+// scaling), and the Puppeteer config is passed when non-empty.
 func (c *Converter) runMmdc(ctx context.Context, mmdFile, outFile, source, puppeteerCfgPath string, extraArgs ...string) error {
 	if err := os.WriteFile(mmdFile, []byte(source), 0o600); err != nil {
 		return fmt.Errorf("write .mmd file: %w", err)

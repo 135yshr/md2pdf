@@ -155,9 +155,9 @@ func TestRenderConsole_MultipleDocumentsInOrder(t *testing.T) {
 	}
 
 	outPath := filepath.Join(dir, "out.txt")
-	f, err := os.Create(outPath)
-	if err != nil {
-		t.Fatalf("create: %v", err)
+	f, createErr := os.Create(outPath)
+	if createErr != nil {
+		t.Fatalf("create: %v", createErr)
 	}
 	defer f.Close()
 
@@ -196,9 +196,9 @@ func TestRenderConsole_SameFileTwiceRendersTwice(t *testing.T) {
 	}
 
 	outPath := filepath.Join(dir, "out.txt")
-	f, err := os.Create(outPath)
-	if err != nil {
-		t.Fatalf("create: %v", err)
+	f, createErr := os.Create(outPath)
+	if createErr != nil {
+		t.Fatalf("create: %v", createErr)
 	}
 	defer f.Close()
 
@@ -226,15 +226,15 @@ func TestRenderConsole_SingleDocumentHasNoSeparator(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	want, err := renderConsoleMarkdown(md, "notty", consoleFallbackWidth)
-	if err != nil {
-		t.Fatalf("baseline: %v", err)
+	want, renderErr := renderConsoleMarkdown(md, "notty", consoleFallbackWidth)
+	if renderErr != nil {
+		t.Fatalf("baseline: %v", renderErr)
 	}
 
 	outPath := filepath.Join(dir, "out.txt")
-	f, err := os.Create(outPath)
-	if err != nil {
-		t.Fatalf("create: %v", err)
+	f, createErr := os.Create(outPath)
+	if createErr != nil {
+		t.Fatalf("create: %v", createErr)
 	}
 	defer f.Close()
 
@@ -255,9 +255,9 @@ func TestRenderConsole_SingleDocumentHasNoSeparator(t *testing.T) {
 func TestRenderConsole_StdinDocument(t *testing.T) {
 	dir := t.TempDir()
 	outPath := filepath.Join(dir, "out.txt")
-	f, err := os.Create(outPath)
-	if err != nil {
-		t.Fatalf("create: %v", err)
+	f, createErr := os.Create(outPath)
+	if createErr != nil {
+		t.Fatalf("create: %v", createErr)
 	}
 	defer f.Close()
 

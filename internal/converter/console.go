@@ -113,9 +113,9 @@ func (c *Converter) renderConsole(ctx context.Context, inputs []string, out *os.
 	// once and shared. Whether an image was actually drawn is not: that is
 	// collected across documents, because a single image anywhere means the
 	// pager has to be skipped for all of them.
-	plan, err := resolveConsoleMermaidPlan(c.cfg.MermaidRender, env.isTTY, env.noColor, os.Getenv)
-	if err != nil {
-		return err
+	plan, planErr := resolveConsoleMermaidPlan(c.cfg.MermaidRender, env.isTTY, env.noColor, os.Getenv)
+	if planErr != nil {
+		return planErr
 	}
 	plan.pureASCII = consoleWantsPureASCII(c.cfg.ConsoleStyle, env.envStyle, style)
 
