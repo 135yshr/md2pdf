@@ -25,8 +25,8 @@ type BuildInfo struct {
 }
 
 // Run executes one invocation of the command line and returns the process exit
-// code. argv is the whole argument vector, os.Args, because the name the binary
-// was invoked under selects the default output format.
+// code. It takes the whole argument vector, os.Args, because the name the
+// binary was invoked under selects the default output format.
 func Run(argv []string, build BuildInfo) int {
 	var args []string
 	if len(argv) > 1 {

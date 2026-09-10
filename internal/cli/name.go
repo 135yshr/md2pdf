@@ -36,8 +36,8 @@ func programName(argv []string) string {
 }
 
 // defaultFormat returns the output format a program name implies, used when
-// neither -format nor the -o extension chooses one. mdview renders to the
-// terminal; every other name, a renamed or wrapped binary included, keeps
+// neither -format nor the -o extension chooses one. The mdview name renders to
+// the terminal; every other name, a renamed or wrapped binary included, keeps
 // md2pdf's pdf default.
 //
 // The comparison folds case because Windows filenames do, and folding on Unix
