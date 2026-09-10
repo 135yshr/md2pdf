@@ -1,6 +1,8 @@
 package converter
 
 import (
+	"image"
+	"image/color"
 	"math"
 	"os"
 	"path/filepath"
@@ -194,5 +196,61 @@ func TestPrepareConsoleMermaid_ScalesInlineImages(t *testing.T) {
 				t.Errorf("scale %v gave %d columns, want %d", tc.scale, got, tc.want)
 			}
 		})
+	}
+}
+
+// TestResampleImage_EnlargesAsWellAsShrinks covers the Sixel path, which is the
+// only one that has to resize the pixels itself: kitty and iTerm2 are told a
+// column count and scale the image on their side, so a resampler that refused
+// to enlarge left -mermaid-scale 2 doing nothing in a Sixel terminal.
+func TestResampleImage_EnlargesAsWellAsShrinks(t *testing.T) {
+	src := image.NewRGBA(image.Rect(0, 0, 40, 20))
+	for y := range 20 {
+		for x := range 40 {
+			src.Set(x, y, color.RGBA{R: uint8(x * 6), G: uint8(y * 12), B: 0x40, A: 0xff})
+		}
+	}
+
+	tests := []struct {
+		name        string
+		targetWidth int
+		wantWidth   int
+		wantHeight  int
+	}{
+		{"shrinks", 20, 20, 10},
+		{"enlarges", 80, 80, 40},
+		{"the same width is left alone", 40, 40, 20},
+		{"a nonsensical target is left alone", 0, 40, 20},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := resampleImage(src, tc.targetWidth)
+			b := got.Bounds()
+			if b.Dx() != tc.wantWidth || b.Dy() != tc.wantHeight {
+				t.Errorf("resampleImage(src, %d) is %dx%d, want %dx%d",
+					tc.targetWidth, b.Dx(), b.Dy(), tc.wantWidth, tc.wantHeight)
+			}
+		})
+	}
+}
+
+// TestEncodeTerminalImage_SixelEnlarges is the end-to-end half: a Sixel payload
+// for an enlarged diagram has to be bigger than the unscaled one, which it
+// cannot be if the resampler declined to enlarge.
+func TestEncodeTerminalImage_SixelEnlarges(t *testing.T) {
+	data := stubPNG(t, 200, 100)
+	transport := terminalImageTransport{protocol: imageProtocolSixel}
+
+	natural, err := encodeTerminalImage(transport, data, 118, 1)
+	if err != nil {
+		t.Fatalf("natural: %v", err)
+	}
+	doubled, err := encodeTerminalImage(transport, data, 118, 2)
+	if err != nil {
+		t.Fatalf("doubled: %v", err)
+	}
+	if len(doubled) <= len(natural) {
+		t.Errorf("doubling produced %d bytes of Sixel, not more than the %d bytes at natural size",
+			len(doubled), len(natural))
 	}
 }

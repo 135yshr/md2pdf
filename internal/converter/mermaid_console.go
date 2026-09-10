@@ -587,7 +587,7 @@ func encodeImageSequence(protocol terminalImageProtocol, data []byte, maxColumns
 
 	case imageProtocolSixel:
 		if sized {
-			img = downscaleImage(img, cols*consoleImageCellWidthPx)
+			img = resampleImage(img, cols*consoleImageCellWidthPx)
 		}
 		var payload bytes.Buffer
 		if err := (&sixel.Encoder{}).Encode(&payload, img); err != nil {
@@ -603,13 +603,21 @@ func encodeImageSequence(protocol terminalImageProtocol, data []byte, maxColumns
 	}
 }
 
-// downscaleImage shrinks src to targetWidth pixels, preserving the aspect ratio.
+// resampleImage resizes src to targetWidth pixels, preserving the aspect ratio.
+//
 // Each destination pixel averages the source pixels it covers, which suits the
 // downscaling of an already-supersampled mmdc render better than picking a
-// single nearest sample. Images at or below targetWidth are returned unchanged.
-func downscaleImage(src image.Image, targetWidth int) image.Image {
+// single nearest sample; enlarging falls out of the same loop as a
+// nearest-neighbour sample, since each destination pixel then covers one source
+// pixel. It resizes in **both** directions on purpose: Sixel is the only
+// protocol md2pdf resizes for itself — kitty and iTerm2 are handed a column
+// count and scale on their side — so refusing to enlarge here left
+// -mermaid-scale above 1 doing nothing in a Sixel terminal.
+//
+// A target of zero or the width src already has returns src untouched.
+func resampleImage(src image.Image, targetWidth int) image.Image {
 	bounds := src.Bounds()
-	if targetWidth <= 0 || bounds.Dx() <= targetWidth {
+	if targetWidth <= 0 || bounds.Dx() == targetWidth {
 		return src
 	}
 
