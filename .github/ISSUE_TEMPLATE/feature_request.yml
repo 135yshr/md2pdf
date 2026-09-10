@@ -23,7 +23,7 @@ body:
     id: solution
     attributes:
       label: Proposed solution
-      description: Describe the feature you'd like. Include CLI flags, config options, or behaviour changes.
+      description: Describe the feature you'd like. Include CLI flags, config options, or behavior changes.
       placeholder: "Add a `-theme` flag that accepts …"
     validations:
       required: true

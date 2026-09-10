@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"slices"
@@ -12,11 +13,11 @@ const tmuxBinary = "tmux"
 
 // tmuxQuery runs a tmux command and returns its standard output. It is a
 // function so tests can answer without a tmux server running.
-type tmuxQuery func(args ...string) (string, error)
+type tmuxQuery func(ctx context.Context, args ...string) (string, error)
 
 // runTmux is the production tmuxQuery.
-func runTmux(args ...string) (string, error) {
-	out, err := exec.Command(tmuxBinary, args...).Output()
+func runTmux(ctx context.Context, args ...string) (string, error) {
+	out, err := exec.CommandContext(ctx, tmuxBinary, args...).Output()
 	if err != nil {
 		return "", err //nolint:wrapcheck // the caller only distinguishes success from failure
 	}
@@ -25,9 +26,9 @@ func runTmux(args ...string) (string, error) {
 
 // insideTmux reports whether md2pdf is running inside a tmux session.
 //
-// $TMUX is the marker rather than TERM. tmux sets TERM to screen-256color, but
-// so does GNU screen and so do other multiplexers, and only tmux offers the
-// passthrough an inline image depends on.
+// $TMUX is the marker rather than TERM, because TERM is set to screen-256color
+// by tmux, by GNU screen and by other multiplexers alike — and only tmux offers
+// the passthrough an inline image depends on.
 func insideTmux(getenv func(string) string) bool {
 	return getenv("TMUX") != ""
 }
@@ -58,8 +59,8 @@ type tmuxClient struct {
 //
 // A pane is visible when its session has a client attached, its window is the
 // current one, and it is not hidden behind another pane zoomed over it.
-func tmuxClientState(query tmuxQuery) (tmuxClient, bool) {
-	out, err := query("display-message", "-p", tmuxClientFormat)
+func tmuxClientState(ctx context.Context, query tmuxQuery) (tmuxClient, bool) {
+	out, err := query(ctx, "display-message", "-p", tmuxClientFormat)
 	if err != nil {
 		return tmuxClient{}, false
 	}
@@ -71,21 +72,21 @@ func tmuxClientState(query tmuxQuery) (tmuxClient, bool) {
 		fields[0], fields[1], fields[2], fields[3], fields[4], fields[5]
 
 	visible := attached != "0" && attached != "" && windowActive == "1" &&
-		!(zoomed == "1" && paneActive != "1")
+		(zoomed != "1" || paneActive == "1")
 	return tmuxClient{termName: termName, termType: termType, visible: visible}, true
 }
 
 // tmuxForwardsPassthrough reports whether tmux will forward DCS passthrough for
 // this pane.
 //
-// tmux discards passthrough unless allow-passthrough is set, and the two
-// settings differ in a way that matters: tmux(1) defines "on" as forwarding only
-// while the pane is visible, and "all" as forwarding even when it is not. An
-// image written into a hidden pane under "on" is dropped with no error anywhere,
-// so the pane has to be checked rather than assumed. A tmux too old to know the
-// option reports a failure, which is also a no.
-func tmuxForwardsPassthrough(query tmuxQuery) (blockedReason string, forwards bool) {
-	out, err := query("show", "-gv", "allow-passthrough")
+// Passthrough is discarded unless allow-passthrough is set, and the two settings
+// differ in a way that matters: tmux(1) defines "on" as forwarding only while the
+// pane is visible, and "all" as forwarding even when it is not. An image written
+// into a hidden pane under "on" is dropped with no error anywhere, so the pane
+// has to be checked rather than assumed. A tmux too old to know the option
+// reports a failure, which is also a no.
+func tmuxForwardsPassthrough(ctx context.Context, query tmuxQuery) (blockedReason string, forwards bool) {
+	out, err := query(ctx, "show", "-gv", "allow-passthrough")
 	if err != nil {
 		return "tmux could not be asked whether it forwards escape sequences; " +
 			"a tmux older than 3.3 cannot", false
@@ -94,7 +95,7 @@ func tmuxForwardsPassthrough(query tmuxQuery) (blockedReason string, forwards bo
 	case "all":
 		return "", true
 	case "on":
-		client, ok := tmuxClientState(query)
+		client, ok := tmuxClientState(ctx, query)
 		if ok && client.visible {
 			return "", true
 		}
@@ -152,7 +153,7 @@ func tmuxClientProtocol(client tmuxClient) terminalImageProtocol {
 // wrapTmuxPassthrough tunnels an escape sequence through tmux to the terminal
 // hosting it.
 //
-// tmux forwards the body of a DCS "tmux;" sequence verbatim. Every ESC in the
+// The body of a DCS "tmux;" sequence is forwarded verbatim. Every ESC in the
 // payload has to be doubled, or tmux reads the first one as the end of the
 // sequence and the rest of the image leaks into the document as text.
 func wrapTmuxPassthrough(sequence string) string {
@@ -177,7 +178,7 @@ func osGetenv(getenv func(string) string) func(string) string {
 
 // terminalImageTransport describes how an image escape sequence reaches the
 // terminal that draws it: which protocol that terminal speaks, and whether the
-// sequence has to be tunnelled through tmux to get there.
+// sequence has to be tunneled through tmux to get there.
 type terminalImageTransport struct {
 	protocol terminalImageProtocol
 	viaTmux  bool
@@ -191,8 +192,8 @@ type terminalImageTransport struct {
 // tmuxTunnelledProtocols lists the protocols worth sending through tmux's
 // passthrough.
 //
-// Sixel is deliberately absent. tmux draws Sixel itself when built with support
-// for it, and a passthrough-wrapped Sixel is not reliably forwarded, so
+// Sixel is deliberately absent, because tmux draws it itself when built with
+// support for it and a passthrough-wrapped Sixel is not reliably forwarded:
 // claiming it would emit a sequence that comes out as garbage rather than an
 // image.
 var tmuxTunnelledProtocols = []terminalImageProtocol{imageProtocolKitty, imageProtocolITerm2}
@@ -202,21 +203,21 @@ var tmuxTunnelledProtocols = []terminalImageProtocol{imageProtocolKitty, imagePr
 // Outside tmux this is just the protocol detection. Inside it, two more things
 // have to hold: tmux must be forwarding passthrough at all, and the outer
 // terminal — read from tmux's own environment, since the process environment
-// only describes tmux — must speak a protocol worth tunnelling. Anything else
+// only describes tmux — must speak a protocol worth tunneling. Anything else
 // reports no transport, so the caller falls back to text art rather than writing
 // a sequence that would vanish or corrupt the output.
-func detectImageTransport(getenv func(string) string, query tmuxQuery) terminalImageTransport {
+func detectImageTransport(ctx context.Context, getenv func(string) string, query tmuxQuery) terminalImageTransport {
 	getenv = osGetenv(getenv)
 	if !insideTmux(getenv) {
 		return terminalImageTransport{protocol: detectImageProtocol(getenv)}
 	}
 
 	query = resolveTmuxQuery(query)
-	if reason, forwards := tmuxForwardsPassthrough(query); !forwards {
+	if reason, forwards := tmuxForwardsPassthrough(ctx, query); !forwards {
 		return terminalImageTransport{tmuxBlockedReason: reason}
 	}
 
-	client, ok := tmuxClientState(query)
+	client, ok := tmuxClientState(ctx, query)
 	if !ok {
 		return terminalImageTransport{}
 	}

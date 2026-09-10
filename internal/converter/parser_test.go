@@ -132,8 +132,8 @@ func TestHTMLEscape(t *testing.T) {
 
 // TestParseMarkdown_MermaidWithQuotes ensures that Mermaid blocks containing
 // double quotes (common in flowchart node labels) are still matched and
-// replaced by their placeholder. goldmark escapes " as &quot; in rendered
-// HTML, so the matcher must use the same escape set.
+// replaced by their placeholder. Note that goldmark escapes " as &quot; in
+// rendered HTML, so the matcher must use the same escape set.
 func TestParseMarkdown_MermaidWithQuotes(t *testing.T) {
 	src := []byte("# Diagram\n\n```mermaid\nflowchart TD\n  A[\"label with quotes\"] --> B[\"another\"]\n```\n")
 	doc, err := parseMarkdown(src)

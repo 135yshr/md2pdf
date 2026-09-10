@@ -1,58 +1,93 @@
 # golangci-lint configuration for md2pdf
 # https://golangci-lint.run/usage/configuration/
+version: "2"
 
 run:
   timeout: 5m
   tests: true
 
 linters:
+  # The standard set — errcheck, govet, ineffassign, staticcheck and unused — is
+  # enabled by default in v2 and is not repeated here. gosimple is gone as a
+  # separate linter: v2 folded its checks into staticcheck.
   enable:
-    - errcheck        # check for unchecked errors
-    - gosimple        # simplification suggestions
-    - govet           # go vet checks
-    - ineffassign     # detect ineffectual assignments
-    - staticcheck     # comprehensive static analysis
-    - unused          # detect unused code
-    - gofmt           # formatting
-    - goimports       # import ordering
-    - misspell        # catch common English misspellings
+    - exhaustive      # check exhaustiveness of enum switch statements
     - godot           # check GoDoc comment endings
     - gosec           # security checks
+    - misspell        # catch common English misspellings
     - noctx           # detect http.Request without context
     - wrapcheck       # ensure errors are wrapped when returned across packages
-    - exhaustive      # check exhaustiveness of enum switch statements
 
-linters-settings:
-  gofmt:
-    simplify: true
+  settings:
+    godot:
+      scope: declarations
+      capital: true
 
-  govet:
-    enable-all: true
+    gosec:
+      excludes:
+        - G204  # subprocess launched with variable — intentional for mmdc and pandoc
 
-  misspell:
-    locale: US
+    govet:
+      enable-all: true
+      disable:
+        # Struct field order, off for the whole module rather than for tests
+        # alone. Two thirds of its findings were table-driven tests' anonymous
+        # structs; the rest were Config, Converter, the -doctor status structs
+        # and five local ones in pdf.go. Each of those is allocated once or a
+        # handful of times per conversion, so the padding saved is not
+        # measurable, while Config's field order deliberately follows its
+        # documentation.
+        - fieldalignment
 
-  godot:
-    scope: declarations
-    capital: true
+    misspell:
+      locale: US
 
-  gosec:
-    excludes:
-      - G204  # subprocess launched with variable — intentional for mmdc/python
+    wrapcheck:
+      ignore-package-globs:
+        - encoding/*
+        - github.com/135yshr/md2pdf/*
 
-  wrapcheck:
-    ignorePackageGlobs:
-      - encoding/*
-      - github.com/135yshr/md2pdf/*
+  exclusions:
+    generated: lax
+
+    # v1 applied these exclusions by default; v2 applies none unless they are
+    # named, so they are listed here to keep the same set of reported issues.
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+
+    rules:
+      # Test files have relaxed rules.
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+          - wrapcheck
+
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 
 issues:
-  exclude-rules:
-    # Test files have relaxed rules.
-    - path: _test\.go
-      linters:
-        - wrapcheck
-        - gosec
-        - errcheck
-
   max-issues-per-linter: 0
   max-same-issues: 0
+
+# gofmt and goimports are formatters in v2, configured apart from the linters.
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+  settings:
+    gofmt:
+      simplify: true
+
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

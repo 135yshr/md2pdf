@@ -1,0 +1,53 @@
+name: PR Title
+
+# A separate workflow rather than a job in ci.yml, because of `edited`. This
+# check reads the pull request title, and a title is most often fixed after the
+# pull request is opened -- but ci.yml's `pull_request` trigger names no types,
+# so it gets the default [opened, synchronize, reopened] and would never see the
+# edit. Adding `edited` there instead would re-run the whole test matrix every
+# time someone touches a word in a title.
+#
+# `synchronize` is here so the check reports a result on the head commit of
+# every push. A required status check is evaluated per commit SHA, so without it
+# a push would leave this one pending forever and block the merge.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  gitmoji:
+    name: The title must produce a release
+    runs-on: ubuntu-latest
+
+    # Dependabot's titles come from .github/dependabot.yml and no reviewer can
+    # retitle its pull requests. Its bumps have never cut a release of their own
+    # either -- they ride along in whatever release comes next. Failing them here
+    # would be changing that policy rather than enforcing one.
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # Node 22, matching auto-release.yml: this check models what that workflow
+      # will decide, so it should run the plugin the same way.
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      # Pinned to the same major as the release workflow. The check calls into
+      # the plugin rather than reimplementing its rules, so the two have to agree
+      # on which plugin they mean.
+      - name: Install semantic-release-gitmoji
+        run: npm install --no-save semantic-release-gitmoji@1
+
+      # The title goes through the environment, never interpolated into this
+      # `run:` string. It is text any contributor can write, and `${{ }}` in a
+      # shell command is the standard Actions script-injection hole.
+      - name: Check the title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: node .github/scripts/check-pr-title.js

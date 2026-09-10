@@ -15,14 +15,18 @@
 //	md2pdf -format html -css custom.css document.md
 //	md2pdf -format console document.md
 //	md2pdf -font /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc document.md
+//
+// The command line itself lives in internal/cli, so that more than one binary
+// can share it.
 package main
 
 import (
-	"fmt"
+	"context"
 	"os"
-	"strings"
+	"os/signal"
+	"syscall"
 
-	"github.com/135yshr/md2pdf/internal/converter"
+	"github.com/135yshr/md2pdf/internal/cli"
 )
 
 var (
@@ -31,48 +35,42 @@ var (
 	date    = "unknown"
 )
 
-// describeInputs names the inputs for progress output, since "-" on its own
-// reads poorly in a message.
-func describeInputs(inputs []string) string {
-	named := make([]string, 0, len(inputs))
-	for _, in := range inputs {
-		if in == converter.StdinPath {
-			named = append(named, "standard input")
-			continue
-		}
-		named = append(named, in)
-	}
-	return strings.Join(named, ", ")
+func main() {
+	os.Exit(run())
 }
 
-func main() {
-	cfg, err := parseFlags(os.Args[1:])
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "md2pdf: %v\n", err)
-		printUsage()
-		os.Exit(1)
-	}
+// run executes the command line under a context an interrupt cancels, and
+// returns the exit code. It is separate from main so that its defers run:
+// os.Exit does not execute them.
+func run() int {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	c, err := converter.New(cfg)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "md2pdf: failed to initialize converter: %v\n", err)
-		os.Exit(1)
-	}
-	defer c.Close()
+	// The first interrupt cancels the context, which stops the external tools
+	// the run started: without it, Ctrl-C leaves mmdc, pandoc and the headless
+	// browser running. The second one exits outright.
+	//
+	// The second one has to be handled here rather than left to the runtime.
+	// Neither signal.Stop nor signal.Reset restores the default behavior once
+	// the process has asked to be notified — the signal is swallowed from then
+	// on — so a stage that cannot observe the context, such as reading a
+	// standard input that never reaches EOF, would otherwise leave the command
+	// impossible to interrupt at all.
+	sig := make(chan os.Signal, 2)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sig)
 
-	// Console format renders the document to stdout, so progress chatter would
-	// end up mixed into the document itself.
-	quiet := cfg.Format == converter.FormatConsole
+	go func() {
+		<-sig
+		cancel()
 
-	if !quiet {
-		fmt.Printf("Converting %s ...\n", describeInputs(cfg.InputFiles))
-	}
-	if err := c.Convert(cfg.InputFiles, cfg.OutputFile); err != nil {
-		fmt.Fprintf(os.Stderr, "md2pdf: conversion failed: %v\n", err)
-		os.Exit(1)
-	}
+		second := <-sig
+		code := 130 // 128 + SIGINT, the shell's convention for an interrupt.
+		if s, ok := second.(syscall.Signal); ok {
+			code = 128 + int(s)
+		}
+		os.Exit(code)
+	}()
 
-	if !quiet {
-		fmt.Printf("%s saved to %s\n", strings.ToUpper(cfg.Format), cfg.OutputFile)
-	}
+	return cli.Run(ctx, os.Args, cli.BuildInfo{Version: version, Commit: commit, Date: date})
 }

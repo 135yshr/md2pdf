@@ -37,7 +37,7 @@ go test ./...
 
 1. Fork the repository and create a branch from `main`.
 2. Keep commits focused — one logical change per commit.
-3. Add or update tests for any changed behaviour.
+3. Add or update tests for any changed behavior.
 4. Ensure `go test ./...` passes and `go vet ./...` reports no issues.
 5. Write commit messages in English in the imperative mood.
 6. Open a pull request against `main`.

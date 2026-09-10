@@ -8,14 +8,19 @@ weight: 20
 
 ```sh
 md2pdf [options] <input.md>
+mdview [options] <input.md>...   # the same binary, rendering to the terminal
 ```
+
+`mdview` is md2pdf under a second name: invoked that way it defaults to
+`-format console`, so a document can be read in the terminal without typing the
+flag. See [Console output](#console-output) below.
 
 ## Options
 
 | Flag | Default | Description |
 |---|---|---|
 | `-o <path>` | `<input>.pdf` | Output path (`.docx` extension implies `-format docx`; not allowed with `-format console`) |
-| `-format <fmt>` | `pdf` | Output format: `pdf`, `docx`, or `console` (aliases `term`, `terminal`; inferred from `-o` extension when omitted) |
+| `-format <fmt>` | `pdf` (`console` when invoked as `mdview`) | Output format: `pdf`, `docx`, or `console` (aliases `term`, `terminal`; inferred from `-o` extension when omitted) |
 | `-font <path>` | auto-detected | Noto Sans CJK JP Regular font |
 | `-font-bold <path>` | auto-detected | Noto Sans CJK JP Bold font |
 | `-font-medium <path>` | auto-detected | Noto Sans CJK JP Medium font |
@@ -71,6 +76,20 @@ wrapped to your terminal width and paged through `$PAGER`.
 ```sh
 md2pdf -format console document.md
 ```
+
+The binary also answers to the name **`mdview`**, which does the same without
+the flag — it is one program under two names:
+
+```sh
+mdview document.md
+mdview docs/*.md
+cat doc.md | mdview -
+```
+
+Everything on this page applies to both. The name only picks the default:
+`mdview -format pdf document.md`, or an `-o` path ending in `.pdf`, `.html` or
+`.docx`, writes a file instead, while an `-o` path that names no format is an
+error rather than a silently ignored flag.
 
 Unlike PDF and DOCX output, this needs no external conversion tools: no `mmdc`,
 no Playwright, no `pandoc`. The only external program it may launch is your

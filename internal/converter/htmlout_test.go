@@ -18,7 +18,7 @@ func TestHTMLOutput_WritesDocument(t *testing.T) {
 	}
 
 	c := newTestConverter(t, &Config{Format: FormatHTML})
-	if err := c.Convert([]string{input}, out); err != nil {
+	if err := c.Convert(t.Context(), []string{input}, out); err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
 
@@ -49,7 +49,7 @@ func TestHTMLOutput_SkipsChromium(t *testing.T) {
 		Format:   FormatHTML,
 		PageSize: "definitely-not-a-paper-size",
 	})
-	if err := c.Convert([]string{input}, filepath.Join(dir, "doc.html")); err != nil {
+	if err := c.Convert(t.Context(), []string{input}, filepath.Join(dir, "doc.html")); err != nil {
 		t.Fatalf("Convert must not touch the PDF pipeline: %v", err)
 	}
 }
@@ -69,7 +69,7 @@ func TestHTMLOutput_AppliesCustomCSS(t *testing.T) {
 	}
 
 	c := newTestConverter(t, &Config{Format: FormatHTML, CSSFiles: []string{css}})
-	if err := c.Convert([]string{input}, out); err != nil {
+	if err := c.Convert(t.Context(), []string{input}, out); err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
 
@@ -93,7 +93,7 @@ func TestHTMLOutput_PreservesImagePaths(t *testing.T) {
 	}
 
 	c := newTestConverter(t, &Config{Format: FormatHTML})
-	if err := c.Convert([]string{input}, out); err != nil {
+	if err := c.Convert(t.Context(), []string{input}, out); err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
 
@@ -110,7 +110,7 @@ func TestHTMLOutput_PreservesImagePaths(t *testing.T) {
 // single-document contract as pdf and docx.
 func TestHTMLOutput_RejectsMultipleInputs(t *testing.T) {
 	c := newTestConverter(t, &Config{Format: FormatHTML})
-	err := c.Convert([]string{"a.md", "b.md"}, filepath.Join(t.TempDir(), "out.html"))
+	err := c.Convert(t.Context(), []string{"a.md", "b.md"}, filepath.Join(t.TempDir(), "out.html"))
 	if err == nil {
 		t.Fatal("expected an error for multiple inputs with html format")
 	}
@@ -161,7 +161,7 @@ func TestHTMLOutput_InlinesMermaidSVG(t *testing.T) {
 		// has no need for.
 		PuppeteerConfig: filepath.Join(dir, "puppeteer.json"),
 	})
-	if err := c.Convert([]string{input}, out); err != nil {
+	if err := c.Convert(t.Context(), []string{input}, out); err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
 
