@@ -57,7 +57,10 @@ func stripQuitIfOneScreen(argv []string) []string {
 	if !isLess(argv) {
 		return argv
 	}
-	out := argv[:1]
+	// A fresh slice, not argv[:1]: appending into argv's own array would
+	// clobber the caller's flags.
+	out := make([]string, 0, len(argv))
+	out = append(out, argv[0])
 	for _, arg := range argv[1:] {
 		switch {
 		case arg == "--quit-if-one-screen":
