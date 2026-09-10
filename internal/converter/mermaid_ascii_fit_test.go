@@ -277,3 +277,21 @@ func TestMermaidArtWidth_MeasuresDisplayColumns(t *testing.T) {
 		})
 	}
 }
+
+// TestRenderMermaidASCII_LeavesFittingDiagramsUntouched is the non-regression
+// pin for fitting: a diagram already narrower than the wrap width must render
+// exactly as it did before, with each label on one line.
+func TestRenderMermaidASCII_LeavesFittingDiagramsUntouched(t *testing.T) {
+	art, err := renderMermaidASCII("flowchart LR\n  A[Alpha Beta] --> B[Gamma Delta]\n", 80, false)
+	if err != nil {
+		t.Fatalf("renderMermaidASCII: %v", err)
+	}
+	for _, want := range []string{"Alpha Beta", "Gamma Delta"} {
+		if !strings.Contains(art, want) {
+			t.Errorf("label %q was wrapped even though the diagram already fits:\n%s", want, art)
+		}
+	}
+	if w := mermaidArtWidth(art); w > 80 {
+		t.Errorf("art is %d columns wide, want at most 80:\n%s", w, art)
+	}
+}
