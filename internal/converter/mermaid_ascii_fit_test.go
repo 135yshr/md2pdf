@@ -166,3 +166,14 @@ func TestFitMermaidLabels_HandlesParsedShapes(t *testing.T) {
 		})
 	}
 }
+
+// TestFitMermaidLabels_QuotedLabelKeepsItsBracket covers a label holding the
+// closing delimiter inside quotes, which Mermaid allows. Treating that bracket
+// as the end of the label would truncate the text.
+func TestFitMermaidLabels_QuotedLabelKeepsItsBracket(t *testing.T) {
+	const source = `graph LR` + "\n" + `  A["Alpha] Beta Gamma"] --> B[Done]` + "\n"
+	const want = `graph LR` + "\n" + `  A["Alpha]<br>Beta<br>Gamma"] --> B[Done]` + "\n"
+	if got := fitMermaidLabels(source, 8); got != want {
+		t.Errorf("fitMermaidLabels()\n got: %q\nwant: %q", got, want)
+	}
+}
