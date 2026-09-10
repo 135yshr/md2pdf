@@ -45,7 +45,9 @@ func (p *program) parseFlags(args []string) (*converter.Config, error) {
 	fs.SetOutput(p.stderr)
 
 	output := fs.String("o", "", "Output file path (default: <input>.pdf, or .docx with -format docx)")
-	format := fs.String("format", "", "Output format: pdf (default), html, docx or console (inferred from -o extension when omitted)")
+	format := fs.String("format", "", fmt.Sprintf(
+		"Output format: pdf, html, docx or console (default: %s; inferred from -o extension when omitted)",
+		p.defaultFormat))
 	fontRegular := fs.String("font", "", "Path to Noto Sans CJK JP Regular .ttc/.ttf font file")
 	fontBold := fs.String("font-bold", "", "Path to Noto Sans CJK JP Bold .ttc/.ttf font file")
 	fontMedium := fs.String("font-medium", "", "Path to Noto Sans CJK JP Medium .ttc/.ttf font file")
@@ -95,8 +97,8 @@ func (p *program) parseFlags(args []string) (*converter.Config, error) {
 
 	// Resolve output format first: it decides whether several inputs are
 	// allowed at all. An explicit -format flag wins; otherwise it is inferred
-	// from the -o extension, defaulting to pdf.
-	outFormat, err := resolveFormat(*format, *output)
+	// from the -o extension, then from the name the program was invoked as.
+	outFormat, err := resolveFormat(*format, *output, p.defaultFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -181,12 +183,13 @@ func (p *program) parseFlags(args []string) (*converter.Config, error) {
 	}, nil
 }
 
-// resolveFormat determines the output format from the explicit -format flag and
-// the -o path. The flag takes precedence; otherwise the format is inferred from
-// the output file extension, defaulting to pdf. It returns an error when the two
-// disagree or when an unsupported format is requested. Console format renders to
-// the terminal, so it cannot be combined with -o.
-func resolveFormat(format, output string) (string, error) {
+// resolveFormat determines the output format from the explicit -format flag,
+// the -o path and the default the invoked program name implies, in that order
+// of precedence. It returns an error when the flag and the extension disagree,
+// when an unsupported format is requested, or when a program that renders to
+// the terminal by default is handed an -o path that names no format. Console
+// format renders to the terminal, so it cannot be combined with -o.
+func resolveFormat(format, output, defaultFormat string) (string, error) {
 	fromExt := ""
 	switch strings.ToLower(filepath.Ext(output)) {
 	case ".pdf":
@@ -201,7 +204,15 @@ func resolveFormat(format, output string) (string, error) {
 		if fromExt != "" {
 			return fromExt, nil
 		}
-		return converter.FormatPDF, nil
+		// Falling back to console with an -o path would silently drop it:
+		// resolveOutputPath returns no path for console output. Say so instead.
+		if defaultFormat == converter.FormatConsole && output != "" {
+			return "", fmt.Errorf(
+				"this program renders to the terminal by default, so -o %s names no format to write: "+
+					"end the path in .pdf, .html or .docx, or choose one with -format",
+				output)
+		}
+		return defaultFormat, nil
 	}
 
 	normalized := normalizeFormat(format)

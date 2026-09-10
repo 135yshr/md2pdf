@@ -86,8 +86,8 @@ func (p *program) stdinUsable() error {
 	if p.stdinIsTerminal {
 		return fmt.Errorf(
 			"reading from standard input (%q), but standard input is a terminal; "+
-				"pipe or redirect a document into md2pdf, for example: cat doc.md | md2pdf %s",
-			converter.StdinPath, converter.StdinPath)
+				"pipe or redirect a document into %s, for example: cat doc.md | %s %s",
+			converter.StdinPath, p.name, p.name, converter.StdinPath)
 	}
 	return nil
 }

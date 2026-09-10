@@ -111,3 +111,14 @@ jobs:
 
       - name: Build Windows amd64
         run: GOOS=windows GOARCH=amd64 go build -o dist/md2pdf-windows-amd64.exe ./cmd/md2pdf
+
+      # The unit tests cover the name-to-format mapping; this checks the
+      # assumption underneath it, that a real symlink still reports its own
+      # name in argv[0] once the binary is built and installed. Console output
+      # needs no external tools, so this adds no dependency to the job.
+      - name: The mdview name defaults to console output
+        run: |
+          ln -s md2pdf-linux-amd64 dist/mdview
+          printf '# Smoke\n\nbody\n' > dist/smoke.md
+          dist/mdview -version | grep -q '^mdview version'
+          dist/mdview -pager=false dist/smoke.md | grep -q 'Smoke'

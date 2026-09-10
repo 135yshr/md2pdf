@@ -1,6 +1,10 @@
 package cli
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/135yshr/md2pdf/internal/converter"
+)
 
 // The help text is assembled from three pieces so that its bulk — the option
 // and input descriptions, where the real maintenance happens — stays
@@ -70,7 +74,7 @@ Inputs:
   standard input instead; relative paths inside it resolve against the
   current directory, and -o becomes required for pdf and docx because
   there is no input filename to derive the output name from.
-  Several paths are accepted with -format console only, and render in
+  Several paths are accepted for console output only, and render in
   order separated by a rule.
 `
 
@@ -98,9 +102,41 @@ Examples:
   %[1]s -format console docs/*.md
 `
 
+// usageSynopsisConsole opens the help text for a program that renders to the
+// terminal by default.
+const usageSynopsisConsole = `
+Usage:
+  %[1]s [options] <input.md>...
+  %[1]s [options] -                       read the document from stdin
+  %[1]s -format pdf -o report.pdf <input.md>   write a file instead
+
+  %[1]s is md2pdf under another name: it renders to the terminal by
+  default. Naming a format with -format, or giving -o a path ending in
+  .pdf, .html or .docx, writes a file instead.
+`
+
+// usageExamplesConsole closes the help text for a program that renders to the
+// terminal by default.
+const usageExamplesConsole = `
+Examples:
+  %[1]s document.md
+  %[1]s -style dark -width 100 document.md
+  %[1]s -pager=false document.md | cat
+  %[1]s -mermaid-render image document.md
+  %[1]s -mermaid-render ascii document.md
+  %[1]s docs/*.md
+  cat doc.md | %[1]s -
+  %[1]s -o report.pdf document.md
+  %[1]s -format docx document.md
+  %[1]s -doctor
+`
+
 // usageParts returns the name-dependent halves of the help text for a program
 // whose output defaults to defaultFormat.
 func usageParts(defaultFormat string) (synopsis, examples string) {
+	if defaultFormat == converter.FormatConsole {
+		return usageSynopsisConsole, usageExamplesConsole
+	}
 	return usageSynopsisPDF, usageExamplesPDF
 }
 

@@ -4,8 +4,12 @@ description: "How md2pdf converts Markdown to PDF, DOCX, or terminal output — 
 weight: 30
 ---
 
-md2pdf reads Markdown once and then branches on `-format`. Each format has its
-own pipeline, because each renders best from a different source.
+md2pdf reads Markdown once and then branches on the output format. Each format
+has its own pipeline, because each renders best from a different source.
+
+The format comes from `-format`, or from the `-o` extension, or — failing both
+— from the name the binary was invoked as: `mdview` defaults to `console`,
+every other name to `pdf`.
 
 ## PDF pipeline (Markdown → HTML → Chromium)
 
@@ -44,9 +48,17 @@ internal/converter/
   docx.go        # DOCX — pandoc conversion and reference-doc styling
   console.go     # Console — glamour ANSI rendering, width/theme/pager handling
 
-cmd/md2pdf/
-  main.go        # CLI entry point
+internal/cli/
+  cli.go         # Run: the entry point every binary shares
+  name.go        # argv[0] -> default output format
   flags.go       # Argument parsing, auto-detection, format resolution
+  inputs.go      # Input validation, output path resolution
+  usage.go       # Help text, assembled per invoked name
+  fonts.go       # CJK font discovery
+  doctor.go      # -doctor report formatting
+
+cmd/md2pdf/
+  main.go        # Thin main: ldflags version vars, then cli.Run
 ```
 
 ## External dependencies

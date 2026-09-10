@@ -21,7 +21,7 @@ without font breakage. Single Go binary, drop-in for CI.
 - 🇯🇵 **Japanese / CJK text out of the box** — Noto Sans CJK JP preconfigured
 - 📝 **GitHub-flavored Markdown** — tables, fenced code blocks, strikethrough
 - 📃 **PDF or DOCX output** — `-format docx` exports editable Word documents (via pandoc)
-- 👀 **Read it in the terminal** — `-format console` renders the document as styled, wrapped ANSI text and pages it through `less` (no conversion tools needed), drawing Mermaid flowcharts and sequence diagrams as inline images on kitty, iTerm2 and Sixel terminals and as box-drawing text art everywhere else
+- 👀 **Read it in the terminal** — `-format console`, or the `mdview` name the same binary also answers to, renders the document as styled, wrapped ANSI text and pages it through `less` (no conversion tools needed), drawing Mermaid flowcharts and sequence diagrams as inline images on kitty, iTerm2 and Sixel terminals and as box-drawing text art everywhere else
 - 🤖 **CI-friendly single binary** — `go install` and you're done
 - 📄 **Configurable** — page size, margins, fonts
 
@@ -35,7 +35,11 @@ without font breakage. Single Go binary, drop-in for CI.
 brew install 135yshr/tap/md2pdf
 ```
 
-This also installs [`mermaid-cli`](https://github.com/mermaid-js/mermaid-cli),
+This installs two commands: `md2pdf`, and `mdview` for reading documents in
+the terminal (see [Reading in the terminal with
+`mdview`](#reading-in-the-terminal-with-mdview) — it is the same binary under a
+second name). It also installs
+[`mermaid-cli`](https://github.com/mermaid-js/mermaid-cli),
 so diagrams work out of the box. Two things it **cannot** install, because a
 Homebrew formula is not allowed to depend on a cask:
 
@@ -54,6 +58,10 @@ Google Chrome counts as the browser; point md2pdf at any location with
 
 ```sh
 go install github.com/135yshr/md2pdf/cmd/md2pdf@latest
+
+# Optional: the mdview name, which reads documents in the terminal by default.
+# go install can only produce one name, so link the second one yourself.
+ln -s "$(go env GOPATH)/bin/md2pdf" "$(go env GOPATH)/bin/mdview"
 ```
 
 **Build from source**
@@ -62,6 +70,7 @@ go install github.com/135yshr/md2pdf/cmd/md2pdf@latest
 git clone https://github.com/135yshr/md2pdf.git
 cd md2pdf
 go build -o md2pdf ./cmd/md2pdf
+ln -s md2pdf mdview        # optional, see "Reading in the terminal with mdview"
 ```
 
 ### 2. Install runtime dependencies
@@ -157,6 +166,7 @@ browser it resolved itself, which is the same one it uses to print the PDF.
 
 ```sh
 md2pdf [options] <input.md>
+mdview [options] <input.md>...   # the same binary, rendering to the terminal
 ```
 
 ### Options
@@ -164,7 +174,7 @@ md2pdf [options] <input.md>
 | Flag | Default | Description |
 |---|---|---|
 | `-o <path>` | `<input>.pdf` | Output path (`.docx` extension implies `-format docx`; not allowed with `-format console`; **required when reading from stdin** for `pdf`/`docx`) |
-| `-format <fmt>` | `pdf` | Output format: `pdf`, `html`, `docx`, or `console` (aliases `term`, `terminal`; inferred from `-o` extension when omitted, including `.html`/`.htm`) |
+| `-format <fmt>` | `pdf` (`console` when invoked as `mdview`) | Output format: `pdf`, `html`, `docx`, or `console` (aliases `term`, `terminal`; inferred from `-o` extension when omitted, including `.html`/`.htm`) |
 | `-doctor` | — | Report which runtime dependencies are present and which formats can run, then exit |
 | `-css <path>` | — | Custom CSS applied after the built-in stylesheet, so its rules win. Repeatable; later files override earlier ones. Used by `pdf` and `html` |
 | `-font <path>` | auto-detected | Noto Sans CJK JP Regular font |
@@ -200,6 +210,8 @@ md2pdf -format docx document.md
 md2pdf -o report.docx document.md   # format inferred from extension
 
 # Read the document in the terminal
+mdview document.md                                      # shorthand for -format console
+mdview docs/*.md                                        # several documents, in order
 md2pdf -format html document.md                              # stop at HTML, no Chromium
 md2pdf -format html -css brand.css document.md               # iterate on CSS in a browser
 md2pdf -css brand.css -css client.css -o report.pdf document.md
@@ -341,6 +353,43 @@ md2pdf -format console intro.md guide.md appendix.md
 The separator is glamour's own horizontal rule, so it follows the theme — dimmed
 under a dark style, plain ASCII under `-style ascii`, colorless under
 `NO_COLOR` — and looks like a `---` written in the document itself.
+
+### Reading in the terminal with `mdview`
+
+`md2pdf -format console document.md` is a lot to type for something you do all
+day, so the binary also answers to the name **`mdview`**. Invoked under that
+name it renders to the terminal by default:
+
+```sh
+mdview document.md
+mdview docs/*.md
+git show HEAD:README.md | mdview -
+```
+
+It is the same binary — nothing extra is installed and nothing is duplicated.
+`brew install 135yshr/tap/md2pdf` creates the name for you. Elsewhere, make it
+yourself, with either a symlink or a copy:
+
+```sh
+ln -s "$(command -v md2pdf)" ~/.local/bin/mdview     # Unix
+copy md2pdf.exe mdview.exe                           # Windows (the release zip
+                                                     # already ships mdview.exe)
+```
+
+The name only chooses the **default**; everything else still works, and
+`md2pdf` itself is unchanged. In order of precedence:
+
+| Invocation | Output |
+|---|---|
+| `md2pdf document.md` | PDF, as always |
+| `mdview document.md` | the terminal |
+| `mdview -format pdf document.md` | PDF — an explicit `-format` wins |
+| `mdview -o report.pdf document.md` | PDF — the `-o` extension wins over the name |
+| `mdview -o notes.txt document.md` | an error: that path names no format, and `-o` cannot be used with terminal output |
+
+Because the choice comes from `argv[0]`, a parent process can invoke the binary
+under any name it likes. That is only ever a default: a script that cares which
+format it gets should pass `-format`.
 
 ### Mermaid diagrams in the terminal
 

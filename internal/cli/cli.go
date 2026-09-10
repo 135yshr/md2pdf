@@ -32,13 +32,14 @@ func Run(argv []string, build BuildInfo) int {
 	if len(argv) > 1 {
 		args = argv[1:]
 	}
+	name := programName(argv)
 	p := &program{
 		build:           build,
 		diagnose:        converter.Diagnose,
 		stdout:          os.Stdout,
 		stderr:          os.Stderr,
-		name:            defaultProgramName,
-		defaultFormat:   converter.FormatPDF,
+		name:            name,
+		defaultFormat:   defaultFormat(name),
 		stdinIsTerminal: term.IsTerminal(os.Stdin.Fd()),
 	}
 	return p.run(args)
