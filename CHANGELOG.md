@@ -1,3 +1,18 @@
+# [v0.18.0](https://github.com/135yshr/md2pdf/compare/v0.17.0...v0.18.0) (2026-09-10)
+
+## ✨ New Features
+- [`821c616`](https://github.com/135yshr/md2pdf/commit/821c616)  feat: tunnel inline diagram images through tmux passthrough (#67) (Issues: [`#67`](https://github.com/135yshr/md2pdf/issues/67) [`#66`](https://github.com/135yshr/md2pdf/issues/66) [`#64`](https://github.com/135yshr/md2pdf/issues/64))
+
+# [v0.17.0](https://github.com/135yshr/md2pdf/compare/v0.16.0...v0.17.0) (2026-09-10)
+
+## ✨ New Features
+- [`5ea2a6d`](https://github.com/135yshr/md2pdf/commit/5ea2a6d)  feat: pan wide console diagrams or show their source, never clip (#66) (Issues: [`#66`](https://github.com/135yshr/md2pdf/issues/66) [`#64`](https://github.com/135yshr/md2pdf/issues/64) [`#64`](https://github.com/135yshr/md2pdf/issues/64) [`#64`](https://github.com/135yshr/md2pdf/issues/64) [`#64`](https://github.com/135yshr/md2pdf/issues/64))
+
+# [v0.16.0](https://github.com/135yshr/md2pdf/compare/v0.15.0...v0.16.0) (2026-09-10)
+
+## ✨ New Features
+- [`5a4c729`](https://github.com/135yshr/md2pdf/commit/5a4c729)  feat: fit over-wide console Mermaid diagrams instead of clipping them (#64) (Issues: [`#64`](https://github.com/135yshr/md2pdf/issues/64))
+
 # [v0.15.0](https://github.com/135yshr/md2pdf/compare/v0.14.2...v0.15.0) (2026-09-10)
 
 ## ✨ New Features
