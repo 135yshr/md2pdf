@@ -5,8 +5,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-
-	"github.com/charmbracelet/x/ansi"
 )
 
 // errStubRasterFailure stands in for an mmdc invocation that fails.
@@ -133,62 +131,6 @@ func TestRenderMermaidASCII_InvalidSourceDoesNotPanic(t *testing.T) {
 			// Either outcome is acceptable; crashing is not.
 			_, _ = renderMermaidASCII(src, 80, false)
 		}()
-	}
-}
-
-// TestArtClippingTrimsToWidth covers the acceptance criterion that art wider than the
-// wrap width is clipped rather than soft-wrapped into fragments.
-func TestArtClippingTrimsToWidth(t *testing.T) {
-	const width = 30
-	src := "flowchart LR\n  A[Alpha Node] --> B[Beta Node] --> C[Gamma Node] --> D[Delta Node]\n"
-	art, err := renderMermaidASCII(src, width, false)
-	if err != nil {
-		t.Fatalf("renderMermaidASCII: %v", err)
-	}
-	for i, line := range strings.Split(clipConsoleArt(art, width), "\n") {
-		if w := ansi.StringWidth(line); w > width {
-			t.Errorf("line %d is %d columns wide, want at most %d", i, w, width)
-		}
-	}
-}
-
-// TestArtClipping_KeepsNarrowLinesAndColors checks clipping is a no-op for
-// lines that already fit, and that it counts columns rather than bytes.
-func TestArtClipping_KeepsNarrowLinesAndColors(t *testing.T) {
-	art := "abc\n\x1b[31mred\x1b[0m\n開始"
-	if got := clipConsoleArt(art, 10); got != art {
-		t.Errorf("clipConsoleArt altered art that already fits:\n%q", got)
-	}
-	if got := clipConsoleArt("", 10); got != "" {
-		t.Errorf("clipConsoleArt(%q) = %q", "", got)
-	}
-	if got := clipConsoleArt(art, 0); got != art {
-		t.Errorf("clipConsoleArt with width 0 must be a no-op, got %q", got)
-	}
-	// 開始 is four columns wide but six bytes; clipping to two columns must keep
-	// one character, not two bytes.
-	if got := ansi.StringWidth(clipConsoleArt("開始", 2)); got > 2 {
-		t.Errorf("clipped CJK line is %d columns wide, want at most 2", got)
-	}
-}
-
-// TestSpliceConsoleDiagrams_ClipsArtToWidthLessIndent is the regression test for
-// clipping that ignored glamour's indent and so overran the wrap width.
-func TestSpliceConsoleDiagrams_ClipsArtToWidthLessIndent(t *testing.T) {
-	const width = 20
-	rendered := "  MD2PDFDG0\n"
-	wide := strings.Repeat("X", 40)
-	out, missing := spliceConsoleDiagrams(rendered, []consoleDiagram{
-		{placeholder: "MD2PDFDG0", content: wide, kind: diagramTextArt},
-	}, width)
-	if len(missing) != 0 {
-		t.Fatalf("unplaced diagrams: %v", missing)
-	}
-	for i, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
-		if w := ansi.StringWidth(line); w > width {
-			t.Errorf("line %d is %d columns wide including the indent, want at most %d: %q",
-				i, w, width, line)
-		}
 	}
 }
 
@@ -479,8 +421,8 @@ func TestPrepareConsoleMermaid_ImageFallbackIsPageable(t *testing.T) {
 	if anyImageDiagram(diagrams) {
 		t.Error("a text-art fallback reported itself as an image, which would skip the pager")
 	}
-	if !diagrams[0].clippable() {
-		t.Error("text art must be clippable to the wrap width")
+	if diagrams[0].pan {
+		t.Error("text art that fits the wrap width must not be marked for panning")
 	}
 }
 

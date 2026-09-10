@@ -257,16 +257,6 @@ func (c *Converter) logf(format string, args ...any) {
 	}
 }
 
-// warnf prints a formatted warning whether or not verbose mode is enabled.
-//
-// It exists for the one thing the verbose log cannot carry: output the user
-// asked for that did not survive. A reader who does not pass -v still has to be
-// told that a diagram lost its right edge, or the loss is silent — which is the
-// defect that made fitting necessary in the first place.
-func (c *Converter) warnf(format string, args ...any) {
-	fmt.Fprintf(c.errOut(), "md2pdf: warning: "+format+"\n", args...)
-}
-
 // imgSrcRe matches src attributes in <img> tags.
 var imgSrcRe = regexp.MustCompile(`<img\s[^>]*?\bsrc=["']([^"']+)["']`)
 

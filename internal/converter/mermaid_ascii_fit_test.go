@@ -1,7 +1,6 @@
 package converter
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"slices"
@@ -510,40 +509,6 @@ func TestPrepareConsoleMermaid_FitsTheReportedDocument(t *testing.T) {
 	}
 }
 
-// TestClippedArtWarning covers the end of the silent loss. A diagram no label
-// cap could fit still loses its right edge to clipping, and the log has to say
-// so — naming the width it needed and the two ways out — instead of leaving a
-// missing branch with nothing in the output to show for it.
-func TestClippedArtWarning(t *testing.T) {
-	tests := []struct {
-		name     string
-		artWidth int
-		width    int
-		want     bool
-	}{
-		{"narrower than the width", 40, 80, false},
-		{"exactly the width", 80, 80, false},
-		{"no width limit set", 200, 0, false},
-		{"overruns the width", 152, 118, true},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := clippedArtWarning(0, tc.artWidth, tc.width)
-			if (got != "") != tc.want {
-				t.Errorf("clippedArtWarning(0, %d, %d) = %q, want warning=%t",
-					tc.artWidth, tc.width, got, tc.want)
-			}
-		})
-	}
-
-	msg := clippedArtWarning(2, 152, 118)
-	for _, want := range []string{"2", "152", "118", "-width", "-mermaid-render source"} {
-		if !strings.Contains(msg, want) {
-			t.Errorf("warning %q does not mention %q", msg, want)
-		}
-	}
-}
-
 // TestFitMermaidLabels_LeavesQuotedEdgeLabelsAlone covers a bracket inside a
 // quoted edge label. The characters before it look like a node id, but the
 // bracket is text the author quoted, not a shape delimiter, so rewriting it
@@ -571,47 +536,6 @@ func TestFitMermaidLabels_LeavesQuotedEdgeLabelsAlone(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := fitMermaidLabels(tc.source, 8); got != tc.want {
 				t.Errorf("fitMermaidLabels()\n got: %q\nwant: %q", got, tc.want)
-			}
-		})
-	}
-}
-
-// TestPrepareConsoleMermaid_WarnsAboutClippingWithoutVerbose is the point of the
-// warning. A diagram that still loses its right edge has to say so even with -v
-// off: routing it through the verbose log would leave the loss exactly as silent
-// as the clipping this change set out to replace.
-func TestPrepareConsoleMermaid_WarnsAboutClippingWithoutVerbose(t *testing.T) {
-	tests := []struct {
-		name     string
-		width    int
-		wantWarn bool
-	}{
-		// 40 columns cannot hold four chains at any label cap.
-		{"art that cannot be fitted warns", 40, true},
-		{"art that fits stays quiet", 118, false},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			var stderr bytes.Buffer
-			c := newTestConverter(t, &Config{Format: FormatConsole})
-			c.stderr = &stderr
-			c.mermaidAvailable = func() bool { return false }
-
-			md := []byte("```mermaid\n" + overWideDashboardDiagram + "```\n")
-			_, diagrams, err := c.prepareConsoleMermaid(t.Context(), md, consoleMermaidPlan{mode: MermaidRenderASCII}, tc.width)
-			if err != nil {
-				t.Fatalf("prepareConsoleMermaid: %v", err)
-			}
-			if len(diagrams) != 1 {
-				t.Fatalf("got %d diagrams, want 1", len(diagrams))
-			}
-			if c.cfg.Verbose {
-				t.Fatal("this test only means something with verbose logging off")
-			}
-
-			logged := stderr.String()
-			if warned := strings.Contains(logged, "clipped"); warned != tc.wantWarn {
-				t.Errorf("stderr = %q, want a clipping warning=%t", logged, tc.wantWarn)
 			}
 		})
 	}

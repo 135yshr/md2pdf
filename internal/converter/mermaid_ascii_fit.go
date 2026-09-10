@@ -1,7 +1,6 @@
 package converter
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 	"unicode"
@@ -423,21 +422,4 @@ func fitDiagramIndent(indent string, artWidth, width int) string {
 		return indent
 	}
 	return indent[:max(0, spare)]
-}
-
-// clippedArtWarning returns the message to log for text art that still overruns
-// the wrap width once fitting has done what it can, or "" when the art fits.
-//
-// Over-wide art loses its right edge to clipConsoleArt. Reporting it is what
-// keeps that loss from being silent: a diagram could otherwise drop a whole
-// branch with nothing in the output to show for it, which is how the clipping
-// this fitting replaces went unnoticed.
-func clippedArtWarning(idx, artWidth, width int) string {
-	if width <= 0 || artWidth <= width {
-		return ""
-	}
-	return fmt.Sprintf(
-		"diagram %d needs %d columns but only %d are available, so its right edge is clipped; "+
-			"use -width for more room, or -mermaid-render source to see it in full",
-		idx, artWidth, width)
 }
