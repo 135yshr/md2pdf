@@ -1,3 +1,8 @@
+# [v0.17.0](https://github.com/135yshr/md2pdf/compare/v0.16.0...v0.17.0) (2026-09-10)
+
+## ✨ New Features
+- [`5ea2a6d`](https://github.com/135yshr/md2pdf/commit/5ea2a6d)  feat: pan wide console diagrams or show their source, never clip (#66) (Issues: [`#66`](https://github.com/135yshr/md2pdf/issues/66) [`#64`](https://github.com/135yshr/md2pdf/issues/64) [`#64`](https://github.com/135yshr/md2pdf/issues/64) [`#64`](https://github.com/135yshr/md2pdf/issues/64) [`#64`](https://github.com/135yshr/md2pdf/issues/64))
+
 # [v0.16.0](https://github.com/135yshr/md2pdf/compare/v0.15.0...v0.16.0) (2026-09-10)
 
 ## ✨ New Features
