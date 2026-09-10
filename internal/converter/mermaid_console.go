@@ -134,6 +134,10 @@ type consoleMermaidPlan struct {
 	// It decides what happens to a diagram no label cap could fit: written in
 	// full for the reader to scroll, or dropped to its Mermaid source.
 	canPan bool
+	// scale multiplies the columns an inline image may occupy. Zero and one both
+	// mean the wrap width, which is what every image was drawn into before
+	// -mermaid-scale existed.
+	scale float64
 }
 
 // emitsImages reports whether the plan will write image escape sequences.
@@ -365,6 +369,11 @@ func (c *Converter) prepareConsoleMermaid(md []byte, plan consoleMermaidPlan, wi
 
 	if useImages {
 		c.logf("Drawing %d Mermaid diagram(s) as %s images...", len(blocks), plan.transport.protocol)
+		if budget := scaleColumnBudget(width, plan.scale); budget > width {
+			c.logf("  -mermaid-scale %g asks for %d columns but the wrap width is %d; "+
+				"the rest of each diagram is off screen, and an inline image cannot be scrolled",
+				plan.scale, budget, width)
+		}
 	} else {
 		c.logf("Drawing %d Mermaid diagram(s) as text art...", len(blocks))
 	}
@@ -400,7 +409,8 @@ var errShowMermaidSource = errors.New("no renderer could draw this diagram")
 // something else.
 func (c *Converter) renderConsoleBlock(idx int, source string, plan consoleMermaidPlan, width int, useImages bool) (consoleDiagram, error) {
 	if useImages {
-		sequence, err := c.renderConsoleDiagram(idx, source, plan.transport, width)
+		sequence, err := c.renderConsoleDiagram(idx, source, plan.transport,
+			scaleColumnBudget(width, plan.scale))
 		if err == nil {
 			c.logf("  diagram %d drawn (%d bytes of %s escape sequence)",
 				idx, len(sequence), plan.transport.protocol)
