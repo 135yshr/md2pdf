@@ -414,9 +414,14 @@ func (c *Converter) renderConsoleBlock(idx int, source string, plan consoleMerma
 		return consoleDiagram{}, errShowMermaidSource
 	}
 	if artWidth := mermaidArtWidth(art); width > 0 && artWidth > width {
-		if !plan.canPan {
-			c.logf("  diagram %d needs %d columns but only %d are available and the output "+
-				"cannot scroll sideways; showing its source instead", idx, artWidth, width)
+		// Panning needs the pager, and a single inline image anywhere in the run
+		// makes renderConsole skip it — the art would then go straight to the
+		// terminal and be folded into fragments. useImages is that possibility,
+		// and it is settled before the first block, so every block decides the
+		// same way regardless of which ones end up rasterising.
+		if reason, ok := panBlockedReason(plan.canPan, useImages); !ok {
+			c.logf("  diagram %d needs %d columns but only %d are available and %s; "+
+				"showing its source instead", idx, artWidth, width, reason)
 			return consoleDiagram{}, errShowMermaidSource
 		}
 		c.logf("  diagram %d drawn as text art, %d columns wide; scroll right to see all of it",

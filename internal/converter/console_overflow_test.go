@@ -1,6 +1,8 @@
 package converter
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -334,4 +336,81 @@ func TestRenderConsoleDocument_PansTheReportedDiagramEndToEnd(t *testing.T) {
 			t.Errorf("the block did not fall back to its Mermaid source:\n%s", rendered)
 		}
 	})
+}
+
+// TestPrepareConsoleMermaid_DoesNotPanWhenImagesMaySkipThePager covers a mixed
+// run on an image-capable terminal: one diagram rasterises, another falls back
+// to text art too wide for the width.
+//
+// Any image at all makes renderConsole skip the pager, so the art would be
+// written straight to the terminal and folded into fragments — panning is not
+// actually available on that path. The source is, so that is what the block
+// gets. The decision cannot wait for the outcome: the pager is chosen after
+// every diagram has been drawn.
+func TestPrepareConsoleMermaid_DoesNotPanWhenImagesMaySkipThePager(t *testing.T) {
+	const width = 40
+	md := []byte("```mermaid\nflowchart LR\n  A --> B\n```\n\nmid\n\n```mermaid\n" +
+		overWideDashboardDiagram + "```\n")
+
+	dir := t.TempDir()
+	c := newTestConverter(t, &Config{Format: FormatConsole})
+	c.mermaidAvailable = func() bool { return true }
+	c.rasterizeMermaid = func(idx int, _ string) (string, error) {
+		if idx != 0 {
+			return "", errStubRasterFailure
+		}
+		path := filepath.Join(dir, "diagram.png")
+		if err := os.WriteFile(path, stubPNG(t, 100, 100), 0o644); err != nil {
+			return "", err
+		}
+		return path, nil
+	}
+
+	plan := consoleMermaidPlan{
+		mode:     MermaidRenderImage,
+		protocol: imageProtocolKitty,
+		canPan:   true,
+	}
+	rewritten, diagrams, err := c.prepareConsoleMermaid(md, plan, width)
+	if err != nil {
+		t.Fatalf("prepareConsoleMermaid: %v", err)
+	}
+	if anyPanDiagram(diagrams) {
+		t.Error("a diagram was marked for panning on a run that skips the pager")
+	}
+	if !anyImageDiagram(diagrams) {
+		t.Fatal("the first diagram did not come out as an image; this test needs it to")
+	}
+	if !strings.Contains(string(rewritten), "優先改善プロセスダッシュボード") {
+		t.Errorf("the over-wide block did not fall back to its Mermaid source:\n%s", rewritten)
+	}
+}
+
+// TestPanBlockedReason pins both conditions panning depends on, and that the
+// image one wins the explanation: it is the surprising half, since the pager is
+// available and still will not be used.
+func TestPanBlockedReason(t *testing.T) {
+	tests := []struct {
+		name          string
+		canPan        bool
+		mayDrawImages bool
+		wantAllowed   bool
+		wantReason    string
+	}{
+		{"can scroll, no images", true, false, true, ""},
+		{"cannot scroll", false, false, false, "cannot scroll sideways"},
+		{"images bypass the pager", true, true, false, "bypass the pager"},
+		{"neither", false, true, false, "bypass the pager"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			reason, allowed := panBlockedReason(tc.canPan, tc.mayDrawImages)
+			if allowed != tc.wantAllowed {
+				t.Errorf("allowed = %t, want %t", allowed, tc.wantAllowed)
+			}
+			if !strings.Contains(reason, tc.wantReason) {
+				t.Errorf("reason = %q, want it to mention %q", reason, tc.wantReason)
+			}
+		})
+	}
 }

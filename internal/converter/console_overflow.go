@@ -105,3 +105,22 @@ func pagerArgvFor(argv []string, panned bool) []string {
 	}
 	return stripQuitIfOneScreen(ensureLessNoWrap(argv))
 }
+
+// panBlockedReason reports whether an over-wide diagram may be shown in full,
+// and why not when it may not.
+//
+// Two things have to hold. The output must be able to scroll sideways at all,
+// and no inline image may be drawn in the same run: renderConsole skips the
+// pager whenever one is, and without the pager there is nothing to scroll. The
+// second condition is deliberately about what *might* be drawn rather than what
+// was, because the pager is chosen only after every diagram already exists.
+func panBlockedReason(canPan, mayDrawImages bool) (reason string, allowed bool) {
+	switch {
+	case mayDrawImages:
+		return "inline images in this run bypass the pager, so nothing can scroll", false
+	case !canPan:
+		return "the output cannot scroll sideways", false
+	default:
+		return "", true
+	}
+}
