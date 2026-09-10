@@ -30,9 +30,13 @@ linters:
     govet:
       enable-all: true
       disable:
-        # Struct field order. Every finding is a table-driven test's anonymous
-        # struct, where the memory layout is irrelevant and field order that
-        # matches the test's story is worth more than eight bytes of padding.
+        # Struct field order, off for the whole module rather than for tests
+        # alone. Two thirds of its findings were table-driven tests' anonymous
+        # structs; the rest were Config, Converter, the -doctor status structs
+        # and five local ones in pdf.go. Each of those is allocated once or a
+        # handful of times per conversion, so the padding saved is not
+        # measurable, while Config's field order deliberately follows its
+        # documentation.
         - fieldalignment
 
     misspell:
