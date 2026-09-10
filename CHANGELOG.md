@@ -1,3 +1,8 @@
+# [v0.18.0](https://github.com/135yshr/md2pdf/compare/v0.17.0...v0.18.0) (2026-09-10)
+
+## ✨ New Features
+- [`821c616`](https://github.com/135yshr/md2pdf/commit/821c616)  feat: tunnel inline diagram images through tmux passthrough (#67) (Issues: [`#67`](https://github.com/135yshr/md2pdf/issues/67) [`#66`](https://github.com/135yshr/md2pdf/issues/66) [`#64`](https://github.com/135yshr/md2pdf/issues/64))
+
 # [v0.17.0](https://github.com/135yshr/md2pdf/compare/v0.16.0...v0.17.0) (2026-09-10)
 
 ## ✨ New Features
