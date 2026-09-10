@@ -615,3 +615,40 @@ func TestPrepareConsoleMermaid_WarnsAboutClippingWithoutVerbose(t *testing.T) {
 		})
 	}
 }
+
+// TestFitMermaidLabels_LeavesPipeEdgeLabelsAlone covers the other way an edge
+// label can hold a bracket: unquoted, between pipes. The characters before the
+// bracket still look like a node id, so the pipe span has to be stepped over the
+// same way a quoted one is.
+func TestFitMermaidLabels_LeavesPipeEdgeLabelsAlone(t *testing.T) {
+	tests := []struct {
+		name   string
+		source string
+		want   string
+	}{
+		{
+			name:   "bracket inside a pipe edge label",
+			source: "graph LR\n  A -->|read [the long documentation]| B\n",
+			want:   "graph LR\n  A -->|read [the long documentation]| B\n",
+		},
+		{
+			name:   "node labels around a pipe edge label are still rewritten",
+			source: "graph LR\n  A[Alpha Beta Gamma] -->|read [the docs]| B[Delta Epsilon]\n",
+			want:   "graph LR\n  A[Alpha<br>Beta<br>Gamma] -->|read [the docs]| B[Delta<br>Epsilon]\n",
+		},
+		{
+			// A lone pipe is not a span; swallowing the rest of the line would
+			// lose every node after it.
+			name:   "an unmatched pipe does not swallow the line",
+			source: "graph LR\n  A[Alpha Beta Gamma] --> B | C\n",
+			want:   "graph LR\n  A[Alpha<br>Beta<br>Gamma] --> B | C\n",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := fitMermaidLabels(tc.source, 8); got != tc.want {
+				t.Errorf("fitMermaidLabels()\n got: %q\nwant: %q", got, tc.want)
+			}
+		})
+	}
+}

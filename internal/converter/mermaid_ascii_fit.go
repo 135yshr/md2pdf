@@ -245,12 +245,13 @@ func rewritableLine(line string) bool {
 
 // fitLabelsInLine wraps every node label on one line of Mermaid source.
 //
-// Quoted stretches are stepped over rather than searched. A shape delimiter is
-// only a delimiter outside quotes: in an edge label such as
-// A -- "read [the docs]" --> B the characters before the bracket look like a
-// node id, but the bracket is quoted text. A quoted node label is unaffected,
-// since its delimiter sits outside the quotes and the whole span is consumed at
-// once.
+// Edge labels are stepped over rather than searched, in both spellings Mermaid
+// allows. A shape delimiter is only a delimiter outside them: in
+// A -- "read [the docs]" --> B and A -->|read [the docs]| B alike, the
+// characters before the bracket look like a node id, but the bracket is label
+// text this rewrite has no business touching. A node label is unaffected either
+// way, since its delimiter sits outside the quotes or pipes and the whole span
+// is consumed in one step.
 func fitLabelsInLine(line string, maxWidth int) string {
 	var out strings.Builder
 	inQuotes := false
@@ -265,6 +266,16 @@ func fitLabelsInLine(line string, maxWidth int) string {
 			out.WriteByte(line[i])
 			i++
 			continue
+		}
+		// A pipe only opens an edge label when another one closes it. A lone
+		// pipe is just a character, and treating it as an opener would swallow
+		// every node after it.
+		if line[i] == '|' {
+			if end, ok := findLabelEnd(line, i+1, "|"); ok {
+				out.WriteString(line[i : end+1])
+				i = end + 1
+				continue
+			}
 		}
 		opener, closer, value, ok := labelValueAt(line, i)
 		if !ok {
