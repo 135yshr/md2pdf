@@ -62,6 +62,7 @@ func (p *program) parseFlags(args []string) (*converter.Config, error) {
 	consoleStyle := fs.String("style", "", "Console color theme: auto (default), dark, light, notty, ... or a JSON stylesheet path")
 	consolePager := fs.Bool("pager", true, "Send console output through $PAGER (default: less -R -F) on a terminal")
 	mermaidRender := fs.String("mermaid-render", "", "Console Mermaid rendering: auto (default), image, ascii or source")
+	mermaidScale := fs.Float64("mermaid-scale", 0, "Scale inline console diagram images (1: natural size within the wrap width)")
 	marginTop := fs.String("margin-top", "18mm", "Top margin (e.g. 18mm, 1in)")
 	marginBottom := fs.String("margin-bottom", "18mm", "Bottom margin")
 	marginLeft := fs.String("margin-left", "14mm", "Left margin")
@@ -141,6 +142,19 @@ func (p *program) parseFlags(args []string) (*converter.Config, error) {
 		if err := converter.ValidateMermaidRenderMode(*mermaidRender); err != nil {
 			return nil, err
 		}
+		if err := converter.ValidateMermaidScale(*mermaidScale); err != nil {
+			return nil, err
+		}
+		// Only the image step has a size to scale. Accepting the flag for text
+		// art or source output would leave it silently doing nothing, so the
+		// combination is rejected instead.
+		if *mermaidScale != 0 &&
+			(*mermaidRender == converter.MermaidRenderASCII || *mermaidRender == converter.MermaidRenderSource) {
+			return nil, fmt.Errorf("-mermaid-scale cannot apply to -mermaid-render %s: "+
+				"only inline images have a size to scale", *mermaidRender)
+		}
+	} else if *mermaidScale != 0 {
+		return nil, fmt.Errorf("-mermaid-scale only applies to console output, not %s", outFormat)
 	}
 
 	// Resolve font paths.
@@ -178,6 +192,7 @@ func (p *program) parseFlags(args []string) (*converter.Config, error) {
 		MarginLeft:       *marginLeft,
 		MarginRight:      *marginRight,
 		ConsoleWidth:     *consoleWidth,
+		MermaidScale:     *mermaidScale,
 		ConsoleStyle:     *consoleStyle,
 		ConsolePager:     *consolePager,
 		MermaidRender:    *mermaidRender,

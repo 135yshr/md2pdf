@@ -135,6 +135,10 @@ type consoleMermaidPlan struct {
 	// It decides what happens to a diagram no label cap could fit: written in
 	// full for the reader to scroll, or dropped to its Mermaid source.
 	canPan bool
+	// scale multiplies the columns an inline image may occupy. Zero and one both
+	// mean the wrap width, which is what every image was drawn into before
+	// -mermaid-scale existed.
+	scale float64
 }
 
 // emitsImages reports whether the plan will write image escape sequences.
@@ -409,7 +413,7 @@ func (c *Converter) renderConsoleBlock(ctx context.Context, idx int, source stri
 	}
 
 	if useImages {
-		sequence, err := c.renderConsoleDiagram(ctx, idx, source, plan.transport, width)
+		sequence, err := c.renderConsoleDiagram(ctx, idx, source, plan.transport, width, plan.scale)
 		if err == nil {
 			c.logf("  diagram %d drawn (%d bytes of %s escape sequence)",
 				idx, len(sequence), plan.transport.protocol)
@@ -454,7 +458,7 @@ func (c *Converter) renderConsoleBlock(ctx context.Context, idx int, source stri
 
 // renderConsoleDiagram rasterizes one Mermaid block and encodes the PNG for the
 // terminal.
-func (c *Converter) renderConsoleDiagram(ctx context.Context, idx int, source string, transport terminalImageTransport, width int) (string, error) {
+func (c *Converter) renderConsoleDiagram(ctx context.Context, idx int, source string, transport terminalImageTransport, width int, scale float64) (string, error) {
 	pngPath, err := c.rasterizeMermaid(ctx, idx, source)
 	if err != nil {
 		return "", err
@@ -463,7 +467,7 @@ func (c *Converter) renderConsoleDiagram(ctx context.Context, idx int, source st
 	if err != nil {
 		return "", fmt.Errorf("read rendered diagram: %w", err)
 	}
-	return encodeTerminalImage(transport, data, width)
+	return encodeTerminalImage(transport, data, width, scale)
 }
 
 // consoleDiagramPNG rasterizes a Mermaid block to a PNG and returns its
@@ -519,21 +523,36 @@ func fencedMermaid(source string) string {
 const consoleImageCellWidthPx = 10
 
 // fitColumns returns the number of terminal columns a diagram of the given pixel
-// width should occupy, clamped to maxColumns. The second result reports whether
-// the diagram had to be shrunk, so images that already fit keep their natural
-// size instead of being stretched across the terminal.
-func fitColumns(pixelWidth, maxColumns int) (cols int, clamped bool) {
+// width should occupy: its natural size multiplied by scale, then held to
+// maxColumns. The second result reports whether that differs from the natural
+// size, which is what decides whether a sizing parameter is written at all —
+// an image left alone keeps whatever size the terminal gives it rather than
+// being stretched across the screen.
+//
+// The scale applies to the diagram, not to maxColumns. Scaling the ceiling
+// instead would do nothing for any diagram already narrower than it, which is
+// most of them: a 40-column diagram asked to halve would stay at 40, since 40
+// still fits under the lowered ceiling.
+//
+// Enlarging stops at maxColumns because an inline image cannot be scrolled the
+// way panned text art can, so columns past the wrap width have nowhere to go.
+func fitColumns(pixelWidth, maxColumns int, scale float64) (cols int, sized bool) {
 	natural := max(1, (pixelWidth+consoleImageCellWidthPx-1)/consoleImageCellWidthPx)
-	if maxColumns > 0 && natural > maxColumns {
-		return maxColumns, true
+
+	target := natural
+	if scale > 0 && scale != 1 {
+		target = max(1, int(math.Round(float64(natural)*scale)))
 	}
-	return natural, false
+	if maxColumns > 0 && target > maxColumns {
+		target = maxColumns
+	}
+	return target, target != natural
 }
 
 // encodeTerminalImage encodes a PNG diagram as an inline image escape sequence
 // for the given protocol, scaled down to at most maxColumns terminal columns.
-func encodeTerminalImage(transport terminalImageTransport, data []byte, maxColumns int) (string, error) {
-	sequence, err := encodeImageSequence(transport.protocol, data, maxColumns)
+func encodeTerminalImage(transport terminalImageTransport, data []byte, maxColumns int, scale float64) (string, error) {
+	sequence, err := encodeImageSequence(transport.protocol, data, maxColumns, scale)
 	if err != nil {
 		return "", err
 	}
@@ -545,12 +564,12 @@ func encodeTerminalImage(transport terminalImageTransport, data []byte, maxColum
 
 // encodeImageSequence encodes a PNG diagram as the protocol's own inline image
 // escape sequence, scaled down to at most maxColumns terminal columns.
-func encodeImageSequence(protocol terminalImageProtocol, data []byte, maxColumns int) (string, error) {
+func encodeImageSequence(protocol terminalImageProtocol, data []byte, maxColumns int, scale float64) (string, error) {
 	img, err := png.Decode(bytes.NewReader(data))
 	if err != nil {
 		return "", fmt.Errorf("decode diagram PNG: %w", err)
 	}
-	cols, clamped := fitColumns(img.Bounds().Dx(), maxColumns)
+	cols, sized := fitColumns(img.Bounds().Dx(), maxColumns, scale)
 
 	switch protocol {
 	case imageProtocolKitty:
@@ -561,7 +580,7 @@ func encodeImageSequence(protocol terminalImageProtocol, data []byte, maxColumns
 			Quiet:        2,
 			Chunk:        true,
 		}
-		if clamped {
+		if sized {
 			opts.Columns = cols
 		}
 		var buf bytes.Buffer
@@ -575,14 +594,14 @@ func encodeImageSequence(protocol terminalImageProtocol, data []byte, maxColumns
 			Inline:  true,
 			Content: []byte(base64.StdEncoding.EncodeToString(data)),
 		}
-		if clamped {
+		if sized {
 			file.Width = iterm2.Cells(cols)
 		}
 		return ansi.ITerm2(file), nil
 
 	case imageProtocolSixel:
-		if clamped {
-			img = downscaleImage(img, cols*consoleImageCellWidthPx)
+		if sized {
+			img = resampleImage(img, cols*consoleImageCellWidthPx)
 		}
 		var payload bytes.Buffer
 		if err := (&sixel.Encoder{}).Encode(&payload, img); err != nil {
@@ -598,13 +617,21 @@ func encodeImageSequence(protocol terminalImageProtocol, data []byte, maxColumns
 	}
 }
 
-// downscaleImage shrinks src to targetWidth pixels, preserving the aspect ratio.
+// resampleImage resizes src to targetWidth pixels, preserving the aspect ratio.
+//
 // Each destination pixel averages the source pixels it covers, which suits the
 // downscaling of an already-supersampled mmdc render better than picking a
-// single nearest sample. Images at or below targetWidth are returned unchanged.
-func downscaleImage(src image.Image, targetWidth int) image.Image {
+// single nearest sample; enlarging falls out of the same loop as a
+// nearest-neighbor sample, since each destination pixel then covers one source
+// pixel. It resizes in **both** directions on purpose: Sixel is the only
+// protocol md2pdf resizes for itself — kitty and iTerm2 are handed a column
+// count and scale on their side — so refusing to enlarge here left
+// -mermaid-scale above 1 doing nothing in a Sixel terminal.
+//
+// A target of zero or the width src already has returns src untouched.
+func resampleImage(src image.Image, targetWidth int) image.Image {
 	bounds := src.Bounds()
-	if targetWidth <= 0 || bounds.Dx() <= targetWidth {
+	if targetWidth <= 0 || bounds.Dx() == targetWidth {
 		return src
 	}
 

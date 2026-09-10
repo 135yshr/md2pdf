@@ -335,3 +335,58 @@ func TestParseFlags_PerWeightFontNeedsNoLocalNames(t *testing.T) {
 		t.Errorf("FontBold = %q, want the sibling %q", cfg.FontBold, want)
 	}
 }
+
+// TestParseFlags_MermaidScale covers the -mermaid-scale flag, including the
+// combinations that can never do anything. A flag that is silently ignored is
+// worse than one that says it cannot apply, so text art and source output
+// reject it rather than accepting it and doing nothing.
+func TestParseFlags_MermaidScale(t *testing.T) {
+	dir := t.TempDir()
+	input := filepath.Join(dir, "doc.md")
+	if err := os.WriteFile(input, []byte("# T\n"), 0o644); err != nil {
+		t.Fatalf("write input: %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		args    []string
+		want    float64
+		wantErr bool
+	}{
+		{"default is unset", []string{"-format", "console", input}, 0, false},
+		{"half", []string{"-format", "console", "-mermaid-scale", "0.5", input}, 0.5, false},
+		{"double", []string{"-format", "console", "-mermaid-scale", "2", input}, 2, false},
+		{"with an explicit image mode",
+			[]string{"-format", "console", "-mermaid-render", "image", "-mermaid-scale", "0.5", input}, 0.5, false},
+		{"out of range", []string{"-format", "console", "-mermaid-scale", "99", input}, 0, true},
+		{"negative", []string{"-format", "console", "-mermaid-scale", "-1", input}, 0, true},
+		// Text art has no scale: a character is a character.
+		{"rejected with ascii",
+			[]string{"-format", "console", "-mermaid-render", "ascii", "-mermaid-scale", "0.5", input}, 0, true},
+		{"rejected with source",
+			[]string{"-format", "console", "-mermaid-render", "source", "-mermaid-scale", "0.5", input}, 0, true},
+		// Only console output draws inline images at all.
+		{"rejected outside console output",
+			[]string{"-format", "html", "-mermaid-scale", "0.5", "-o", filepath.Join(dir, "o.html"), input}, 0, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := parseFlags(tc.args)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("parseFlags(%v) = %+v, want an error", tc.args, cfg)
+				}
+				if !strings.Contains(err.Error(), "mermaid-scale") {
+					t.Errorf("error %q does not name the flag", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseFlags(%v) error = %v", tc.args, err)
+			}
+			if cfg.MermaidScale != tc.want {
+				t.Errorf("MermaidScale = %v, want %v", cfg.MermaidScale, tc.want)
+			}
+		})
+	}
+}

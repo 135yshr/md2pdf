@@ -62,6 +62,16 @@ Options:
                           source always prints the Mermaid source.
                           Inline images bypass the pager, which cannot display
                           them; text art pages normally.
+                          A diagram too wide for the terminal is shown in full
+                          and scrolled sideways when the pager can do that,
+                          and printed as source when it cannot; it is never
+                          shown with its right edge cut off.
+  -mermaid-scale <n>      Scale inline console diagram images, where 1 is the
+                          natural size (default). 0.5 halves a diagram and 2
+                          doubles it; enlarging stops at the wrap width,
+                          since an inline image cannot be scrolled. Accepts
+                          0.1 to 4. Applies to images only, so it cannot be
+                          combined with -mermaid-render ascii or source.
   -doctor                 Report which runtime dependencies are present and
                           which output formats can run, then exit. Exits
                           non-zero when a format is blocked, so it works as a
@@ -95,6 +105,7 @@ Examples:
   %[1]s -format console -mermaid-render image document.md
   %[1]s -format console -mermaid-render ascii document.md
   %[1]s -format console -mermaid-render source document.md
+  %[1]s -format console -mermaid-render image -mermaid-scale 0.5 document.md
   %[1]s -doctor
   %[1]s -font /path/to/NotoSansCJK-Regular.ttc document.md
   cat doc.md | %[1]s -format console -

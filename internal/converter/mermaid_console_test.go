@@ -180,7 +180,7 @@ func TestEncodeTerminalImage_ProtocolSequences(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := encodeTerminalImage(terminalImageTransport{protocol: tc.protocol}, data, 40)
+			got, err := encodeTerminalImage(terminalImageTransport{protocol: tc.protocol}, data, 40, 1)
 			if err != nil {
 				t.Fatalf("encodeTerminalImage: %v", err)
 			}
@@ -195,14 +195,14 @@ func TestEncodeTerminalImage_ProtocolSequences(t *testing.T) {
 }
 
 func TestEncodeTerminalImage_NoneIsAnError(t *testing.T) {
-	if _, err := encodeTerminalImage(terminalImageTransport{protocol: imageProtocolNone}, stubPNG(t, 8, 8), 40); err == nil {
+	if _, err := encodeTerminalImage(terminalImageTransport{protocol: imageProtocolNone}, stubPNG(t, 8, 8), 40, 1); err == nil {
 		t.Error("expected an error for imageProtocolNone")
 	}
 }
 
 func TestEncodeTerminalImage_RejectsInvalidPNG(t *testing.T) {
 	for _, p := range []terminalImageProtocol{imageProtocolKitty, imageProtocolITerm2, imageProtocolSixel} {
-		if _, err := encodeTerminalImage(terminalImageTransport{protocol: p}, []byte("not a png"), 40); err == nil {
+		if _, err := encodeTerminalImage(terminalImageTransport{protocol: p}, []byte("not a png"), 40, 1); err == nil {
 			t.Errorf("protocol %v accepted invalid PNG data", p)
 		}
 	}
@@ -213,7 +213,7 @@ func TestEncodeTerminalImage_RejectsInvalidPNG(t *testing.T) {
 func TestEncodeTerminalImage_ConstrainsWideImages(t *testing.T) {
 	wide := stubPNG(t, 4000, 400)
 
-	kittySeq, err := encodeTerminalImage(terminalImageTransport{protocol: imageProtocolKitty}, wide, 40)
+	kittySeq, err := encodeTerminalImage(terminalImageTransport{protocol: imageProtocolKitty}, wide, 40, 1)
 	if err != nil {
 		t.Fatalf("kitty: %v", err)
 	}
@@ -221,7 +221,7 @@ func TestEncodeTerminalImage_ConstrainsWideImages(t *testing.T) {
 		t.Errorf("kitty sequence does not clamp columns to 40: %q", firstBytes(kittySeq, 120))
 	}
 
-	itermSeq, err := encodeTerminalImage(terminalImageTransport{protocol: imageProtocolITerm2}, wide, 40)
+	itermSeq, err := encodeTerminalImage(terminalImageTransport{protocol: imageProtocolITerm2}, wide, 40, 1)
 	if err != nil {
 		t.Fatalf("iterm2: %v", err)
 	}
@@ -234,7 +234,7 @@ func TestEncodeTerminalImage_ConstrainsWideImages(t *testing.T) {
 // already fits is not blown up to fill the terminal.
 func TestEncodeTerminalImage_LeavesNarrowImagesAtNaturalSize(t *testing.T) {
 	narrow := stubPNG(t, 40, 20)
-	seq, err := encodeTerminalImage(terminalImageTransport{protocol: imageProtocolKitty}, narrow, 100)
+	seq, err := encodeTerminalImage(terminalImageTransport{protocol: imageProtocolKitty}, narrow, 100, 1)
 	if err != nil {
 		t.Fatalf("encodeTerminalImage: %v", err)
 	}

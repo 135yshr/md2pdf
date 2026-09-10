@@ -134,6 +134,7 @@ func (c *Converter) renderConsole(ctx context.Context, inputs []string, out *os.
 	}
 	plan.pureASCII = consoleWantsPureASCII(c.cfg.ConsoleStyle, env.envStyle, style)
 	plan.canPan = resolveConsolePan(c.cfg.ConsolePager, env.isTTY, pagerArgv, pagerAvailable)
+	plan.scale = c.cfg.MermaidScale
 
 	docs := make([][]byte, 0, len(inputs))
 	var drawn consoleDrawn
