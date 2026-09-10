@@ -98,6 +98,10 @@ type Config struct {
 	// ConsolePager sends console output through $PAGER (default: less -R -F)
 	// when writing to an interactive terminal.
 	ConsolePager bool
+	// MermaidScale multiplies the columns an inline diagram image may occupy in
+	// console output. Zero draws each diagram at its natural size within the
+	// wrap width, which is the behaviour without the flag.
+	MermaidScale float64
 	// MermaidRender selects how Mermaid blocks are drawn in console output:
 	// "auto" (default), "image" or "source".
 	MermaidRender string
