@@ -314,3 +314,67 @@ func mermaidArtWidth(art string) int {
 	}
 	return widest
 }
+
+// labelFitCaps lists the label widths the fit loop tries, widest first, so the
+// least-wrapped art that fits is the one chosen. The list stops at 8 columns:
+// below that a label is broken into so many lines that the box is taller than it
+// is readable, and the diagram has stopped being worth drawing.
+var labelFitCaps = []int{40, 32, 24, 20, 16, 12, 8}
+
+// fitLabelDiagramPrefixes lists the diagram types whose labels may be wrapped.
+// Sequence diagrams are excluded: they have no bracketed node labels, so a
+// rewrite there could only corrupt the source.
+var fitLabelDiagramPrefixes = []string{"flowchart", "graph"}
+
+// diagramSupportsLabelFitting reports whether source names a diagram type whose
+// node labels the fit loop may rewrite.
+func diagramSupportsLabelFitting(source string) bool {
+	header, ok := mermaidDiagramHeader(source)
+	if !ok {
+		return false
+	}
+	for _, prefix := range fitLabelDiagramPrefixes {
+		if header == prefix || strings.HasPrefix(header, prefix+" ") {
+			return true
+		}
+	}
+	return false
+}
+
+// fitMermaidArt narrows text art that overruns width by wrapping its node
+// labels, and returns art unchanged when it already fits.
+//
+// Wrapping the labels is the only lever available. mermaid-ascii sizes each box
+// from its label and lays independent chains out side by side, so a wide
+// diagram is wide because its labels are; the library's own MaxWidth only
+// compacts padding once and never reflows a layout. Trading width for height
+// this way is what keeps every chain on screen instead of clipping the
+// rightmost ones away.
+//
+// Nothing here can fail: a rewrite the renderer rejects, and a diagram too wide
+// even at the narrowest cap, both fall back to art that draws. The caller is
+// left to decide what to do about art that is still too wide.
+func fitMermaidArt(source, art string, width int, pureASCII bool) string {
+	if width <= 0 || mermaidArtWidth(art) <= width || !diagramSupportsLabelFitting(source) {
+		return art
+	}
+
+	narrowest := art
+	for _, labelCap := range labelFitCaps {
+		fitted := fitMermaidLabels(source, labelCap)
+		if fitted == source {
+			continue
+		}
+		candidate, err := renderMermaidArt(fitted, width, pureASCII)
+		if err != nil {
+			continue
+		}
+		switch candidateWidth := mermaidArtWidth(candidate); {
+		case candidateWidth <= width:
+			return candidate
+		case candidateWidth < mermaidArtWidth(narrowest):
+			narrowest = candidate
+		}
+	}
+	return narrowest
+}

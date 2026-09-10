@@ -295,3 +295,34 @@ func TestRenderMermaidASCII_LeavesFittingDiagramsUntouched(t *testing.T) {
 		t.Errorf("art is %d columns wide, want at most 80:\n%s", w, art)
 	}
 }
+
+// TestRenderMermaidASCII_FitsAnOverWideDiagram is the reported defect. Four
+// independent chains laid side by side came to 152 columns, and clipping to the
+// wrap width dropped the fourth one entirely with no warning. Wrapping the
+// labels has to bring the whole diagram inside the width instead.
+func TestRenderMermaidASCII_FitsAnOverWideDiagram(t *testing.T) {
+	const source = "graph TB\n" +
+		"    A[メインダッシュボード<br>/] --> B[AI Enablement Index・利用サマリー・リスク・成果]\n" +
+		"    E[セキュリティダッシュボード<br>/dashboard/security] --> F[リスク分析・アラート監視]\n" +
+		"    C[ユースケースダッシュボード<br>/dashboard/use-case] --> D[ユースケース分析・カテゴリ分析]\n" +
+		"    G[優先改善プロセスダッシュボード<br>/dashboard/priority-process] --> H[業務プロセス改善・利用促進]\n"
+	const width = 118
+
+	art, err := renderMermaidASCII(source, width, false)
+	if err != nil {
+		t.Fatalf("renderMermaidASCII: %v", err)
+	}
+	if w := mermaidArtWidth(art); w > width {
+		t.Errorf("art is %d columns wide, want at most %d:\n%s", w, width, art)
+	}
+	// The paths are unbreakable tokens, so each surviving chain still shows its
+	// own path in full. All four must be there.
+	for _, want := range []string{"/dashboard/security", "/dashboard/use-case", "/dashboard/priority-process"} {
+		if !strings.Contains(art, want) {
+			t.Errorf("chain %q is missing from the art:\n%s", want, art)
+		}
+	}
+	if boxes := strings.Count(strings.SplitN(art, "\n", 2)[0], "┌"); boxes != 4 {
+		t.Errorf("top row has %d boxes, want 4:\n%s", boxes, art)
+	}
+}
