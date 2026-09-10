@@ -95,6 +95,12 @@ Go modules: `github.com/yuin/goldmark` (Markdown parsing), `charm.land/glamour/v
 
 Only the *image* step of the console Mermaid chain needs `mmdc`. Its absence downgrades diagrams to text art, which is rendered in-process — console output never requires an external tool and never fails the run over a missing one.
 
+## Releasing
+
+**A pull request title without a leading gitmoji ships nothing, and says nothing.** `main` is squash-merged, so the pull request title becomes the commit subject, and `semantic-release-gitmoji` reads only the **leading gitmoji of that subject** — `parse-commits.js` bails on `matched.index !== 0`, so a gitmoji anywhere else, the body included, is invisible. With no match, `Auto Release` still exits 0, logs "There will be no new version", and its goreleaser job is skipped by `if: needs.release.outputs.new_tag != ''`. No tag, no GitHub release, no Homebrew formula update — the work sits on `main` unreleased. This is how #65 (`mdview`) and #69 shipped to nobody. `.github/workflows/pr-title.yml` now fails such a title before it can be merged; it calls the plugin's own `getReleaseType` against `.releaserc.json` rather than keeping a second copy of the rules, so the check and the release cannot drift apart.
+
+Write the `:shortcode:`, not the character: `emojify(':construction_worker:')` is 👷‍♂️, a different grapheme from a pasted 👷, and only the shortcode matches `releaseRules`. A shortcode `node-emoji` cannot resolve is dropped from those rules **silently** by `get-config.js`'s `.filter(hasEmoji)` — `:camera_flash:` and `:monocle_face:` were both dead this way until the check started failing on them. One release covers everything accumulated since the last tag, and its size is decided by the single commit that triggers it. Dependabot is exempt from the check, since its titles come from `.github/dependabot.yml` and its bumps ride along in the next release.
+
 ## Code Style
 
 - All exported symbols require GoDoc comments ending with a period (godot linter)
