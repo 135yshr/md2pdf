@@ -35,60 +35,6 @@ func TestPagerCanPan(t *testing.T) {
 	}
 }
 
-// TestEnsureLessNoWrap covers the -S that turns folding into horizontal
-// scrolling. Without it less wraps an over-wide diagram into fragments, which
-// is the state fitting set out to avoid.
-func TestEnsureLessNoWrap(t *testing.T) {
-	tests := []struct {
-		name string
-		argv []string
-		want []string
-	}{
-		{"adds -S", []string{"less", "-R"}, []string{"less", "-R", "-S"}},
-		{"keeps an existing -S", []string{"less", "-S"}, []string{"less", "-S"}},
-		{"keeps -S in a cluster", []string{"less", "-RS"}, []string{"less", "-RS"}},
-		{"keeps --chop-long-lines", []string{"less", "--chop-long-lines"}, []string{"less", "--chop-long-lines"}},
-		// -s squeezes blank lines and is not -S; the check must be case
-		// sensitive or an over-wide diagram would still fold.
-		{"does not mistake -s for -S", []string{"less", "-s"}, []string{"less", "-s", "-S"}},
-		{"leaves other pagers alone", []string{"more"}, []string{"more"}},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := ensureLessNoWrap(append([]string(nil), tc.argv...))
-			if strings.Join(got, " ") != strings.Join(tc.want, " ") {
-				t.Errorf("ensureLessNoWrap(%v) = %v, want %v", tc.argv, got, tc.want)
-			}
-		})
-	}
-}
-
-// TestStripQuitIfOneScreen covers -F, which makes less print the file and exit
-// when it fits on one screen. That leaves the terminal to fold the wide lines
-// with no chance to scroll, so panning has to give it up.
-func TestStripQuitIfOneScreen(t *testing.T) {
-	tests := []struct {
-		name string
-		argv []string
-		want []string
-	}{
-		{"drops a standalone -F", []string{"less", "-R", "-F"}, []string{"less", "-R"}},
-		{"drops --quit-if-one-screen", []string{"less", "--quit-if-one-screen"}, []string{"less"}},
-		{"drops F from a cluster", []string{"less", "-RF"}, []string{"less", "-R"}},
-		{"drops a cluster that was only F", []string{"less", "-F", "-R"}, []string{"less", "-R"}},
-		{"leaves argv without -F alone", []string{"less", "-R", "-S"}, []string{"less", "-R", "-S"}},
-		{"leaves other pagers alone", []string{"more", "-F"}, []string{"more", "-F"}},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := stripQuitIfOneScreen(append([]string(nil), tc.argv...))
-			if strings.Join(got, " ") != strings.Join(tc.want, " ") {
-				t.Errorf("stripQuitIfOneScreen(%v) = %v, want %v", tc.argv, got, tc.want)
-			}
-		})
-	}
-}
-
 // TestResolveConsolePan covers the decision that replaces clipping: whether the
 // rendered document reaches the reader through something that can show a line
 // wider than the screen.
@@ -273,8 +219,15 @@ func TestPagerArgvFor(t *testing.T) {
 		want   []string
 	}{
 		{"no panning leaves the default alone", []string{"less", "-R", "-F"}, false, []string{"less", "-R", "-F"}},
-		{"panning chops lines and drops -F", []string{"less", "-R", "-F"}, true, []string{"less", "-R", "-S"}},
-		{"panning through a cluster", []string{"less", "-RF"}, true, []string{"less", "-R", "-S"}},
+		{"panning chops lines and cancels -F", []string{"less", "-R", "-F"}, true, []string{"less", "-R", "-S", "-+F"}},
+		// -S is appended, never detected. less takes a repeated boolean option
+		// as "on", and inspecting the existing flags cannot be done safely: the
+		// S in -PSTATUS is prompt text, not a cluster of boolean options.
+		{"an existing -S is simply re-set", []string{"less", "-S"}, true, []string{"less", "-S", "-S", "-+F"}},
+		{"a prompt argument is never read as flags", []string{"less", "-PSTATUS"}, true, []string{"less", "-PSTATUS", "-S", "-+F"}},
+		// -F can also arrive through $LESS, which no argv rewrite can reach, so
+		// it is cancelled with -+F rather than carved out of a cluster.
+		{"-F inside a cluster is cancelled, not carved out", []string{"less", "-RF"}, true, []string{"less", "-RF", "-S", "-+F"}},
 		{"panning through a non-less pager is left alone", []string{"more"}, true, []string{"more"}},
 	}
 	for _, tc := range tests {

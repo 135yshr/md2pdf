@@ -2,7 +2,6 @@ package converter
 
 import (
 	"path/filepath"
-	"strings"
 )
 
 // lessBinary is the only pager md2pdf knows how to make scroll sideways.
@@ -24,59 +23,6 @@ func pagerCanPan(argv []string) bool {
 	return isLess(argv)
 }
 
-// ensureLessNoWrap appends -S when the configured pager is less without a
-// chop-long-lines flag. Without it less folds an over-wide diagram into
-// fragments instead of letting the reader scroll right.
-//
-// The check is case sensitive: less spells blank-line squeezing -s, and
-// treating that as -S would leave the diagram folded.
-func ensureLessNoWrap(argv []string) []string {
-	if !isLess(argv) {
-		return argv
-	}
-	for _, arg := range argv[1:] {
-		switch {
-		case strings.HasPrefix(arg, "--chop"):
-			return argv
-		case strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "--") &&
-			strings.Contains(arg, "S"):
-			return argv
-		}
-	}
-	return append(argv, "-S")
-}
-
-// stripQuitIfOneScreen removes less's -F from the pager command line.
-//
-// -F prints the file and exits when it fits on one screen, which hands the wide
-// lines to the terminal to fold with no chance to scroll. Panning is worth more
-// than the convenience of not entering the pager for a short document, so the
-// flag is dropped — including out of a cluster such as -RF — whenever a diagram
-// is being shown over-wide.
-func stripQuitIfOneScreen(argv []string) []string {
-	if !isLess(argv) {
-		return argv
-	}
-	// A fresh slice, not argv[:1]: appending into argv's own array would
-	// clobber the caller's flags.
-	out := make([]string, 0, len(argv))
-	out = append(out, argv[0])
-	for _, arg := range argv[1:] {
-		switch {
-		case arg == "--quit-if-one-screen":
-			continue
-		case strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "--") &&
-			strings.Contains(arg, "F"):
-			if kept := "-" + strings.ReplaceAll(arg[1:], "F", ""); kept != "-" {
-				out = append(out, kept)
-			}
-			continue
-		}
-		out = append(out, arg)
-	}
-	return out
-}
-
 // resolveConsolePan reports whether an over-wide diagram may be written in full
 // rather than dropped to its Mermaid source.
 //
@@ -96,14 +42,34 @@ func resolveConsolePan(pagerEnabled, isTTY bool, pagerArgv []string, pagerAvaila
 // diagram being shown wider than the screen.
 //
 // Two changes are needed together: -S so less chops the long lines instead of
-// folding them, and no -F so it does not print the document and exit before the
+// folding them, and -+F so it does not print the document and exit before the
 // reader can scroll. A pager md2pdf does not recognise is left untouched —
 // resolveConsolePan has already ruled out panning in that case.
+//
+// Both are appended rather than merged into the existing flags, because the
+// existing flags cannot be parsed safely from here. In `less -PSTATUS` the S
+// belongs to the prompt string, not to a cluster of boolean options, so testing
+// for a letter would both miss a real -F and mangle a prompt. Appending is
+// enough: less applies command-line options left to right, so a trailing -S sets
+// chop-long-lines whatever came before, and -+F resets quit-if-one-screen even
+// when it was set in $LESS.
 func pagerArgvFor(argv []string, panned bool) []string {
-	if !panned {
+	if !panned || !isLess(argv) {
 		return argv
 	}
-	return stripQuitIfOneScreen(ensureLessNoWrap(argv))
+
+	// A standalone -F is dropped only to keep the logged command line readable.
+	// The flag that actually matters is the trailing -+F, which cancels the
+	// option however it arrived — including through $LESS, where less also reads
+	// its options and where no rewrite of argv could reach it.
+	out := make([]string, 0, len(argv)+2)
+	for _, arg := range argv {
+		if arg == "-F" || arg == "--quit-if-one-screen" {
+			continue
+		}
+		out = append(out, arg)
+	}
+	return append(out, "-S", "-+F")
 }
 
 // panBlockedReason reports whether an over-wide diagram may be shown in full,
