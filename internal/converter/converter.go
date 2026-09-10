@@ -332,7 +332,7 @@ func ChromiumPath() (string, error) {
 func chromiumPath() (string, error) {
 	// Honour CHROME_PATH if set. Fail fast on invalid values.
 	if p := os.Getenv("CHROME_PATH"); p != "" {
-		info, err := os.Stat(p)
+		info, err := os.Stat(p) //nolint:gosec // G703: CHROME_PATH names the browser to run, so an arbitrary path is the point
 		if err != nil {
 			return "", fmt.Errorf("CHROME_PATH is set but invalid: %w", err)
 		}

@@ -70,7 +70,7 @@ func (c *Converter) buildHTML(doc *parsedDoc, destPath string) error {
 		return fmt.Errorf("execute html template: %w", err)
 	}
 
-	if err := os.WriteFile(destPath, []byte(sb.String()), 0o644); err != nil {
+	if err := os.WriteFile(destPath, []byte(sb.String()), 0o644); err != nil { //nolint:gosec // G306: a document the caller asked to be written
 		return fmt.Errorf("write html: %w", err)
 	}
 	return nil

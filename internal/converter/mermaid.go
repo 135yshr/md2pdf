@@ -99,7 +99,7 @@ func (c *Converter) renderSingleDiagram(ctx context.Context, idx int, source, pu
 // outFile. extraArgs are appended after the standard flags (e.g. PNG scaling),
 // and the Puppeteer config is passed when non-empty.
 func (c *Converter) runMmdc(ctx context.Context, mmdFile, outFile, source, puppeteerCfgPath string, extraArgs ...string) error {
-	if err := os.WriteFile(mmdFile, []byte(source), 0o644); err != nil {
+	if err := os.WriteFile(mmdFile, []byte(source), 0o600); err != nil {
 		return fmt.Errorf("write .mmd file: %w", err)
 	}
 
@@ -154,7 +154,7 @@ func (c *Converter) ensurePuppeteerConfig() (string, error) {
 	}
 
 	cfgPath := filepath.Join(c.workDir, "puppeteer.json")
-	if err := os.WriteFile(cfgPath, data, 0o644); err != nil {
+	if err := os.WriteFile(cfgPath, data, 0o600); err != nil {
 		return "", fmt.Errorf("write puppeteer config: %w", err)
 	}
 	c.logf("  auto-generated Puppeteer config: %s (chrome: %s)", cfgPath, chromeExe)

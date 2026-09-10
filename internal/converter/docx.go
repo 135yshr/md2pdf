@@ -84,7 +84,7 @@ func (c *Converter) convertMarkdownDOCX(ctx context.Context, mdBytes []byte, src
 	}
 
 	mdPath := filepath.Join(c.workDir, "document.md")
-	if err := os.WriteFile(mdPath, []byte(markdown), 0o644); err != nil {
+	if err := os.WriteFile(mdPath, []byte(markdown), 0o600); err != nil {
 		return fmt.Errorf("write markdown: %w", err)
 	}
 
@@ -178,7 +178,7 @@ func (c *Converter) buildReferenceDoc(ctx context.Context, pandoc string) (strin
 	}
 
 	refPath := filepath.Join(c.workDir, "reference.docx")
-	if err := os.WriteFile(refPath, patched, 0o644); err != nil {
+	if err := os.WriteFile(refPath, patched, 0o600); err != nil {
 		return "", fmt.Errorf("write reference doc: %w", err)
 	}
 	return refPath, nil
