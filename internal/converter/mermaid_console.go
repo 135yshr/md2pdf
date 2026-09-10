@@ -130,6 +130,10 @@ type consoleMermaidPlan struct {
 	// an image being drawn is then an error rather than a step down the chain,
 	// so -mermaid-render image is a guarantee and not a preference.
 	strict bool
+	// canPan reports whether the output can show a line wider than the screen.
+	// It decides what happens to a diagram no label cap could fit: written in
+	// full for the reader to scroll, or dropped to its Mermaid source.
+	canPan bool
 }
 
 // emitsImages reports whether the plan will write image escape sequences.
@@ -195,6 +199,10 @@ type consoleDiagram struct {
 	// kind records what the content is made of, which decides both whether it
 	// can be clipped to the wrap width and whether the pager has to be skipped.
 	kind consoleDiagramKind
+	// pan marks text art wider than the wrap width that is being shown in full
+	// anyway. Such art must never be trimmed, and its presence makes the pager
+	// scroll sideways rather than fold the lines.
+	pan bool
 }
 
 // consoleDiagramKind distinguishes a drawn diagram's medium. Text art is the
@@ -211,16 +219,24 @@ const (
 // isImage reports whether the diagram is an inline image escape sequence.
 func (d consoleDiagram) isImage() bool { return d.kind == diagramImage }
 
-// clippable reports whether over-wide lines may be trimmed. An image sequence
-// occupies no columns of its own, so trimming it would only corrupt it.
-func (d consoleDiagram) clippable() bool { return d.kind == diagramTextArt }
-
 // anyImageDiagram reports whether any diagram was drawn as an inline image.
 // The plan alone cannot answer this: an image plan still produces text art when
 // mmdc turns out to be missing or a diagram fails to rasterise.
 func anyImageDiagram(diagrams []consoleDiagram) bool {
 	for _, d := range diagrams {
 		if d.isImage() {
+			return true
+		}
+	}
+	return false
+}
+
+// anyPanDiagram reports whether any diagram is being shown wider than the wrap
+// width. One is enough to change how the whole run is delivered, since the pager
+// is started once for the entire document.
+func anyPanDiagram(diagrams []consoleDiagram) bool {
+	for _, d := range diagrams {
+		if d.pan {
 			return true
 		}
 	}
@@ -284,10 +300,12 @@ func spliceConsoleDiagrams(rendered string, diagrams []consoleDiagram, width int
 		placed[token] = true
 		indent := stripped[:len(stripped)-len(strings.TrimLeft(stripped, " "))]
 
+		// Nothing is trimmed here. Text art reaching this point either fits the
+		// wrap width or is being panned on purpose, so the only adjustment left
+		// is giving up the indent to buy the diagram its last columns.
 		content := diagram.content
-		if diagram.clippable() && width > 0 {
+		if diagram.kind == diagramTextArt && width > 0 {
 			indent = fitDiagramIndent(indent, mermaidArtWidth(content), width)
-			content = clipConsoleArt(content, max(1, width-len(indent)))
 		}
 		for _, contentLine := range strings.Split(content, "\n") {
 			out = append(out, indent+contentLine)
@@ -395,10 +413,17 @@ func (c *Converter) renderConsoleBlock(idx int, source string, plan consoleMerma
 		c.logf("  diagram %d could not be drawn as text art (%v); showing its source instead", idx, err)
 		return consoleDiagram{}, errShowMermaidSource
 	}
-	c.logf("  diagram %d drawn as text art", idx)
-	if warning := clippedArtWarning(idx, mermaidArtWidth(art), width); warning != "" {
-		c.warnf("%s", warning)
+	if artWidth := mermaidArtWidth(art); width > 0 && artWidth > width {
+		if !plan.canPan {
+			c.logf("  diagram %d needs %d columns but only %d are available and the output "+
+				"cannot scroll sideways; showing its source instead", idx, artWidth, width)
+			return consoleDiagram{}, errShowMermaidSource
+		}
+		c.logf("  diagram %d drawn as text art, %d columns wide; scroll right to see all of it",
+			idx, artWidth)
+		return consoleDiagram{content: art, kind: diagramTextArt, pan: true}, nil
 	}
+	c.logf("  diagram %d drawn as text art", idx)
 	return consoleDiagram{content: art, kind: diagramTextArt}, nil
 }
 

@@ -8,7 +8,6 @@ import (
 	"charm.land/glamour/v2/styles"
 	"github.com/AlexanderGrooff/mermaid-ascii/pkg/diagram"
 	"github.com/AlexanderGrooff/mermaid-ascii/pkg/render"
-	"github.com/charmbracelet/x/ansi"
 )
 
 // asciiDiagramPrefixes lists the Mermaid diagram types rendered as text art.
@@ -128,24 +127,4 @@ func renderMermaidArt(source string, width int, pureASCII bool) (art string, err
 		return "", fmt.Errorf("render mermaid as text art: %w", err)
 	}
 	return art, nil
-}
-
-// clipConsoleArt trims each line of text art to width columns. The art is
-// spliced into the document after glamour has wrapped it, so an over-wide line
-// would otherwise be folded by the terminal into unreadable fragments. Clipping
-// keeps the diagram's shape intact at the cost of its right edge.
-//
-// It is applied at splice time rather than at render time because only the
-// splice knows how far glamour indented the diagram.
-func clipConsoleArt(art string, width int) string {
-	if width <= 0 {
-		return art
-	}
-	lines := strings.Split(art, "\n")
-	for i, line := range lines {
-		if ansi.StringWidth(line) > width {
-			lines[i] = ansi.Truncate(line, width, "")
-		}
-	}
-	return strings.Join(lines, "\n")
 }
