@@ -155,14 +155,14 @@ func TestRenderConsole_MultipleDocumentsInOrder(t *testing.T) {
 	}
 
 	outPath := filepath.Join(dir, "out.txt")
-	f, err := os.Create(outPath)
-	if err != nil {
-		t.Fatalf("create: %v", err)
+	f, createErr := os.Create(outPath)
+	if createErr != nil {
+		t.Fatalf("create: %v", createErr)
 	}
 	defer f.Close()
 
 	c := newTestConverter(t, &Config{Format: FormatConsole, ConsolePager: false})
-	if err := c.renderConsole([]string{first, second}, f); err != nil {
+	if err := c.renderConsole(t.Context(), []string{first, second}, f); err != nil {
 		t.Fatalf("renderConsole: %v", err)
 	}
 
@@ -196,14 +196,14 @@ func TestRenderConsole_SameFileTwiceRendersTwice(t *testing.T) {
 	}
 
 	outPath := filepath.Join(dir, "out.txt")
-	f, err := os.Create(outPath)
-	if err != nil {
-		t.Fatalf("create: %v", err)
+	f, createErr := os.Create(outPath)
+	if createErr != nil {
+		t.Fatalf("create: %v", createErr)
 	}
 	defer f.Close()
 
 	c := newTestConverter(t, &Config{Format: FormatConsole, ConsolePager: false})
-	if err := c.renderConsole([]string{path, path}, f); err != nil {
+	if err := c.renderConsole(t.Context(), []string{path, path}, f); err != nil {
 		t.Fatalf("renderConsole: %v", err)
 	}
 
@@ -226,20 +226,20 @@ func TestRenderConsole_SingleDocumentHasNoSeparator(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	want, err := renderConsoleMarkdown(md, "notty", consoleFallbackWidth)
-	if err != nil {
-		t.Fatalf("baseline: %v", err)
+	want, renderErr := renderConsoleMarkdown(md, "notty", consoleFallbackWidth)
+	if renderErr != nil {
+		t.Fatalf("baseline: %v", renderErr)
 	}
 
 	outPath := filepath.Join(dir, "out.txt")
-	f, err := os.Create(outPath)
-	if err != nil {
-		t.Fatalf("create: %v", err)
+	f, createErr := os.Create(outPath)
+	if createErr != nil {
+		t.Fatalf("create: %v", createErr)
 	}
 	defer f.Close()
 
 	c := newTestConverter(t, &Config{Format: FormatConsole, ConsolePager: false})
-	if err := c.renderConsole([]string{path}, f); err != nil {
+	if err := c.renderConsole(t.Context(), []string{path}, f); err != nil {
 		t.Fatalf("renderConsole: %v", err)
 	}
 	got, err := os.ReadFile(outPath)
@@ -255,16 +255,16 @@ func TestRenderConsole_SingleDocumentHasNoSeparator(t *testing.T) {
 func TestRenderConsole_StdinDocument(t *testing.T) {
 	dir := t.TempDir()
 	outPath := filepath.Join(dir, "out.txt")
-	f, err := os.Create(outPath)
-	if err != nil {
-		t.Fatalf("create: %v", err)
+	f, createErr := os.Create(outPath)
+	if createErr != nil {
+		t.Fatalf("create: %v", createErr)
 	}
 	defer f.Close()
 
 	c := newTestConverter(t, &Config{Format: FormatConsole, ConsolePager: false})
 	c.stdin = strings.NewReader("# Piped heading\n\nSome body.\n")
 
-	if err := c.renderConsole([]string{StdinPath}, f); err != nil {
+	if err := c.renderConsole(t.Context(), []string{StdinPath}, f); err != nil {
 		t.Fatalf("renderConsole: %v", err)
 	}
 	data, err := os.ReadFile(outPath)
@@ -285,7 +285,7 @@ func TestConvert_EmptyStdinFailsWithoutWritingOutput(t *testing.T) {
 	c := newTestConverter(t, &Config{Format: FormatPDF})
 	c.stdin = strings.NewReader("")
 
-	if err := c.Convert([]string{StdinPath}, out); err == nil {
+	if err := c.Convert(t.Context(), []string{StdinPath}, out); err == nil {
 		t.Fatal("expected an error for empty stdin")
 	}
 	if _, err := os.Stat(out); err == nil {
@@ -312,7 +312,7 @@ func TestConvert_StdinToFileFormat(t *testing.T) {
 		stdin:   strings.NewReader("# Piped\n\n![local](./img.png)\n"),
 	}
 
-	if err := c.Convert([]string{StdinPath}, outPath); err != nil {
+	if err := c.Convert(t.Context(), []string{StdinPath}, outPath); err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
 
@@ -348,7 +348,7 @@ func TestConvert_StdinToFileFormat(t *testing.T) {
 // not just the CLI, since Convert is the package's entry point.
 func TestConvert_RejectsMultipleInputsForFileFormats(t *testing.T) {
 	c := newTestConverter(t, &Config{Format: FormatPDF})
-	err := c.Convert([]string{"a.md", "b.md"}, filepath.Join(t.TempDir(), "out.pdf"))
+	err := c.Convert(t.Context(), []string{"a.md", "b.md"}, filepath.Join(t.TempDir(), "out.pdf"))
 	if err == nil {
 		t.Fatal("expected an error for multiple inputs with a file format")
 	}
@@ -359,7 +359,7 @@ func TestConvert_RejectsMultipleInputsForFileFormats(t *testing.T) {
 
 func TestConvert_RejectsNoInputs(t *testing.T) {
 	c := newTestConverter(t, &Config{Format: FormatConsole})
-	if err := c.Convert(nil, ""); err == nil {
+	if err := c.Convert(t.Context(), nil, ""); err == nil {
 		t.Error("expected an error for no inputs")
 	}
 }

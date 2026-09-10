@@ -147,7 +147,7 @@ func diagnose(cfg *Config, deps diagnoseDeps) Report {
 // problem. It is reported as conditional instead.
 //
 // HTML requires nothing: it stops before the browser, and only touches one
-// through mmdc when there are diagrams to rasterise. PDF needs the browser
+// through mmdc when there are diagrams to rasterize. PDF needs the browser
 // because that is what prints it.
 var formatRequirements = map[string][]string{
 	FormatConsole: {},

@@ -2,23 +2,40 @@ package converter
 
 import (
 	"path/filepath"
+	"strings"
 )
 
 // lessBinary is the only pager md2pdf knows how to make scroll sideways.
 const lessBinary = "less"
 
-// isLess reports whether argv invokes less. resolvePager rewrites argv[0] to an
-// absolute path, so the base name is what has to be compared.
+// windowsExecSuffixes are the extensions exec.LookPath appends when resolving a
+// command on Windows, from the default PATHEXT.
+var windowsExecSuffixes = []string{".exe", ".com", ".bat", ".cmd"}
+
+// isLess reports whether argv invokes less.
+//
+// The base name is what has to be compared, since resolvePager rewrites argv[0]
+// to an absolute path — and on Windows that name carries an executable suffix
+// and no guaranteed case. Matching the bare name exactly would refuse to pan on
+// Windows even with less installed, dropping every over-wide diagram to its
+// source there.
 func isLess(argv []string) bool {
-	return len(argv) > 0 && filepath.Base(argv[0]) == lessBinary
+	if len(argv) == 0 {
+		return false
+	}
+	name := strings.ToLower(filepath.Base(argv[0]))
+	for _, suffix := range windowsExecSuffixes {
+		name = strings.TrimSuffix(name, suffix)
+	}
+	return name == lessBinary
 }
 
 // pagerCanPan reports whether the pager can show a line wider than the screen
 // and let the reader scroll right to the rest of it.
 //
-// Only less qualifies. more folds long lines and cannot scroll horizontally at
-// all, and a pager md2pdf does not recognise gets no benefit of the doubt: a
-// diagram is only shown over-wide when there is a way to reach its right edge.
+// Only less qualifies. Folding is all that more can do with a long line, and a
+// pager md2pdf does not recognize gets no benefit of the doubt: a diagram is
+// only shown over-wide when there is a way to reach its right edge.
 func pagerCanPan(argv []string) bool {
 	return isLess(argv)
 }
@@ -43,7 +60,7 @@ func resolveConsolePan(pagerEnabled, isTTY bool, pagerArgv []string, pagerAvaila
 //
 // Two changes are needed together: -S so less chops the long lines instead of
 // folding them, and -+F so it does not print the document and exit before the
-// reader can scroll. A pager md2pdf does not recognise is left untouched —
+// reader can scroll. A pager md2pdf does not recognize is left untouched —
 // resolveConsolePan has already ruled out panning in that case.
 //
 // Both are appended rather than merged into the existing flags, because the

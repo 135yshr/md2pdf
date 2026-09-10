@@ -1,5 +1,6 @@
 # Binaries
 /md2pdf
+/mdview
 dist/
 
 # Test output (converter temp files)
@@ -8,6 +9,10 @@ dist/
 
 # Go
 vendor/
+
+# Node. Only the PR-title check needs it, and it installs with --no-save.
+node_modules/
+package-lock.json
 
 # OS
 .DS_Store

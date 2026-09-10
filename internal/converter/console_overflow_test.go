@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,6 +26,12 @@ func TestPagerCanPan(t *testing.T) {
 		{"cat", []string{"/bin/cat"}, false},
 		{"bat", []string{"bat", "--paging=always"}, false},
 		{"empty", nil, false},
+		// exec.LookPath resolves the pager to less.exe on Windows, so an exact
+		// basename match would refuse to pan there even with less installed.
+		// filepath.Join keeps the separator right for the host running the test.
+		{"windows less.exe", []string{filepath.Join("C:", "tools", "less.exe")}, true},
+		{"windows LESS.EXE", []string{filepath.Join("C:", "tools", "LESS.EXE")}, true},
+		{"another pager with an extension", []string{filepath.Join("C:", "tools", "more.exe")}, false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -80,7 +87,7 @@ func TestPrepareConsoleMermaid_OverWideArtPansWhenTheOutputCan(t *testing.T) {
 	c.mermaidAvailable = func() bool { return false }
 
 	plan := consoleMermaidPlan{mode: MermaidRenderASCII, canPan: true}
-	_, diagrams, err := c.prepareConsoleMermaid(md, plan, width)
+	_, diagrams, err := c.prepareConsoleMermaid(t.Context(), md, plan, width)
 	if err != nil {
 		t.Fatalf("prepareConsoleMermaid: %v", err)
 	}
@@ -109,7 +116,7 @@ func TestPrepareConsoleMermaid_OverWideArtFallsBackToSourceWhenItCannotPan(t *te
 	c.mermaidAvailable = func() bool { return false }
 
 	plan := consoleMermaidPlan{mode: MermaidRenderASCII, canPan: false}
-	rewritten, diagrams, err := c.prepareConsoleMermaid(md, plan, width)
+	rewritten, diagrams, err := c.prepareConsoleMermaid(t.Context(), md, plan, width)
 	if err != nil {
 		t.Fatalf("prepareConsoleMermaid: %v", err)
 	}
@@ -131,7 +138,7 @@ func TestPrepareConsoleMermaid_FittingArtNeverPans(t *testing.T) {
 		c.mermaidAvailable = func() bool { return false }
 
 		plan := consoleMermaidPlan{mode: MermaidRenderASCII, canPan: canPan}
-		_, diagrams, err := c.prepareConsoleMermaid(md, plan, 80)
+		_, diagrams, err := c.prepareConsoleMermaid(t.Context(), md, plan, 80)
 		if err != nil {
 			t.Fatalf("canPan=%t: prepareConsoleMermaid: %v", canPan, err)
 		}
@@ -226,8 +233,8 @@ func TestPagerArgvFor(t *testing.T) {
 		{"an existing -S is simply re-set", []string{"less", "-S"}, true, []string{"less", "-S", "-S", "-+F"}},
 		{"a prompt argument is never read as flags", []string{"less", "-PSTATUS"}, true, []string{"less", "-PSTATUS", "-S", "-+F"}},
 		// -F can also arrive through $LESS, which no argv rewrite can reach, so
-		// it is cancelled with -+F rather than carved out of a cluster.
-		{"-F inside a cluster is cancelled, not carved out", []string{"less", "-RF"}, true, []string{"less", "-RF", "-S", "-+F"}},
+		// it is canceled with -+F rather than carved out of a cluster.
+		{"-F inside a cluster is canceled, not carved out", []string{"less", "-RF"}, true, []string{"less", "-RF", "-S", "-+F"}},
 		{"panning through a non-less pager is left alone", []string{"more"}, true, []string{"more"}},
 	}
 	for _, tc := range tests {
@@ -255,7 +262,7 @@ func TestRenderConsoleDocument_PansTheReportedDiagramEndToEnd(t *testing.T) {
 		c.mermaidAvailable = func() bool { return false }
 
 		plan := consoleMermaidPlan{mode: MermaidRenderASCII, canPan: true}
-		rendered, drawn, err := c.renderConsoleDocument(md, styles.NoTTYStyle, width, plan)
+		rendered, drawn, err := c.renderConsoleDocument(t.Context(), md, styles.NoTTYStyle, width, plan)
 		if err != nil {
 			t.Fatalf("renderConsoleDocument: %v", err)
 		}
@@ -277,7 +284,7 @@ func TestRenderConsoleDocument_PansTheReportedDiagramEndToEnd(t *testing.T) {
 		c.mermaidAvailable = func() bool { return false }
 
 		plan := consoleMermaidPlan{mode: MermaidRenderASCII, canPan: false}
-		rendered, drawn, err := c.renderConsoleDocument(md, styles.NoTTYStyle, width, plan)
+		rendered, drawn, err := c.renderConsoleDocument(t.Context(), md, styles.NoTTYStyle, width, plan)
 		if err != nil {
 			t.Fatalf("renderConsoleDocument: %v", err)
 		}
@@ -308,7 +315,7 @@ func TestPrepareConsoleMermaid_DoesNotPanWhenImagesMaySkipThePager(t *testing.T)
 	dir := t.TempDir()
 	c := newTestConverter(t, &Config{Format: FormatConsole})
 	c.mermaidAvailable = func() bool { return true }
-	c.rasterizeMermaid = func(idx int, _ string) (string, error) {
+	c.rasterizeMermaid = func(_ context.Context, idx int, _ string) (string, error) {
 		if idx != 0 {
 			return "", errStubRasterFailure
 		}
@@ -324,7 +331,7 @@ func TestPrepareConsoleMermaid_DoesNotPanWhenImagesMaySkipThePager(t *testing.T)
 		protocol: imageProtocolKitty,
 		canPan:   true,
 	}
-	rewritten, diagrams, err := c.prepareConsoleMermaid(md, plan, width)
+	rewritten, diagrams, err := c.prepareConsoleMermaid(t.Context(), md, plan, width)
 	if err != nil {
 		t.Fatalf("prepareConsoleMermaid: %v", err)
 	}

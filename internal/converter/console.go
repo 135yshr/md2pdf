@@ -2,6 +2,7 @@ package converter
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -106,7 +107,7 @@ func detectConsoleEnv(out *os.File) consoleEnv {
 // decides what happens to a diagram no label cap could fit: an output that can
 // scroll sideways gets the diagram in full, and one that cannot gets its Mermaid
 // source. Nothing is ever shown with its right edge cut off.
-func (c *Converter) renderConsole(inputs []string, out *os.File) error {
+func (c *Converter) renderConsole(ctx context.Context, inputs []string, out *os.File) error {
 	env := detectConsoleEnv(out)
 	width := resolveConsoleWidth(c.cfg.ConsoleWidth, env.isTTY, env.width)
 	style := resolveConsoleStyle(c.cfg.ConsoleStyle, env.envStyle, env.isTTY, env.noColor, env.darkBG)
@@ -127,9 +128,9 @@ func (c *Converter) renderConsole(inputs []string, out *os.File) error {
 	// once and shared. What the diagrams turned out to be is not: that is
 	// collected across documents, because the pager is started once for all of
 	// them.
-	plan, err := resolveConsoleMermaidPlan(c.cfg.MermaidRender, env.isTTY, env.noColor, os.Getenv)
-	if err != nil {
-		return err
+	plan, planErr := resolveConsoleMermaidPlan(c.cfg.MermaidRender, env.isTTY, env.noColor, os.Getenv)
+	if planErr != nil {
+		return planErr
 	}
 	plan.pureASCII = consoleWantsPureASCII(c.cfg.ConsoleStyle, env.envStyle, style)
 	plan.canPan = resolveConsolePan(c.cfg.ConsolePager, env.isTTY, pagerArgv, pagerAvailable)
@@ -141,7 +142,7 @@ func (c *Converter) renderConsole(inputs []string, out *os.File) error {
 		if err != nil {
 			return err
 		}
-		rendered, documentDrawn, err := c.renderConsoleDocument(md, style, width, plan)
+		rendered, documentDrawn, err := c.renderConsoleDocument(ctx, md, style, width, plan)
 		if err != nil {
 			return err
 		}
@@ -194,8 +195,8 @@ func (d consoleDrawn) or(other consoleDrawn) consoleDrawn {
 // renderConsoleDocument renders one Markdown document to styled ANSI text,
 // drawing its Mermaid blocks and splicing them into place. Documents are
 // rendered independently so their Mermaid placeholder tokens cannot collide.
-func (c *Converter) renderConsoleDocument(md []byte, style string, width int, plan consoleMermaidPlan) ([]byte, consoleDrawn, error) {
-	doc, diagrams, err := c.prepareConsoleMermaid(md, plan, width)
+func (c *Converter) renderConsoleDocument(ctx context.Context, md []byte, style string, width int, plan consoleMermaidPlan) ([]byte, consoleDrawn, error) {
+	doc, diagrams, err := c.prepareConsoleMermaid(ctx, md, plan, width)
 	if err != nil {
 		return nil, consoleDrawn{}, err
 	}
@@ -350,7 +351,10 @@ func runPager(argv []string, rendered []byte, profile colorprofile.Profile) erro
 		return err
 	}
 
-	cmd := exec.Command(argv[0], argv[1:]...) //nolint:gosec // G204: the pager comes from $PAGER or the less default
+	// Deliberately not the conversion's context. The pager owns the terminal and
+	// exits when the reader quits it; canceling the run out from under it would
+	// kill less mid-screen and leave the terminal in its alternate buffer.
+	cmd := exec.CommandContext(context.Background(), argv[0], argv[1:]...)
 	cmd.Stdin = &buf
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
