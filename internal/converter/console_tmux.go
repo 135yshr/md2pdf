@@ -32,53 +32,22 @@ func insideTmux(getenv func(string) string) bool {
 	return getenv("TMUX") != ""
 }
 
-// tmuxGlobalEnv returns a getenv that answers from tmux's global environment
-// first and the process environment second.
-//
-// Inside a session the process environment reports TERM_PROGRAM=tmux, which
-// hides the terminal that actually has to draw the image. tmux keeps the
-// original values, so the outer terminal can be identified from there. Keys tmux
-// does not carry — a terminal that identifies itself through something other
-// than TERM_PROGRAM, say — still come from the process environment, and a tmux
-// that cannot be queried changes nothing.
-func tmuxGlobalEnv(query tmuxQuery, getenv func(string) string) func(string) string {
-	out, err := query("show-environment", "-g")
-	if err != nil {
-		return getenv
-	}
-
-	outer := make(map[string]string)
-	for _, line := range strings.Split(out, "\n") {
-		// tmux prints "-NAME" for a variable marked for removal, which is the
-		// absence of a value rather than a value.
-		if line == "" || strings.HasPrefix(line, "-") {
-			continue
-		}
-		if key, value, ok := strings.Cut(line, "="); ok {
-			outer[key] = value
-		}
-	}
-
-	return func(key string) string {
-		if value, ok := outer[key]; ok {
-			return value
-		}
-		return getenv(key)
-	}
-}
-
 // tmuxClientFormat asks tmux for everything about the current client and pane
 // that image detection depends on, in one invocation. The separator cannot occur
 // in a TERM name, and splitting on it keeps the field positions even when the
 // client name is empty because no client is attached.
-const tmuxClientFormat = "#{client_termname}|#{window_active}|#{session_attached}|" +
-	"#{window_zoomed_flag}|#{pane_active}"
+const tmuxClientFormat = "#{client_termname}|#{client_termtype}|#{window_active}|" +
+	"#{session_attached}|#{window_zoomed_flag}|#{pane_active}"
 
 // tmuxClient describes the client and pane md2pdf is drawing into.
 type tmuxClient struct {
 	// termName is TERM as the attached client reports it, empty when no client
 	// is attached.
 	termName string
+	// termType is what the client answered tmux's terminal version query with,
+	// such as "iTerm2 3.6.11" or "kitty(0.35.2)". It is empty for a terminal
+	// that does not answer, and on a tmux too old to report it.
+	termType string
 	// visible reports whether tmux is currently showing this pane, which is what
 	// allow-passthrough=on depends on.
 	visible bool
@@ -95,15 +64,15 @@ func tmuxClientState(query tmuxQuery) (tmuxClient, bool) {
 		return tmuxClient{}, false
 	}
 	fields := strings.Split(strings.TrimSpace(out), "|")
-	if len(fields) != 5 {
+	if len(fields) != 6 {
 		return tmuxClient{}, false
 	}
-	termName, windowActive, attached, zoomed, paneActive :=
-		fields[0], fields[1], fields[2], fields[3], fields[4]
+	termName, termType, windowActive, attached, zoomed, paneActive :=
+		fields[0], fields[1], fields[2], fields[3], fields[4], fields[5]
 
 	visible := attached != "0" && attached != "" && windowActive == "1" &&
 		!(zoomed == "1" && paneActive != "1")
-	return tmuxClient{termName: termName, visible: visible}, true
+	return tmuxClient{termName: termName, termType: termType, visible: visible}, true
 }
 
 // tmuxForwardsPassthrough reports whether tmux will forward DCS passthrough for
@@ -136,31 +105,48 @@ func tmuxForwardsPassthrough(query tmuxQuery) (blockedReason string, forwards bo
 	}
 }
 
-// tmuxDetectEnv returns the environment the outer terminal's protocol is read
-// from inside a session.
+// tmuxClientTermTypes maps a substring of the client's answer to tmux's
+// terminal version query onto the image protocol that terminal speaks.
 //
-// The attached client's TERM is authoritative, because tmux's global snapshot
-// describes whatever started the server: attach the same server from a different
-// terminal and that snapshot names the wrong one. KITTY_WINDOW_ID is dropped
-// entirely for the same reason — it identifies a window of the terminal that
-// started the server, and letting it through would report kitty for a client
-// that is not kitty. Everything else comes from the snapshot, then the process
-// environment.
-func tmuxDetectEnv(query tmuxQuery, getenv func(string) string) func(string) string {
-	global := tmuxGlobalEnv(query, getenv)
-	client, ok := tmuxClientState(query)
+// The answer is the one signal about the attached client that identifies a
+// terminal whose TERM says nothing useful — iTerm2 and WezTerm both report a
+// plain xterm-256color.
+var tmuxClientTermTypes = []struct {
+	marker   string
+	protocol terminalImageProtocol
+}{
+	{marker: "kitty", protocol: imageProtocolKitty},
+	{marker: "ghostty", protocol: imageProtocolKitty},
+	{marker: "iterm2", protocol: imageProtocolITerm2},
+	{marker: "wezterm", protocol: imageProtocolITerm2},
+}
 
-	return func(key string) string {
-		switch key {
-		case "KITTY_WINDOW_ID":
-			return ""
-		case "TERM":
-			if ok && client.termName != "" {
-				return client.termName
-			}
+// tmuxClientProtocol reports the image protocol the attached client speaks,
+// deciding entirely from what that client told tmux about itself.
+//
+// Nothing here may come from tmux's global environment. That snapshot describes
+// whatever started the server, so a server started under iTerm2 and attached
+// from a plain terminal would otherwise be sent an OSC 1337 image the client
+// cannot show — and which vanishes without an error. The same reasoning rules
+// out the process environment's KITTY_WINDOW_ID, which names a window of the
+// terminal that started the server.
+//
+// The version query answer is tried first because it identifies terminals whose
+// TERM does not, and TERM second for the terminals that announce themselves that
+// way instead.
+func tmuxClientProtocol(client tmuxClient) terminalImageProtocol {
+	termType := strings.ToLower(client.termType)
+	for _, candidate := range tmuxClientTermTypes {
+		if strings.Contains(termType, candidate.marker) {
+			return candidate.protocol
 		}
-		return global(key)
 	}
+	return detectImageProtocol(func(key string) string {
+		if key == "TERM" {
+			return client.termName
+		}
+		return ""
+	})
 }
 
 // wrapTmuxPassthrough tunnels an escape sequence through tmux to the terminal
@@ -230,7 +216,11 @@ func detectImageTransport(getenv func(string) string, query tmuxQuery) terminalI
 		return terminalImageTransport{tmuxBlockedReason: reason}
 	}
 
-	protocol := detectImageProtocol(tmuxDetectEnv(query, getenv))
+	client, ok := tmuxClientState(query)
+	if !ok {
+		return terminalImageTransport{}
+	}
+	protocol := tmuxClientProtocol(client)
 	if !slices.Contains(tmuxTunnelledProtocols, protocol) {
 		return terminalImageTransport{}
 	}
