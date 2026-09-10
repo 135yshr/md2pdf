@@ -287,6 +287,7 @@ func spliceConsoleDiagrams(rendered string, diagrams []consoleDiagram, width int
 
 		content := diagram.content
 		if diagram.clippable() && width > 0 {
+			indent = fitDiagramIndent(indent, mermaidArtWidth(content), width)
 			content = clipConsoleArt(content, max(1, width-len(indent)))
 		}
 		for _, contentLine := range strings.Split(content, "\n") {
@@ -409,6 +410,9 @@ func (c *Converter) renderConsoleBlock(ctx context.Context, idx int, source stri
 		return consoleDiagram{}, errShowMermaidSource
 	}
 	c.logf("  diagram %d drawn as text art", idx)
+	if warning := clippedArtWarning(idx, mermaidArtWidth(art), width); warning != "" {
+		c.warnf("%s", warning)
+	}
 	return consoleDiagram{content: art, kind: diagramTextArt}, nil
 }
 

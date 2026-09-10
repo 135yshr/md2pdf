@@ -127,6 +127,9 @@ type Converter struct {
 	// stdin is where StdinPath reads from. Nil means os.Stdin; tests set it to
 	// supply a document without touching the process's standard input.
 	stdin io.Reader
+	// stderr is where progress logs and warnings go. Nil means os.Stderr;
+	// tests set it to read back what was reported.
+	stderr io.Writer
 }
 
 // New creates a new Converter and prepares a temporary working directory.
@@ -237,13 +240,31 @@ func (c *Converter) Convert(ctx context.Context, inputs []string, outputPath str
 	return nil
 }
 
-// logf prints a formatted message to standard error when verbose mode is
-// enabled. Logging to stderr keeps progress output separate from the rendered
-// document that console format writes to stdout.
+// errOut returns the writer diagnostics go to, defaulting to standard error.
+// Everything the converter reports goes to stderr rather than stdout, which
+// keeps it separate from the rendered document console format writes there.
+func (c *Converter) errOut() io.Writer {
+	if c.stderr != nil {
+		return c.stderr
+	}
+	return os.Stderr
+}
+
+// logf prints a formatted progress message when verbose mode is enabled.
 func (c *Converter) logf(format string, args ...any) {
 	if c.cfg.Verbose {
-		fmt.Fprintf(os.Stderr, "  "+format+"\n", args...)
+		fmt.Fprintf(c.errOut(), "  "+format+"\n", args...)
 	}
+}
+
+// warnf prints a formatted warning whether or not verbose mode is enabled.
+//
+// It exists for the one thing the verbose log cannot carry: output the user
+// asked for that did not survive. A reader who does not pass -v still has to be
+// told that a diagram lost its right edge, or the loss is silent — which is the
+// defect that made fitting necessary in the first place.
+func (c *Converter) warnf(format string, args ...any) {
+	fmt.Fprintf(c.errOut(), "md2pdf: warning: "+format+"\n", args...)
 }
 
 // imgSrcRe matches src attributes in <img> tags.

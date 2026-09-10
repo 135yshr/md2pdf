@@ -82,15 +82,30 @@ func mermaidDiagramHeader(source string) (string, bool) {
 // are swapped for plain +, - and | so the art stays readable on terminals that
 // cannot show them.
 //
-// Diagram types outside asciiDiagramPrefixes are rejected before parsing, and
-// mermaid-ascii's layout is guarded against panics: it is a fallback path, so a
-// crash there must degrade to the Mermaid source rather than take down the run.
-func renderMermaidASCII(source string, width int, pureASCII bool) (art string, err error) {
+// Diagram types outside asciiDiagramPrefixes are rejected before parsing. Art
+// wider than width has its node labels wrapped until it fits; see fitMermaidArt
+// for why that is the only lever available.
+func renderMermaidASCII(source string, width int, pureASCII bool) (string, error) {
 	if !asciiDiagramSupported(source) {
 		header, _ := mermaidDiagramHeader(source)
 		return "", fmt.Errorf("%w: %q", errUnsupportedASCIIDiagram, header)
 	}
 
+	art, err := renderMermaidArt(source, width, pureASCII)
+	if err != nil {
+		return "", err
+	}
+	return fitMermaidArt(source, art, width, pureASCII), nil
+}
+
+// renderMermaidArt draws Mermaid source as text art exactly as written, with no
+// attempt to make it fit. It is the single place the library is called, so the
+// fit loop can re-draw a rewritten source through the same path.
+//
+// The layout is guarded against panics here, because mermaid-ascii is a fallback
+// path: a crash there must degrade to the Mermaid source rather than take down
+// the run.
+func renderMermaidArt(source string, width int, pureASCII bool) (art string, err error) {
 	cfg := diagram.DefaultConfig()
 	cfg.UseAscii = pureASCII
 	cfg.StyleType = "cli"
