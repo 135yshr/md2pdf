@@ -22,7 +22,7 @@ every other name to `pdf`.
 
 DOCX is produced **directly from Markdown** by pandoc's `gfm` reader, with no
 HTML in between, so pandoc emits clean, Word-native paragraph and list styles.
-Mermaid blocks are rasterised to PNG and spliced back in as image references
+Mermaid blocks are rasterized to PNG and spliced back in as image references
 (Word cannot reliably display pandoc-embedded SVG). A generated reference
 document supplies the styling: bordered GFM tables, a 10.5pt body, compact
 headings, and a Japanese-friendly font.

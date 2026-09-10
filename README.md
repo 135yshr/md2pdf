@@ -266,7 +266,7 @@ Each format reads from the source that renders best for it.
 
 - **PDF** (default) — goldmark converts Markdown to HTML (GFM tables, fenced code blocks), Mermaid blocks are rendered to inline SVG via `mmdc`, a self-contained HTML file is assembled with GitHub-flavored CSS and `@font-face` declarations for Noto Sans CJK JP, and a headless Chromium browser, driven directly over the DevTools Protocol, prints it to PDF. No Python or Playwright is involved — the same browser also serves `mmdc`, so one Chromium covers both stages.
 - **Console** — the Markdown is rendered to styled ANSI text by [glamour](https://github.com/charmbracelet/glamour) (the library behind [glow](https://github.com/charmbracelet/glow)), wrapped to the terminal width and paged through `$PAGER`. The theme follows the terminal background unless `-style` says otherwise; color is dropped entirely when `NO_COLOR` is set or the output is piped. Mermaid blocks are drawn as inline images when the terminal supports one of the image protocols below, as box-drawing text art when it does not, and otherwise stay visible as their source — so console output still needs no conversion tools of its own.
-- **DOCX** — the Markdown is sent **directly to `pandoc`** (its `gfm` reader, no HTML in between), so pandoc produces clean, Word-native paragraph and list styles. Mermaid blocks are rasterised to PNG and spliced back in as image references (Word cannot reliably display pandoc-embedded SVG). A generated reference document gives the output a readable, Japanese-friendly look: a 10.5pt body, compact blue headings, bordered GFM tables, and the `Yu Gothic` font (override with `-docx-font`).
+- **DOCX** — the Markdown is sent **directly to `pandoc`** (its `gfm` reader, no HTML in between), so pandoc produces clean, Word-native paragraph and list styles. Mermaid blocks are rasterized to PNG and spliced back in as image references (Word cannot reliably display pandoc-embedded SVG). A generated reference document gives the output a readable, Japanese-friendly look: a 10.5pt body, compact blue headings, bordered GFM tables, and the `Yu Gothic` font (override with `-docx-font`).
 
 ### Custom CSS and HTML output
 
@@ -399,10 +399,10 @@ start. Anything the chain cannot draw — a diagram type without a text-art
 renderer, or a block that fails to parse — keeps its Mermaid source, so no
 document ever loses content:
 
-| Mode | Behaviour |
+| Mode | Behavior |
 | --- | --- |
 | `auto` (default) | Inline image → text art → Mermaid source, taking the first that works |
-| `image` | Require an inline image. A terminal that cannot show one, a missing `mmdc`, or a diagram that fails to rasterise are all errors rather than a quiet downgrade |
+| `image` | Require an inline image. A terminal that cannot show one, a missing `mmdc`, or a diagram that fails to rasterize are all errors rather than a quiet downgrade |
 | `ascii` | Always draw box-drawing text art (source only for diagram types it cannot draw) |
 | `source` | Always print the Mermaid source as a code block |
 

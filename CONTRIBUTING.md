@@ -34,7 +34,7 @@ MD2PDF_REQUIRE_INTEGRATION=1 go test ./...
 
 1. Fork the repository and create a branch from `main`.
 2. Keep commits focused — one logical change per commit.
-3. Add or update tests for any changed behaviour. `go test ./...` must pass with
+3. Add or update tests for any changed behavior. `go test ./...` must pass with
    no external tools installed, so a test that needs mmdc, a Chromium or pandoc
    should either skip when the tool is absent (see `requireTool`) or
    drive a stub binary. Do not exclude tests from the run with `-run` filters or
@@ -53,7 +53,7 @@ Please use the **Bug Report** issue template and include:
 
 ## Suggesting Features
 
-Open a **Feature Request** issue describing the use case and expected behaviour.
+Open a **Feature Request** issue describing the use case and expected behavior.
 
 ## Code Style
 

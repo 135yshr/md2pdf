@@ -14,7 +14,7 @@ import (
 // colliding with user-supplied images copied by copyImages.
 const mermaidImageSubdir = "_md2pdf_mermaid"
 
-// mermaidBackground is the background colour passed to mmdc for rendered diagrams.
+// mermaidBackground is the background color passed to mmdc for rendered diagrams.
 const mermaidBackground = "white"
 
 // mermaidPNGScale is the mmdc device-pixel-ratio passed via -s. It scales raster
@@ -31,7 +31,7 @@ type puppeteerConfig struct {
 // renderMermaid iterates over all Mermaid blocks in doc, writes each source to
 // a .mmd temp file, invokes mmdc to produce an SVG, and stores the SVG content
 // back into the block's SVGContent field. It is used for PDF output, which
-// inlines the crisp SVG; DOCX output renders rasterised PNGs separately.
+// inlines the crisp SVG; DOCX output renders rasterized PNGs separately.
 func (c *Converter) renderMermaid(ctx context.Context, doc *parsedDoc) error {
 	if len(doc.mermaidBlocks) == 0 {
 		return nil
@@ -117,7 +117,7 @@ func (c *Converter) runMmdc(ctx context.Context, mmdFile, outFile, source, puppe
 	return nil
 }
 
-// resolveMmdc returns the mmdc binary to invoke, honouring the configured path
+// resolveMmdc returns the mmdc binary to invoke, honoring the configured path
 // and resolving it against $PATH so the caller's environment is respected.
 func (c *Converter) resolveMmdc() string {
 	mmdcBin := c.cfg.MmdcPath

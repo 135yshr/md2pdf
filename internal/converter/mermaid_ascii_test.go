@@ -204,10 +204,10 @@ func TestSpliceConsoleDiagrams_NeverClipsImageSequences(t *testing.T) {
 	}
 }
 
-// TestRenderMermaidASCII_HonoursSourceDirection pins that the direction in the
+// TestRenderMermaidASCII_HonorsSourceDirection pins that the direction in the
 // diagram header reaches the layout. The parser in mermaid-ascii reads it from
 // the source, so this guards against a future change here overriding it.
-func TestRenderMermaidASCII_HonoursSourceDirection(t *testing.T) {
+func TestRenderMermaidASCII_HonorsSourceDirection(t *testing.T) {
 	lr, err := renderMermaidASCII("flowchart LR\n  A --> B\n", 80, false)
 	if err != nil {
 		t.Fatalf("LR: %v", err)
@@ -368,7 +368,7 @@ func TestPrepareConsoleMermaid_ImagePlanFallsBackToASCIIWithoutMmdc(t *testing.T
 }
 
 // TestPrepareConsoleMermaid_ImageFailureFallsBackToASCII covers a per-diagram
-// rasterisation failure dropping one step down the chain rather than to source.
+// rasterization failure dropping one step down the chain rather than to source.
 func TestPrepareConsoleMermaid_ImageFailureFallsBackToASCII(t *testing.T) {
 	md := []byte("```mermaid\nflowchart LR\n  A --> B\n```\n")
 	c := newTestConverter(t, &Config{Format: FormatConsole})
@@ -485,7 +485,7 @@ func TestPrepareConsoleMermaid_ImageFallbackIsPageable(t *testing.T) {
 }
 
 // TestPrepareConsoleMermaid_StrictImageModeErrorsWithoutMmdc pins that
-// -mermaid-render image is a guarantee: without the rasteriser it fails rather
+// -mermaid-render image is a guarantee: without the rasterizer it fails rather
 // than quietly producing something that is not an image.
 func TestPrepareConsoleMermaid_StrictImageModeErrorsWithoutMmdc(t *testing.T) {
 	md := []byte("```mermaid\nflowchart LR\n  A --> B\n```\n")
@@ -515,10 +515,10 @@ func TestPrepareConsoleMermaid_StrictImageModeErrorsOnRasterFailure(t *testing.T
 	plan := consoleMermaidPlan{mode: MermaidRenderImage, protocol: imageProtocolKitty, strict: true}
 	_, _, err := c.prepareConsoleMermaid(t.Context(), md, plan, 80)
 	if err == nil {
-		t.Fatal("expected an error in strict image mode when rasterisation fails")
+		t.Fatal("expected an error in strict image mode when rasterization fails")
 	}
 	if !errors.Is(err, errStubRasterFailure) {
-		t.Errorf("error does not wrap the rasterisation failure: %v", err)
+		t.Errorf("error does not wrap the rasterization failure: %v", err)
 	}
 }
 

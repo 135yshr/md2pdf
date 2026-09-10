@@ -328,7 +328,7 @@ func copyFile(src, dst string) error {
 	return nil
 }
 
-// ChromiumPath locates the Chromium executable md2pdf drives, honouring
+// ChromiumPath locates the Chromium executable md2pdf drives, honoring
 // CHROME_PATH and then probing the usual install locations. It is exported so
 // callers can report on the environment without attempting a conversion.
 func ChromiumPath() (string, error) {
@@ -338,7 +338,7 @@ func ChromiumPath() (string, error) {
 // chromiumPath attempts to locate the system Chromium executable.
 // It checks common install paths, including caches left by Playwright.
 func chromiumPath() (string, error) {
-	// Honour CHROME_PATH if set. Fail fast on invalid values.
+	// Honor CHROME_PATH if set. Fail fast on invalid values.
 	if p := os.Getenv("CHROME_PATH"); p != "" {
 		info, err := os.Stat(p) //nolint:gosec // G703: CHROME_PATH names the browser to run, so an arbitrary path is the point
 		if err != nil {

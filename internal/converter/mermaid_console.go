@@ -218,7 +218,7 @@ func (d consoleDiagram) clippable() bool { return d.kind == diagramTextArt }
 
 // anyImageDiagram reports whether any diagram was drawn as an inline image.
 // The plan alone cannot answer this: an image plan still produces text art when
-// mmdc turns out to be missing or a diagram fails to rasterise.
+// mmdc turns out to be missing or a diagram fails to rasterize.
 func anyImageDiagram(diagrams []consoleDiagram) bool {
 	for _, d := range diagrams {
 		if d.isImage() {
@@ -326,13 +326,13 @@ func (c *Converter) prepareConsoleMermaid(ctx context.Context, md []byte, plan c
 		return md, nil, nil
 	}
 
-	// Images need mmdc to rasterise the PNG; text art does not, so a missing
+	// Images need mmdc to rasterize the PNG; text art does not, so a missing
 	// Mermaid CLI drops one step down the chain instead of all the way to source.
 	useImages := plan.emitsImages()
 	if useImages && !c.mermaidAvailable() {
 		if plan.strict {
 			return nil, nil, errors.New(
-				"-mermaid-render image needs the Mermaid CLI to rasterise diagrams, " +
+				"-mermaid-render image needs the Mermaid CLI to rasterize diagrams, " +
 					"but mmdc was not found; install @mermaid-js/mermaid-cli, " +
 					"or use -mermaid-render ascii to draw them as text art")
 		}
@@ -374,7 +374,7 @@ var errShowMermaidSource = errors.New("no renderer could draw this diagram")
 // to restore the block's Mermaid source.
 //
 // A strict plan (-mermaid-render image) skips the text-art step entirely and
-// returns the rasterisation error, so asking for an image never quietly yields
+// returns the rasterization error, so asking for an image never quietly yields
 // something else.
 func (c *Converter) renderConsoleBlock(ctx context.Context, idx int, source string, plan consoleMermaidPlan, width int, useImages bool) (consoleDiagram, error) {
 	if useImages {
@@ -399,7 +399,7 @@ func (c *Converter) renderConsoleBlock(ctx context.Context, idx int, source stri
 	return consoleDiagram{content: art, kind: diagramTextArt}, nil
 }
 
-// renderConsoleDiagram rasterises one Mermaid block and encodes the PNG for the
+// renderConsoleDiagram rasterizes one Mermaid block and encodes the PNG for the
 // terminal.
 func (c *Converter) renderConsoleDiagram(ctx context.Context, idx int, source string, protocol terminalImageProtocol, width int) (string, error) {
 	pngPath, err := c.rasterizeMermaid(ctx, idx, source)
@@ -413,7 +413,7 @@ func (c *Converter) renderConsoleDiagram(ctx context.Context, idx int, source st
 	return encodeTerminalImage(protocol, data, width)
 }
 
-// consoleDiagramPNG rasterises a Mermaid block to a PNG and returns its
+// consoleDiagramPNG rasterizes a Mermaid block to a PNG and returns its
 // absolute path. It is the production implementation behind
 // Converter.rasterizeMermaid.
 func (c *Converter) consoleDiagramPNG(ctx context.Context, idx int, source string) (string, error) {
