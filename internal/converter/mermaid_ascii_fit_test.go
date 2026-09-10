@@ -95,3 +95,25 @@ func TestWrapLabelText_RespectsAuthoredBreaks(t *testing.T) {
 		})
 	}
 }
+
+// TestWrapLabelText_Degenerate covers the inputs that must never be touched:
+// an unset cap, a nonsensical one and an empty label.
+func TestWrapLabelText_Degenerate(t *testing.T) {
+	tests := []struct {
+		name     string
+		text     string
+		maxWidth int
+	}{
+		{"zero cap", "優先改善プロセスダッシュボード", 0},
+		{"negative cap", "優先改善プロセスダッシュボード", -5},
+		{"empty label", "", 12},
+		{"empty label, zero cap", "", 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := wrapLabelText(tc.text, tc.maxWidth); got != tc.text {
+				t.Errorf("wrapLabelText(%q, %d) = %q, want it unchanged", tc.text, tc.maxWidth, got)
+			}
+		})
+	}
+}
