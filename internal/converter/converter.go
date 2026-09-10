@@ -21,7 +21,15 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
+
+// externalToolWaitDelay bounds how long a killed tool's descendants may keep
+// its output pipes open. Killing a process does not kill what it started, and
+// mmdc starts a browser while pandoc can start filters, so reading those pipes
+// to EOF would make an interrupted run wait for the grandchildren rather than
+// for the process it actually stopped.
+const externalToolWaitDelay = 2 * time.Second
 
 // Supported output formats.
 const (

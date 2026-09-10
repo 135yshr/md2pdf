@@ -110,6 +110,7 @@ func (c *Converter) runMmdc(ctx context.Context, mmdFile, outFile, source, puppe
 	}
 
 	cmd := exec.CommandContext(ctx, c.resolveMmdc(), args...)
+	cmd.WaitDelay = externalToolWaitDelay
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("mmdc failed: %w\noutput: %s", err, out)

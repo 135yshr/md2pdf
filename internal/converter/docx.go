@@ -102,6 +102,7 @@ func (c *Converter) convertMarkdownDOCX(ctx context.Context, mdBytes []byte, src
 	}
 
 	cmd := exec.CommandContext(ctx, pandoc, args...)
+	cmd.WaitDelay = externalToolWaitDelay
 	cmd.Dir = c.workDir
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -165,6 +166,7 @@ func (c *Converter) findPandoc() (string, error) {
 // path. The returned document is passed to pandoc via --reference-doc.
 func (c *Converter) buildReferenceDoc(ctx context.Context, pandoc string) (string, error) {
 	cmd := exec.CommandContext(ctx, pandoc, "--print-default-data-file", "reference.docx")
+	cmd.WaitDelay = externalToolWaitDelay
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
