@@ -3,6 +3,7 @@ package converter
 import (
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 )
 
@@ -109,4 +110,47 @@ func osGetenv(getenv func(string) string) func(string) string {
 		return getenv
 	}
 	return os.Getenv
+}
+
+// terminalImageTransport describes how an image escape sequence reaches the
+// terminal that draws it: which protocol that terminal speaks, and whether the
+// sequence has to be tunnelled through tmux to get there.
+type terminalImageTransport struct {
+	protocol terminalImageProtocol
+	viaTmux  bool
+}
+
+// tmuxTunnelledProtocols lists the protocols worth sending through tmux's
+// passthrough.
+//
+// Sixel is deliberately absent. tmux draws Sixel itself when built with support
+// for it, and a passthrough-wrapped Sixel is not reliably forwarded, so
+// claiming it would emit a sequence that comes out as garbage rather than an
+// image.
+var tmuxTunnelledProtocols = []terminalImageProtocol{imageProtocolKitty, imageProtocolITerm2}
+
+// detectImageTransport decides how an inline image would reach the terminal.
+//
+// Outside tmux this is just the protocol detection. Inside it, two more things
+// have to hold: tmux must be forwarding passthrough at all, and the outer
+// terminal — read from tmux's own environment, since the process environment
+// only describes tmux — must speak a protocol worth tunnelling. Anything else
+// reports no transport, so the caller falls back to text art rather than writing
+// a sequence that would vanish or corrupt the output.
+func detectImageTransport(getenv func(string) string, query tmuxQuery) terminalImageTransport {
+	getenv = osGetenv(getenv)
+	if !insideTmux(getenv) {
+		return terminalImageTransport{protocol: detectImageProtocol(getenv)}
+	}
+
+	query = resolveTmuxQuery(query)
+	if !tmuxAllowsPassthrough(query) {
+		return terminalImageTransport{}
+	}
+
+	protocol := detectImageProtocol(tmuxGlobalEnv(query, getenv))
+	if !slices.Contains(tmuxTunnelledProtocols, protocol) {
+		return terminalImageTransport{}
+	}
+	return terminalImageTransport{protocol: protocol, viaTmux: true}
 }

@@ -126,3 +126,93 @@ func TestWrapTmuxPassthrough(t *testing.T) {
 		t.Errorf("payload is not wrapped in a tmux DCS: %q", got)
 	}
 }
+
+// stubTmuxCommands answers show-environment and the allow-passthrough lookup
+// separately, which is what transport detection asks for.
+func stubTmuxCommands(env, passthrough string) tmuxQuery {
+	return func(args ...string) (string, error) {
+		if len(args) > 0 && args[0] == "show-environment" {
+			return env, nil
+		}
+		return passthrough, nil
+	}
+}
+
+// TestDetectImageTransport covers where an image escape sequence has to go.
+// Inside tmux the process environment describes tmux, not the terminal that
+// draws, so detection has to look through the session — and only when tmux will
+// actually forward the sequence.
+func TestDetectImageTransport(t *testing.T) {
+	const insideEnv = "TERM=screen-256color"
+	tests := []struct {
+		name         string
+		env          map[string]string
+		tmuxEnv      string
+		passthrough  string
+		wantProtocol terminalImageProtocol
+		wantViaTmux  bool
+	}{
+		{
+			name:         "outside tmux is unchanged",
+			env:          map[string]string{"TERM_PROGRAM": "iTerm.app"},
+			wantProtocol: imageProtocolITerm2,
+		},
+		{
+			name:         "outside tmux with no image protocol",
+			env:          map[string]string{"TERM": "xterm-256color"},
+			wantProtocol: imageProtocolNone,
+		},
+		{
+			name:         "tmux over iTerm2 with passthrough on",
+			env:          map[string]string{"TMUX": "/tmp/tmux-501/default,1,0", "TERM_PROGRAM": "tmux", "TERM": "screen-256color"},
+			tmuxEnv:      insideEnv + "\nTERM_PROGRAM=iTerm.app\n",
+			passthrough:  "on\n",
+			wantProtocol: imageProtocolITerm2,
+			wantViaTmux:  true,
+		},
+		{
+			name:         "tmux over kitty with passthrough on",
+			env:          map[string]string{"TMUX": "/tmp/tmux-501/default,1,0", "TERM_PROGRAM": "tmux", "TERM": "screen-256color"},
+			tmuxEnv:      "TERM=xterm-kitty\n",
+			passthrough:  "all\n",
+			wantProtocol: imageProtocolKitty,
+			wantViaTmux:  true,
+		},
+		{
+			// Without passthrough tmux swallows the sequence and the image
+			// vanishes with no error, so nothing may be claimed.
+			name:         "tmux with passthrough off",
+			env:          map[string]string{"TMUX": "/tmp/tmux-501/default,1,0", "TERM_PROGRAM": "tmux"},
+			tmuxEnv:      insideEnv + "\nTERM_PROGRAM=iTerm.app\n",
+			passthrough:  "off\n",
+			wantProtocol: imageProtocolNone,
+		},
+		{
+			name:         "tmux over a terminal with no image protocol",
+			env:          map[string]string{"TMUX": "/tmp/tmux-501/default,1,0", "TERM_PROGRAM": "tmux"},
+			tmuxEnv:      "TERM=xterm-256color\n",
+			passthrough:  "on\n",
+			wantProtocol: imageProtocolNone,
+		},
+		{
+			// Sixel is not tunnelled: tmux handles it natively when built for
+			// it, and a passthrough-wrapped Sixel is not reliably forwarded.
+			name:         "tmux over a Sixel terminal is not claimed",
+			env:          map[string]string{"TMUX": "/tmp/tmux-501/default,1,0", "TERM_PROGRAM": "tmux"},
+			tmuxEnv:      "TERM=foot\n",
+			passthrough:  "on\n",
+			wantProtocol: imageProtocolNone,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := detectImageTransport(mapGetenv(tc.env), stubTmuxCommands(tc.tmuxEnv, tc.passthrough))
+			if got.protocol != tc.wantProtocol {
+				t.Errorf("protocol = %v, want %v", got.protocol, tc.wantProtocol)
+			}
+			if got.viaTmux != tc.wantViaTmux {
+				t.Errorf("viaTmux = %t, want %t", got.viaTmux, tc.wantViaTmux)
+			}
+		})
+	}
+}
