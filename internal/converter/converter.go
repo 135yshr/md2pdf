@@ -11,6 +11,7 @@
 package converter
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -20,7 +21,15 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
+
+// externalToolWaitDelay bounds how long a killed tool's descendants may keep
+// its output pipes open. Killing a process does not kill what it started, and
+// mmdc starts a browser while pandoc can start filters, so reading those pipes
+// to EOF would make an interrupted run wait for the grandchildren rather than
+// for the process it actually stopped.
+const externalToolWaitDelay = 2 * time.Second
 
 // Supported output formats.
 const (
@@ -100,7 +109,7 @@ type Config struct {
 	ConsolePager bool
 	// MermaidScale multiplies the columns an inline diagram image may occupy in
 	// console output. Zero draws each diagram at its natural size within the
-	// wrap width, which is the behaviour without the flag.
+	// wrap width, which is the behavior without the flag.
 	MermaidScale float64
 	// MermaidRender selects how Mermaid blocks are drawn in console output:
 	// "auto" (default), "image" or "source".
@@ -117,7 +126,7 @@ type Converter struct {
 	// absolute path, and mermaidAvailable reports whether the renderer can run
 	// at all. Both are fields so tests can stand in for the external mmdc
 	// invocation without depending on what is installed on the machine.
-	rasterizeMermaid func(idx int, source string) (string, error)
+	rasterizeMermaid func(ctx context.Context, idx int, source string) (string, error)
 	mermaidAvailable func() bool
 	// stdin is where StdinPath reads from. Nil means os.Stdin; tests set it to
 	// supply a document without touching the process's standard input.
@@ -153,13 +162,13 @@ func (c *Converter) Close() {
 //
 // Console format renders every input in order; the other formats take exactly
 // one, which the CLI enforces before calling this.
-func (c *Converter) Convert(inputs []string, outputPath string) error {
+func (c *Converter) Convert(ctx context.Context, inputs []string, outputPath string) error {
 	if len(inputs) == 0 {
 		return errors.New("no input documents")
 	}
 
 	if strings.EqualFold(c.cfg.Format, FormatConsole) {
-		if err := c.renderConsole(inputs, os.Stdout); err != nil {
+		if err := c.renderConsole(ctx, inputs, os.Stdout); err != nil {
 			return fmt.Errorf("render console: %w", err)
 		}
 		return nil
@@ -170,24 +179,24 @@ func (c *Converter) Convert(inputs []string, outputPath string) error {
 	}
 	inputPath := inputs[0]
 
-	mdBytes, err := c.readInput(inputPath)
-	if err != nil {
-		return err
+	mdBytes, readErr := c.readInput(inputPath)
+	if readErr != nil {
+		return readErr
 	}
 
-	srcDir, err := inputDir(inputPath)
-	if err != nil {
-		return err
+	srcDir, dirErr := inputDir(inputPath)
+	if dirErr != nil {
+		return dirErr
 	}
 
-	absOut, err := filepath.Abs(outputPath)
-	if err != nil {
-		return fmt.Errorf("resolve output path: %w", err)
+	absOut, absErr := filepath.Abs(outputPath)
+	if absErr != nil {
+		return fmt.Errorf("resolve output path: %w", absErr)
 	}
 
 	if strings.EqualFold(c.cfg.Format, FormatDOCX) {
 		c.logf("Converting Markdown to DOCX with pandoc...")
-		if err := c.convertMarkdownDOCX(mdBytes, srcDir, absOut); err != nil {
+		if err := c.convertMarkdownDOCX(ctx, mdBytes, srcDir, absOut); err != nil {
 			return fmt.Errorf("convert docx: %w", err)
 		}
 		return nil
@@ -200,7 +209,7 @@ func (c *Converter) Convert(inputs []string, outputPath string) error {
 	}
 
 	c.logf("Rendering %d Mermaid diagram(s)...", len(doc.mermaidBlocks))
-	if err := c.renderMermaid(doc); err != nil {
+	if err := c.renderMermaid(ctx, doc); err != nil {
 		return fmt.Errorf("render mermaid: %w", err)
 	}
 
@@ -228,7 +237,7 @@ func (c *Converter) Convert(inputs []string, outputPath string) error {
 	}
 
 	c.logf("Printing PDF with headless Chromium...")
-	if err := c.printPDF(htmlPath, absOut); err != nil {
+	if err := c.printPDF(ctx, htmlPath, absOut); err != nil {
 		return fmt.Errorf("print pdf: %w", err)
 	}
 
@@ -315,26 +324,34 @@ func (c *Converter) copyImages(html, srcDir string) error {
 }
 
 // copyFile copies the file at src to dst.
+//
+// The messages name which step failed rather than the file, because the caller
+// already puts the filename in front of whatever comes back from here.
 func copyFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("open source: %w", err)
 	}
 	defer in.Close()
 
 	out, err := os.Create(dst)
 	if err != nil {
-		return err
+		return fmt.Errorf("create destination: %w", err)
 	}
 	defer out.Close()
 
 	if _, err := io.Copy(out, in); err != nil {
-		return err
+		return fmt.Errorf("copy contents: %w", err)
 	}
-	return out.Close()
+	// Closed explicitly as well as deferred, so a failure to flush is reported
+	// rather than discarded.
+	if err := out.Close(); err != nil {
+		return fmt.Errorf("close destination: %w", err)
+	}
+	return nil
 }
 
-// ChromiumPath locates the Chromium executable md2pdf drives, honouring
+// ChromiumPath locates the Chromium executable md2pdf drives, honoring
 // CHROME_PATH and then probing the usual install locations. It is exported so
 // callers can report on the environment without attempting a conversion.
 func ChromiumPath() (string, error) {
@@ -344,9 +361,9 @@ func ChromiumPath() (string, error) {
 // chromiumPath attempts to locate the system Chromium executable.
 // It checks common install paths, including caches left by Playwright.
 func chromiumPath() (string, error) {
-	// Honour CHROME_PATH if set. Fail fast on invalid values.
+	// Honor CHROME_PATH if set. Fail fast on invalid values.
 	if p := os.Getenv("CHROME_PATH"); p != "" {
-		info, err := os.Stat(p)
+		info, err := os.Stat(p) //nolint:gosec // G703: CHROME_PATH names the browser to run, so an arbitrary path is the point
 		if err != nil {
 			return "", fmt.Errorf("CHROME_PATH is set but invalid: %w", err)
 		}

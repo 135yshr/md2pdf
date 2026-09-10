@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"context"
 	"image"
 	"image/color"
 	"math"
@@ -143,7 +144,7 @@ func iterm2Columns(t *testing.T, sequence string) int {
 func stubWideRasterizer(t *testing.T, c *Converter, dir string) {
 	t.Helper()
 	c.mermaidAvailable = func() bool { return true }
-	c.rasterizeMermaid = func(int, string) (string, error) {
+	c.rasterizeMermaid = func(context.Context, int, string) (string, error) {
 		path := filepath.Join(dir, "wide.png")
 		if err := os.WriteFile(path, stubPNG(t, 2000, 400), 0o644); err != nil {
 			return "", err
@@ -170,7 +171,7 @@ func TestPrepareConsoleMermaid_ScalesInlineImages(t *testing.T) {
 			transport: terminalImageTransport{protocol: imageProtocolITerm2},
 			scale:     scale,
 		}
-		_, diagrams, err := c.prepareConsoleMermaid(md, plan, width)
+		_, diagrams, err := c.prepareConsoleMermaid(t.Context(), md, plan, width)
 		if err != nil {
 			t.Fatalf("prepareConsoleMermaid: %v", err)
 		}

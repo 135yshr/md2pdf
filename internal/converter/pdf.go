@@ -91,7 +91,7 @@ func resolvePrintOptions(cfg *Config) (printOptions, error) {
 // The browser is the one chromiumPath finds, which is also the browser handed to
 // mmdc through the generated Puppeteer config — so a single Chromium serves both
 // the diagram and the print stage, and CHROME_PATH overrides both.
-func (c *Converter) printPDF(htmlPath, pdfPath string) error {
+func (c *Converter) printPDF(ctx context.Context, htmlPath, pdfPath string) error {
 	opts, err := resolvePrintOptions(c.cfg)
 	if err != nil {
 		return err
@@ -103,7 +103,7 @@ func (c *Converter) printPDF(htmlPath, pdfPath string) error {
 	}
 	c.logf("  driving %s over the DevTools Protocol", browser)
 
-	pdf, err := renderPDF(browser, htmlPath, opts, printTimeout)
+	pdf, err := renderPDF(ctx, browser, htmlPath, opts, printTimeout)
 	if err != nil {
 		return err
 	}
@@ -119,7 +119,7 @@ func (c *Converter) printPDF(htmlPath, pdfPath string) error {
 // Fonts are waited on explicitly: the page declares CJK faces with @font-face,
 // and printing before document.fonts settles produces a PDF laid out with
 // fallback metrics.
-func renderPDF(browser, htmlPath string, opts printOptions, timeout time.Duration) ([]byte, error) {
+func renderPDF(ctx context.Context, browser, htmlPath string, opts printOptions, timeout time.Duration) ([]byte, error) {
 	allocOpts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.ExecPath(browser),
 		// The sandbox cannot be used as root, which is the normal case in CI
@@ -130,7 +130,7 @@ func renderPDF(browser, htmlPath string, opts printOptions, timeout time.Duratio
 		chromedp.WSURLReadTimeout(browserStartTimeout),
 	)
 
-	allocCtx, cancelAlloc := chromedp.NewExecAllocator(context.Background(), allocOpts...)
+	allocCtx, cancelAlloc := chromedp.NewExecAllocator(ctx, allocOpts...)
 	defer cancelAlloc()
 	browserCtx, cancelBrowser := chromedp.NewContext(allocCtx)
 	defer cancelBrowser()

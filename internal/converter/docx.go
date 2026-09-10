@@ -3,6 +3,7 @@ package converter
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -64,18 +65,18 @@ var tableStyleRe = regexp.MustCompile(`(?s)<w:style [^>]*w:styleId="Table".*?</w
 // reference document (Japanese-friendly font, compact headings, bordered tables)
 // is generated and applied when possible, falling back to pandoc's defaults.
 //
-// pandoc runs with its working directory set to the converter's temporary
+// It runs pandoc with the working directory set to the converter's temporary
 // directory so generated diagrams resolve there; user images are resolved
 // against srcDir via --resource-path.
-func (c *Converter) convertMarkdownDOCX(mdBytes []byte, srcDir, docxPath string) error {
-	pandoc, err := c.findPandoc()
-	if err != nil {
-		return err
+func (c *Converter) convertMarkdownDOCX(ctx context.Context, mdBytes []byte, srcDir, docxPath string) error {
+	pandoc, findErr := c.findPandoc()
+	if findErr != nil {
+		return findErr
 	}
 
 	markdown, blocks := extractMermaidFromMarkdown(string(mdBytes))
 	c.logf("Rendering %d Mermaid diagram(s)...", len(blocks))
-	if err := c.renderMermaidPNGs(blocks); err != nil {
+	if err := c.renderMermaidPNGs(ctx, blocks); err != nil {
 		return fmt.Errorf("render mermaid: %w", err)
 	}
 	for _, b := range blocks {
@@ -83,7 +84,7 @@ func (c *Converter) convertMarkdownDOCX(mdBytes []byte, srcDir, docxPath string)
 	}
 
 	mdPath := filepath.Join(c.workDir, "document.md")
-	if err := os.WriteFile(mdPath, []byte(markdown), 0o644); err != nil {
+	if err := os.WriteFile(mdPath, []byte(markdown), 0o600); err != nil {
 		return fmt.Errorf("write markdown: %w", err)
 	}
 
@@ -94,13 +95,14 @@ func (c *Converter) convertMarkdownDOCX(mdBytes []byte, srcDir, docxPath string)
 
 	// Best-effort: a styled reference document makes the output readable.
 	// If it cannot be built, fall back to pandoc's default styling.
-	if refDoc, rerr := c.buildReferenceDoc(pandoc); rerr != nil {
+	if refDoc, rerr := c.buildReferenceDoc(ctx, pandoc); rerr != nil {
 		c.logf("  warning: could not build reference document, using pandoc defaults: %v", rerr)
 	} else {
 		args = append(args, "--reference-doc", refDoc)
 	}
 
-	cmd := exec.Command(pandoc, args...) //nolint:gosec // G204: pandoc path is auto-detected or user-provided, args are controlled
+	cmd := exec.CommandContext(ctx, pandoc, args...)
+	cmd.WaitDelay = externalToolWaitDelay
 	cmd.Dir = c.workDir
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -113,7 +115,7 @@ func (c *Converter) convertMarkdownDOCX(mdBytes []byte, srcDir, docxPath string)
 // renderMermaidPNGs renders each Mermaid block to a PNG inside the working
 // directory and records the working-directory-relative path on the block.
 // It is a no-op when no blocks are present.
-func (c *Converter) renderMermaidPNGs(blocks []*mermaidBlock) error {
+func (c *Converter) renderMermaidPNGs(ctx context.Context, blocks []*mermaidBlock) error {
 	if len(blocks) == 0 {
 		return nil
 	}
@@ -122,7 +124,7 @@ func (c *Converter) renderMermaidPNGs(blocks []*mermaidBlock) error {
 		return fmt.Errorf("puppeteer config: %w", err)
 	}
 	for i, b := range blocks {
-		name, err := c.renderSingleDiagramPNG(i, b.Source, pcfg)
+		name, err := c.renderSingleDiagramPNG(ctx, i, b.Source, pcfg)
 		if err != nil {
 			return fmt.Errorf("diagram %d: %w", i, err)
 		}
@@ -162,8 +164,9 @@ func (c *Converter) findPandoc() (string, error) {
 // buildReferenceDoc fetches pandoc's default reference.docx, styles it for
 // readable output, writes the result into the working directory, and returns its
 // path. The returned document is passed to pandoc via --reference-doc.
-func (c *Converter) buildReferenceDoc(pandoc string) (string, error) {
-	cmd := exec.Command(pandoc, "--print-default-data-file", "reference.docx") //nolint:gosec
+func (c *Converter) buildReferenceDoc(ctx context.Context, pandoc string) (string, error) {
+	cmd := exec.CommandContext(ctx, pandoc, "--print-default-data-file", "reference.docx")
+	cmd.WaitDelay = externalToolWaitDelay
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -177,7 +180,7 @@ func (c *Converter) buildReferenceDoc(pandoc string) (string, error) {
 	}
 
 	refPath := filepath.Join(c.workDir, "reference.docx")
-	if err := os.WriteFile(refPath, patched, 0o644); err != nil {
+	if err := os.WriteFile(refPath, patched, 0o600); err != nil {
 		return "", fmt.Errorf("write reference doc: %w", err)
 	}
 	return refPath, nil

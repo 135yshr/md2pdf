@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -80,14 +81,14 @@ func TestWrapLabelText_KeepsUnbreakableTokenWhole(t *testing.T) {
 
 // TestWrapLabelText_RespectsAuthoredBreaks covers a label the author already
 // broke by hand. Each segment is wrapped on its own so the authored boundary
-// survives, and every <br> spelling mermaid-ascii accepts is recognised.
+// survives, and every <br> spelling mermaid-ascii accepts is recognized.
 func TestWrapLabelText_RespectsAuthoredBreaks(t *testing.T) {
 	for _, br := range []string{"<br>", "<br/>", "<br />", "<BR>"} {
 		t.Run(br, func(t *testing.T) {
 			got := wrapLabelText("メインダッシュボード"+br+"/dashboard/main", 12)
 			lines := strings.Split(got, labelBreak)
 			if !slices.Contains(lines, "/dashboard/main") {
-				t.Errorf("authored break at %q was not honoured: %q", br, got)
+				t.Errorf("authored break at %q was not honored: %q", br, got)
 			}
 			for _, line := range lines {
 				if strings.ContainsAny(line, "<>") {
@@ -143,7 +144,7 @@ func TestFitMermaidLabels_RewritesEveryNodeOnALine(t *testing.T) {
 }
 
 // TestFitMermaidLabels_HandlesParsedShapes covers the node shapes
-// mermaid-ascii's own parseNode recognises. Rewriting only square brackets would
+// mermaid-ascii's own parseNode recognizes. Rewriting only square brackets would
 // leave the other shapes over-wide.
 func TestFitMermaidLabels_HandlesParsedShapes(t *testing.T) {
 	tests := []struct {
@@ -255,9 +256,9 @@ func TestFitMermaidLabels_LeavesEdgeLabelsAlone(t *testing.T) {
 }
 
 // TestMermaidArtWidth_MeasuresDisplayColumns pins that art is measured in
-// terminal columns. mermaid-ascii's own displayWidth goes through go-runewidth,
+// terminal columns. The width mermaid-ascii reports goes through go-runewidth,
 // which counts a box-drawing "─" as two columns under an East Asian locale and
-// so reports an inflated width; the fit loop must not inherit that reading.
+// so is inflated; the fit loop must not inherit that reading.
 func TestMermaidArtWidth_MeasuresDisplayColumns(t *testing.T) {
 	tests := []struct {
 		name string
@@ -269,7 +270,7 @@ func TestMermaidArtWidth_MeasuresDisplayColumns(t *testing.T) {
 		{"widest line wins", "ab\nabcdef\nabc", 6},
 		{"CJK counts two columns", "開始", 4},
 		{"box drawing counts one column", "┌────┐", 6},
-		{"colour escapes occupy no columns", "\x1b[31mred\x1b[0m", 3},
+		{"color escapes occupy no columns", "\x1b[31mred\x1b[0m", 3},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -474,12 +475,12 @@ func TestPrepareConsoleMermaid_FitsTheReportedDocument(t *testing.T) {
 
 	c := newTestConverter(t, &Config{Format: FormatConsole})
 	c.mermaidAvailable = func() bool { return false }
-	c.rasterizeMermaid = func(int, string) (string, error) {
+	c.rasterizeMermaid = func(context.Context, int, string) (string, error) {
 		t.Fatal("rasterizer must not run in ascii mode")
 		return "", nil
 	}
 
-	doc, diagrams, err := c.prepareConsoleMermaid(md, consoleMermaidPlan{mode: MermaidRenderASCII}, width)
+	doc, diagrams, err := c.prepareConsoleMermaid(t.Context(), md, consoleMermaidPlan{mode: MermaidRenderASCII}, width)
 	if err != nil {
 		t.Fatalf("prepareConsoleMermaid: %v", err)
 	}

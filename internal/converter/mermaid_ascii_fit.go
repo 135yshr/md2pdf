@@ -314,7 +314,7 @@ func frontmatterEnd(lines []string) int {
 }
 
 // fitMermaidLabels rewrites Mermaid source so that no node label line is wider
-// than maxWidth columns, by inserting the <br> breaks mermaid-ascii honours.
+// than maxWidth columns, by inserting the <br> breaks mermaid-ascii honors.
 // Narrowing the labels narrows the boxes, which is the only way to make an
 // over-wide text-art diagram fit: the library can compact its padding but never
 // reflows a layout.
@@ -374,9 +374,9 @@ func diagramSupportsLabelFitting(source string) bool {
 // fitMermaidArt narrows text art that overruns width by wrapping its node
 // labels, and returns art unchanged when it already fits.
 //
-// Wrapping the labels is the only lever available. mermaid-ascii sizes each box
-// from its label and lays independent chains out side by side, so a wide
-// diagram is wide because its labels are; the library's own MaxWidth only
+// Wrapping the labels is the only lever available, because mermaid-ascii sizes
+// each box from its label and lays independent chains out side by side: a wide
+// diagram is wide because its labels are, and the library's own MaxWidth only
 // compacts padding once and never reflows a layout. Trading width for height
 // this way is what keeps every chain on screen instead of clipping the
 // rightmost ones away.

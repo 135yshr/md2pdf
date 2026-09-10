@@ -4,8 +4,12 @@ description: "How md2pdf converts Markdown to PDF, DOCX, or terminal output — 
 weight: 30
 ---
 
-md2pdf reads Markdown once and then branches on `-format`. Each format has its
-own pipeline, because each renders best from a different source.
+md2pdf reads Markdown once and then branches on the output format. Each format
+has its own pipeline, because each renders best from a different source.
+
+The format comes from `-format`, or from the `-o` extension, or — failing both
+— from the name the binary was invoked as: `mdview` defaults to `console`,
+every other name to `pdf`.
 
 ## PDF pipeline (Markdown → HTML → Chromium)
 
@@ -18,7 +22,7 @@ own pipeline, because each renders best from a different source.
 
 DOCX is produced **directly from Markdown** by pandoc's `gfm` reader, with no
 HTML in between, so pandoc emits clean, Word-native paragraph and list styles.
-Mermaid blocks are rasterised to PNG and spliced back in as image references
+Mermaid blocks are rasterized to PNG and spliced back in as image references
 (Word cannot reliably display pandoc-embedded SVG). A generated reference
 document supplies the styling: bordered GFM tables, a 10.5pt body, compact
 headings, and a Japanese-friendly font.
@@ -44,9 +48,17 @@ internal/converter/
   docx.go        # DOCX — pandoc conversion and reference-doc styling
   console.go     # Console — glamour ANSI rendering, width/theme/pager handling
 
-cmd/md2pdf/
-  main.go        # CLI entry point
+internal/cli/
+  cli.go         # Run: the entry point every binary shares
+  name.go        # argv[0] -> default output format
   flags.go       # Argument parsing, auto-detection, format resolution
+  inputs.go      # Input validation, output path resolution
+  usage.go       # Help text, assembled per invoked name
+  fonts.go       # CJK font discovery
+  doctor.go      # -doctor report formatting
+
+cmd/md2pdf/
+  main.go        # Thin main: ldflags version vars, then cli.Run
 ```
 
 ## External dependencies

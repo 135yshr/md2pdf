@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"errors"
@@ -7,8 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/charmbracelet/x/term"
 
 	"github.com/135yshr/md2pdf/internal/converter"
 )
@@ -38,13 +36,18 @@ func (f *cssFlag) Set(value string) error {
 	return nil
 }
 
-// parseFlags parses command-line arguments and returns a Config.
-func parseFlags(args []string) (*converter.Config, error) {
-	fs := flag.NewFlagSet("md2pdf", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+// parseFlags parses command-line arguments and returns a Config. The -version
+// and -doctor flags print their own output and finish the invocation here; they
+// report that as an exitError rather than exiting the process, so the caller
+// keeps ownership of the exit status.
+func (p *program) parseFlags(args []string) (*converter.Config, error) {
+	fs := flag.NewFlagSet(p.name, flag.ContinueOnError)
+	fs.SetOutput(p.stderr)
 
 	output := fs.String("o", "", "Output file path (default: <input>.pdf, or .docx with -format docx)")
-	format := fs.String("format", "", "Output format: pdf (default), html, docx or console (inferred from -o extension when omitted)")
+	format := fs.String("format", "", fmt.Sprintf(
+		"Output format: pdf, html, docx or console (default: %s; inferred from -o extension when omitted)",
+		p.defaultFormat))
 	fontRegular := fs.String("font", "", "Path to Noto Sans CJK JP Regular .ttc/.ttf font file")
 	fontBold := fs.String("font-bold", "", "Path to Noto Sans CJK JP Bold .ttc/.ttf font file")
 	fontMedium := fs.String("font-medium", "", "Path to Noto Sans CJK JP Medium .ttc/.ttf font file")
@@ -69,12 +72,15 @@ func parseFlags(args []string) (*converter.Config, error) {
 	doctor := fs.Bool("doctor", false, "Report which runtime dependencies are present and which formats can run, then exit")
 
 	if err := fs.Parse(args); err != nil {
-		return nil, err
+		// Wrapped rather than replaced: flag.ErrHelp has to stay recognizable
+		// to anything that later wants to treat -h as a success.
+		return nil, fmt.Errorf("parse arguments: %w", err)
 	}
 
 	if *showVersion {
-		fmt.Printf("md2pdf version %s (commit: %s, built: %s)\n", version, commit, date)
-		os.Exit(0)
+		fmt.Fprintf(p.stdout, "%s version %s (commit: %s, built: %s)\n",
+			p.name, p.build.Version, p.build.Commit, p.build.Date)
+		return nil, exitError{code: 0}
 	}
 
 	// -doctor inspects the machine rather than converting anything, so it runs
@@ -86,21 +92,21 @@ func parseFlags(args []string) (*converter.Config, error) {
 			PandocPath:  *pandocPath,
 			FontRegular: resolveFontRegular(*fontRegular),
 		}
-		if runDoctor(os.Stdout, converter.Diagnose(cfg)) {
-			os.Exit(0)
+		if runDoctor(p.stdout, p.diagnose(cfg)) {
+			return nil, exitError{code: 0}
 		}
-		os.Exit(1)
+		return nil, exitError{code: 1}
 	}
 
 	// Resolve output format first: it decides whether several inputs are
 	// allowed at all. An explicit -format flag wins; otherwise it is inferred
-	// from the -o extension, defaulting to pdf.
-	outFormat, err := resolveFormat(*format, *output)
+	// from the -o extension, then from the name the program was invoked as.
+	outFormat, err := resolveFormat(*format, *output, p.defaultFormat)
 	if err != nil {
 		return nil, err
 	}
 
-	inputs, err := resolveInputs(fs.Args(), outFormat, term.IsTerminal(os.Stdin.Fd()))
+	inputs, err := p.resolveInputs(fs.Args(), outFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -194,12 +200,13 @@ func parseFlags(args []string) (*converter.Config, error) {
 	}, nil
 }
 
-// resolveFormat determines the output format from the explicit -format flag and
-// the -o path. The flag takes precedence; otherwise the format is inferred from
-// the output file extension, defaulting to pdf. It returns an error when the two
-// disagree or when an unsupported format is requested. Console format renders to
-// the terminal, so it cannot be combined with -o.
-func resolveFormat(format, output string) (string, error) {
+// resolveFormat determines the output format from the explicit -format flag,
+// the -o path and the default the invoked program name implies, in that order
+// of precedence. It returns an error when the flag and the extension disagree,
+// when an unsupported format is requested, or when a program that renders to
+// the terminal by default is handed an -o path that names no format. Console
+// format renders to the terminal, so it cannot be combined with -o.
+func resolveFormat(format, output, defaultFormat string) (string, error) {
 	fromExt := ""
 	switch strings.ToLower(filepath.Ext(output)) {
 	case ".pdf":
@@ -214,7 +221,15 @@ func resolveFormat(format, output string) (string, error) {
 		if fromExt != "" {
 			return fromExt, nil
 		}
-		return converter.FormatPDF, nil
+		// Falling back to console with an -o path would silently drop it:
+		// resolveOutputPath returns no path for console output. Say so instead.
+		if defaultFormat == converter.FormatConsole && output != "" {
+			return "", fmt.Errorf(
+				"this program renders to the terminal by default, so -o %s names no format to write: "+
+					"end the path in .pdf, .html or .docx, or choose one with -format",
+				output)
+		}
+		return defaultFormat, nil
 	}
 
 	normalized := normalizeFormat(format)
@@ -276,98 +291,4 @@ func findFirst(paths []string) string {
 		}
 	}
 	return paths[0]
-}
-
-// printUsage prints a friendly usage summary to stderr.
-func printUsage() {
-	fmt.Fprintf(os.Stderr, `
-Usage:
-  md2pdf [options] <input.md>
-  md2pdf [options] -                       read the document from stdin
-  md2pdf -format console [options] <input.md>...   several files, in order
-
-Options:
-  -o <path>               Output path (default: <input>.<format>, e.g.
-                          <input>.html with -format html)
-  -format <fmt>           Output format: pdf (default), html, docx or console
-                          (console has the aliases term and terminal;
-                          inferred from -o extension when omitted, including
-                          .html and .htm)
-  -css <path>             Custom CSS applied after the built-in stylesheet,
-                          so its rules win. Repeatable; later files win over
-                          earlier ones. Used by pdf and html output.
-  -font <path>            Noto Sans CJK JP Regular font (.ttc/.ttf)
-  -font-bold <path>       Noto Sans CJK JP Bold font
-  -font-medium <path>     Noto Sans CJK JP Medium font
-  -mmdc <path>            Path to mmdc (Mermaid CLI) binary
-  -pandoc <path>          Path to pandoc binary (used for -format docx)
-  -docx-font <family>     Font family for DOCX output (default: Yu Gothic)
-  -puppeteer-config <f>   Path to Puppeteer JSON config for mmdc
-  -page-size <size>       PDF page size: A4 (default), Letter, A3
-  -margin-top <m>         Top margin    (default: 18mm)
-  -margin-bottom <m>      Bottom margin (default: 18mm)
-  -margin-left <m>        Left margin   (default: 14mm)
-  -margin-right <m>       Right margin  (default: 14mm)
-  -width <cols>           Console word-wrap width (default: terminal width,
-                          capped at 120 columns)
-  -style <name|path>      Console color theme: auto (default), dark, light,
-                          notty, ascii, dracula, pink, tokyo-night, or a path
-                          to a JSON stylesheet (env: GLAMOUR_STYLE)
-  -pager                  Page console output through $PAGER on a terminal
-                          (default: true; use -pager=false to disable)
-  -mermaid-render <mode>  How to draw Mermaid diagrams in console output:
-                          auto (default) tries an inline image on terminals
-                          that support kitty, iTerm2 or Sixel, then falls back
-                          to box-drawing text art, then to the source;
-                          image forces inline images and fails if the terminal
-                          cannot show them; ascii always draws text art;
-                          source always prints the Mermaid source.
-                          Inline images bypass the pager, which cannot display
-                          them; text art pages normally.
-                          A diagram too wide for the terminal is shown in full
-                          and scrolled sideways when the pager can do that,
-                          and printed as source when it cannot; it is never
-                          shown with its right edge cut off.
-  -mermaid-scale <n>      Scale inline console diagram images, where 1 is the
-                          natural size (default). 0.5 halves a diagram and 2
-                          doubles it; enlarging stops at the wrap width,
-                          since an inline image cannot be scrolled. Accepts
-                          0.1 to 4. Applies to images only, so it cannot be
-                          combined with -mermaid-render ascii or source.
-  -doctor                 Report which runtime dependencies are present and
-                          which output formats can run, then exit. Exits
-                          non-zero when a format is blocked, so it works as a
-                          check in a setup script.
-  -v                      Verbose output
-  -version                Print version and exit
-
-Inputs:
-  A single .md path works for every format. "-" reads the document from
-  standard input instead; relative paths inside it resolve against the
-  current directory, and -o becomes required for pdf and docx because
-  there is no input filename to derive the output name from.
-  Several paths are accepted with -format console only, and render in
-  order separated by a rule.
-
-Examples:
-  md2pdf document.md
-  md2pdf -o report.pdf document.md
-  md2pdf -format docx document.md
-  md2pdf -o report.docx document.md
-  md2pdf -format html document.md
-  md2pdf -format html -css brand.css document.md
-  md2pdf -css brand.css -css client.css -o report.pdf document.md
-  md2pdf -format console document.md
-  md2pdf -format console -style dark -width 100 document.md
-  md2pdf -format console -pager=false document.md | cat
-  md2pdf -format console -mermaid-render image document.md
-  md2pdf -format console -mermaid-render ascii document.md
-  md2pdf -format console -mermaid-render source document.md
-  md2pdf -format console -mermaid-render image -mermaid-scale 0.5 document.md
-  md2pdf -doctor
-  md2pdf -font /path/to/NotoSansCJK-Regular.ttc document.md
-  cat doc.md | md2pdf -format console -
-  gh pr view 41 --json body -q .body | md2pdf -o pr.pdf -
-  md2pdf -format console docs/*.md
-`)
 }

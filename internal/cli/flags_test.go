@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"os"
@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/135yshr/md2pdf/internal/converter"
 )
 
 func TestResolveFormat(t *testing.T) {
@@ -35,7 +37,7 @@ func TestResolveFormat(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := resolveFormat(tc.format, tc.output)
+			got, err := resolveFormat(tc.format, tc.output, converter.FormatPDF)
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("resolveFormat(%q, %q) expected error, got %q", tc.format, tc.output, got)
@@ -47,6 +49,47 @@ func TestResolveFormat(t *testing.T) {
 			}
 			if got != tc.want {
 				t.Errorf("resolveFormat(%q, %q) = %q, want %q", tc.format, tc.output, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestResolveFormatWithConsoleDefault covers the program that renders to the
+// terminal unless told otherwise: an explicit -format wins, an -o extension
+// wins over the name, and an -o path that names no format is an error rather
+// than a silently discarded flag.
+func TestResolveFormatWithConsoleDefault(t *testing.T) {
+	tests := []struct {
+		name    string
+		format  string
+		output  string
+		want    string
+		wantErr bool
+	}{
+		{"no flags renders to the terminal", "", "", "console", false},
+		{"a pdf output path wins over the name", "", "out.pdf", "pdf", false},
+		{"an html output path wins over the name", "", "out.html", "html", false},
+		{"a docx output path wins over the name", "", "out.docx", "docx", false},
+		{"an output path naming no format errors", "", "notes.txt", "", true},
+		{"an explicit format wins", "docx", "out.docx", "docx", false},
+		{"an explicit pdf wins with no output path", "pdf", "", "pdf", false},
+		{"an explicit console still rejects an output path", "console", "out.txt", "", true},
+		{"a conflicting flag and extension still errors", "pdf", "out.docx", "", true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := resolveFormat(tc.format, tc.output, converter.FormatConsole)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("resolveFormat(%q, %q, console) expected error, got %q", tc.format, tc.output, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("resolveFormat(%q, %q, console): %v", tc.format, tc.output, err)
+			}
+			if got != tc.want {
+				t.Errorf("resolveFormat(%q, %q, console) = %q, want %q", tc.format, tc.output, got, tc.want)
 			}
 		})
 	}

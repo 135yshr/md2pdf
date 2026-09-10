@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -8,11 +9,6 @@ import (
 
 // errStubTmuxFailure stands in for a tmux command that cannot run.
 var errStubTmuxFailure = errors.New("stub tmux failure")
-
-// stubTmux returns a tmuxQuery answering the given output for any command.
-func stubTmux(out string, err error) tmuxQuery {
-	return func(...string) (string, error) { return out, err }
-}
 
 // TestInsideTmux pins how tmux is detected. $TMUX is the marker rather than
 // TERM: tmux sets TERM to screen-256color, but so do other multiplexers and a
@@ -66,7 +62,7 @@ type tmuxStub struct {
 }
 
 // query implements tmuxQuery.
-func (s tmuxStub) query(args ...string) (string, error) {
+func (s tmuxStub) query(_ context.Context, args ...string) (string, error) {
 	if s.err != nil {
 		return "", s.err
 	}
@@ -165,7 +161,7 @@ func TestDetectImageTransport(t *testing.T) {
 			wantProtocol: imageProtocolNone,
 		},
 		{
-			// Sixel is not tunnelled: tmux handles it natively when built for
+			// Sixel is not tunneled: tmux handles it natively when built for
 			// it, and a passthrough-wrapped Sixel is not reliably forwarded.
 			name:         "tmux over a Sixel terminal is not claimed",
 			env:          map[string]string{"TMUX": "/tmp/tmux-501/default,1,0", "TERM_PROGRAM": "tmux"},
@@ -180,7 +176,7 @@ func TestDetectImageTransport(t *testing.T) {
 			if tc.client != "" {
 				query = tmuxStub{env: tc.tmuxEnv, client: tc.client, passthrough: tc.passthrough}.query
 			}
-			got := detectImageTransport(mapGetenv(tc.env), query)
+			got := detectImageTransport(t.Context(), mapGetenv(tc.env), query)
 			if got.protocol != tc.wantProtocol {
 				t.Errorf("protocol = %v, want %v", got.protocol, tc.wantProtocol)
 			}
@@ -204,15 +200,15 @@ func TestEncodeTerminalImage_TunnelsThroughTmux(t *testing.T) {
 		t.Errorf("a sequence going straight to the terminal was wrapped for tmux: %q", direct[:32])
 	}
 
-	tunnelled, err := encodeTerminalImage(
+	tunneled, err := encodeTerminalImage(
 		terminalImageTransport{protocol: imageProtocolKitty, viaTmux: true}, data, 40, 1)
 	if err != nil {
-		t.Fatalf("tunnelled: %v", err)
+		t.Fatalf("tunneled: %v", err)
 	}
-	if tunnelled != wrapTmuxPassthrough(direct) {
+	if tunneled != wrapTmuxPassthrough(direct) {
 		t.Error("the tmux sequence is not the direct one wrapped for passthrough")
 	}
-	if strings.Contains(tunnelled[len("\x1bPtmux;"):len(tunnelled)-2], "\x1b\x1b\x1b") {
+	if strings.Contains(tunneled[len("\x1bPtmux;"):len(tunneled)-2], "\x1b\x1b\x1b") {
 		t.Error("ESC doubling went wrong inside the payload")
 	}
 }
@@ -230,7 +226,7 @@ func TestResolveConsoleMermaidPlan_TmuxPassthroughOff(t *testing.T) {
 	query := stubTmuxCommands("TERM_PROGRAM=iTerm.app\n", "off\n")
 
 	t.Run("auto degrades to text art", func(t *testing.T) {
-		plan, err := resolveConsoleMermaidPlan(MermaidRenderAuto, true, false, getenv, query)
+		plan, err := resolveConsoleMermaidPlan(t.Context(), MermaidRenderAuto, true, false, getenv, query)
 		if err != nil {
 			t.Fatalf("resolveConsoleMermaidPlan: %v", err)
 		}
@@ -240,7 +236,7 @@ func TestResolveConsoleMermaidPlan_TmuxPassthroughOff(t *testing.T) {
 	})
 
 	t.Run("explicit image names the setting", func(t *testing.T) {
-		_, err := resolveConsoleMermaidPlan(MermaidRenderImage, true, false, getenv, query)
+		_, err := resolveConsoleMermaidPlan(t.Context(), MermaidRenderImage, true, false, getenv, query)
 		if err == nil {
 			t.Fatal("expected an error with tmux passthrough off")
 		}
@@ -252,7 +248,7 @@ func TestResolveConsoleMermaidPlan_TmuxPassthroughOff(t *testing.T) {
 	})
 
 	t.Run("passthrough on reaches the outer terminal", func(t *testing.T) {
-		plan, err := resolveConsoleMermaidPlan(MermaidRenderImage, true, false, getenv,
+		plan, err := resolveConsoleMermaidPlan(t.Context(), MermaidRenderImage, true, false, getenv,
 			tmuxStub{client: visibleClientType("xterm-256color", "iTerm2 3.6.11"), passthrough: "on\n"}.query)
 		if err != nil {
 			t.Fatalf("resolveConsoleMermaidPlan: %v", err)
@@ -264,8 +260,8 @@ func TestResolveConsoleMermaidPlan_TmuxPassthroughOff(t *testing.T) {
 }
 
 // TestTmuxClientState covers reading the pane md2pdf is actually drawing into.
-// tmux's global environment describes whatever started the server, which can be
-// a different terminal from the one attached now.
+// The global environment describes whatever started the server, which can be a
+// different terminal from the one attached now.
 func TestTmuxClientState(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -285,7 +281,7 @@ func TestTmuxClientState(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, ok := tmuxClientState(tmuxStub{client: tc.answer}.query)
+			got, ok := tmuxClientState(t.Context(), tmuxStub{client: tc.answer}.query)
 			if ok != tc.wantOK {
 				t.Fatalf("ok = %t, want %t", ok, tc.wantOK)
 			}
@@ -323,7 +319,7 @@ func TestTmuxForwardsPassthrough(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			query := tmuxStub{passthrough: tc.passthrough, client: tc.client, err: tc.err}.query
-			reason, got := tmuxForwardsPassthrough(query)
+			reason, got := tmuxForwardsPassthrough(t.Context(), query)
 			if got != tc.want {
 				t.Errorf("tmuxForwardsPassthrough() = %t, want %t (reason %q)", got, tc.want, reason)
 			}
@@ -390,7 +386,7 @@ func TestDetectImageTransport_FollowsTheAttachedClient(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			query := tmuxStub{env: tc.env, client: tc.client, passthrough: tc.passthrough}.query
-			got := detectImageTransport(inTmux, query)
+			got := detectImageTransport(t.Context(), inTmux, query)
 			if got.protocol != tc.wantProtocol {
 				t.Errorf("protocol = %v, want %v", got.protocol, tc.wantProtocol)
 			}
@@ -434,7 +430,7 @@ func TestResolveConsoleMermaidPlan_TmuxBlockedReasonsAreActionable(t *testing.T)
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			query := tmuxStub{env: globals, client: tc.client, passthrough: tc.passthrough}.query
-			_, err := resolveConsoleMermaidPlan(MermaidRenderImage, true, false, getenv, query)
+			_, err := resolveConsoleMermaidPlan(t.Context(), MermaidRenderImage, true, false, getenv, query)
 			if err == nil {
 				t.Fatal("expected an error")
 			}
@@ -449,10 +445,10 @@ func TestResolveConsoleMermaidPlan_TmuxBlockedReasonsAreActionable(t *testing.T)
 // test for identifying the protocol from a mix of the two terminals.
 //
 // A server started under iTerm2 and attached from a plain terminal used to keep
-// the server's TERM_PROGRAM, so an OSC 1337 image was tunnelled to a client that
+// the server's TERM_PROGRAM, so an OSC 1337 image was tunneled to a client that
 // cannot show one — it disappears. Nothing protocol-identifying may come from
 // the server snapshot; tmux reports the client's own answer to its version query
-// as #{client_termtype}, which is what iTerm2 and kitty are recognised by.
+// as #{client_termtype}, which is what iTerm2 and kitty are recognized by.
 func TestDetectImageTransport_NeverMixesClientAndServerMetadata(t *testing.T) {
 	inTmux := mapGetenv(map[string]string{
 		"TMUX":         "/tmp/tmux-501/default,1,0",
@@ -516,7 +512,7 @@ func TestDetectImageTransport_NeverMixesClientAndServerMetadata(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			query := tmuxStub{env: tc.env, client: tc.client, passthrough: "on\n"}.query
-			got := detectImageTransport(inTmux, query)
+			got := detectImageTransport(t.Context(), inTmux, query)
 			if got.protocol != tc.wantProtocol {
 				t.Errorf("protocol = %v, want %v", got.protocol, tc.wantProtocol)
 			}

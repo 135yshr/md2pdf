@@ -65,7 +65,7 @@ func TestLengthInches(t *testing.T) {
 		{name: "the default left margin", value: "14mm", want: 0.55118},
 		{name: "inches", value: "1in", want: 1},
 		{name: "fractional inches", value: "0.5in", want: 0.5},
-		{name: "centimetres", value: "2cm", want: 0.78740},
+		{name: "centimeters", value: "2cm", want: 0.78740},
 		{name: "points", value: "36pt", want: 0.5},
 		{name: "CSS pixels", value: "96px", want: 1},
 		{name: "a bare number is CSS pixels", value: "48", want: 0.5},

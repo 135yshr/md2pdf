@@ -12,10 +12,16 @@ weight: 10
 brew install 135yshr/tap/md2pdf
 ```
 
+This installs two commands: `md2pdf`, and `mdview`, which is the same binary
+under a second name and renders to the terminal by default.
+
 ### Go install
 
 ```sh
 go install github.com/135yshr/md2pdf/cmd/md2pdf@latest
+
+# go install can only produce one name; link the second one yourself.
+ln -s "$(go env GOPATH)/bin/md2pdf" "$(go env GOPATH)/bin/mdview"
 ```
 
 ### Build from source
@@ -24,6 +30,7 @@ go install github.com/135yshr/md2pdf/cmd/md2pdf@latest
 git clone https://github.com/135yshr/md2pdf.git
 cd md2pdf
 go build -o md2pdf ./cmd/md2pdf
+ln -s md2pdf mdview        # optional second name, defaults to terminal output
 ```
 
 ## Install runtime dependencies

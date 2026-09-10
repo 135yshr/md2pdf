@@ -2,6 +2,7 @@ package converter
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -149,7 +150,7 @@ func (p consoleMermaidPlan) emitsImages() bool {
 // need an interactive terminal with a known image protocol and color enabled;
 // "auto" degrades to the Mermaid source whenever any of that is missing, while
 // an explicit "image" reports which capability was absent.
-func resolveConsoleMermaidPlan(mode string, isTTY, noColor bool, getenv func(string) string, tmux tmuxQuery) (consoleMermaidPlan, error) {
+func resolveConsoleMermaidPlan(ctx context.Context, mode string, isTTY, noColor bool, getenv func(string) string, tmux tmuxQuery) (consoleMermaidPlan, error) {
 	if mode == "" {
 		mode = MermaidRenderAuto
 	}
@@ -173,7 +174,7 @@ func resolveConsoleMermaidPlan(mode string, isTTY, noColor bool, getenv func(str
 		return asciiPlan, nil
 	}
 
-	transport := detectImageTransport(getenv, tmux)
+	transport := detectImageTransport(ctx, getenv, tmux)
 	if transport.protocol == imageProtocolNone {
 		if mode == MermaidRenderImage {
 			if transport.tmuxBlockedReason != "" {
@@ -229,7 +230,7 @@ func (d consoleDiagram) isImage() bool { return d.kind == diagramImage }
 
 // anyImageDiagram reports whether any diagram was drawn as an inline image.
 // The plan alone cannot answer this: an image plan still produces text art when
-// mmdc turns out to be missing or a diagram fails to rasterise.
+// mmdc turns out to be missing or a diagram fails to rasterize.
 func anyImageDiagram(diagrams []consoleDiagram) bool {
 	for _, d := range diagrams {
 		if d.isImage() {
@@ -335,7 +336,7 @@ func spliceConsoleDiagrams(rendered string, diagrams []consoleDiagram, width int
 // so output stays identical to the source-only rendering. Diagrams are rendered
 // independently: one that cannot be drawn falls back to its own source and
 // leaves the rest of the document alone.
-func (c *Converter) prepareConsoleMermaid(md []byte, plan consoleMermaidPlan, width int) ([]byte, []consoleDiagram, error) {
+func (c *Converter) prepareConsoleMermaid(ctx context.Context, md []byte, plan consoleMermaidPlan, width int) ([]byte, []consoleDiagram, error) {
 	if !plan.emitsImages() && plan.mode != MermaidRenderASCII {
 		return md, nil, nil
 	}
@@ -352,13 +353,13 @@ func (c *Converter) prepareConsoleMermaid(md []byte, plan consoleMermaidPlan, wi
 		return md, nil, nil
 	}
 
-	// Images need mmdc to rasterise the PNG; text art does not, so a missing
+	// Images need mmdc to rasterize the PNG; text art does not, so a missing
 	// Mermaid CLI drops one step down the chain instead of all the way to source.
 	useImages := plan.emitsImages()
 	if useImages && !c.mermaidAvailable() {
 		if plan.strict {
 			return nil, nil, errors.New(
-				"-mermaid-render image needs the Mermaid CLI to rasterise diagrams, " +
+				"-mermaid-render image needs the Mermaid CLI to rasterize diagrams, " +
 					"but mmdc was not found; install @mermaid-js/mermaid-cli, " +
 					"or use -mermaid-render ascii to draw them as text art")
 		}
@@ -375,7 +376,7 @@ func (c *Converter) prepareConsoleMermaid(md []byte, plan consoleMermaidPlan, wi
 
 	diagrams := make([]consoleDiagram, 0, len(blocks))
 	for i, block := range blocks {
-		diagram, err := c.renderConsoleBlock(i, block.Source, plan, width, useImages)
+		diagram, err := c.renderConsoleBlock(ctx, i, block.Source, plan, width, useImages)
 		switch {
 		case errors.Is(err, errShowMermaidSource):
 			markdown = strings.Replace(markdown, block.Placeholder, fencedMermaid(block.Source), 1)
@@ -400,11 +401,19 @@ var errShowMermaidSource = errors.New("no renderer could draw this diagram")
 // to restore the block's Mermaid source.
 //
 // A strict plan (-mermaid-render image) skips the text-art step entirely and
-// returns the rasterisation error, so asking for an image never quietly yields
+// returns the rasterization error, so asking for an image never quietly yields
 // something else.
-func (c *Converter) renderConsoleBlock(idx int, source string, plan consoleMermaidPlan, width int, useImages bool) (consoleDiagram, error) {
+func (c *Converter) renderConsoleBlock(ctx context.Context, idx int, source string, plan consoleMermaidPlan, width int, useImages bool) (consoleDiagram, error) {
+	// An interrupted run must not walk the fallback chain. Every step below
+	// succeeds without the context — text art is drawn in-process — so degrading
+	// to one would finish with exit status 0 and print a document after the
+	// reader asked for the run to stop.
+	if err := ctx.Err(); err != nil {
+		return consoleDiagram{}, fmt.Errorf("diagram %d: %w", idx, err)
+	}
+
 	if useImages {
-		sequence, err := c.renderConsoleDiagram(idx, source, plan.transport, width, plan.scale)
+		sequence, err := c.renderConsoleDiagram(ctx, idx, source, plan.transport, width, plan.scale)
 		if err == nil {
 			c.logf("  diagram %d drawn (%d bytes of %s escape sequence)",
 				idx, len(sequence), plan.transport.protocol)
@@ -414,6 +423,11 @@ func (c *Converter) renderConsoleBlock(idx int, source string, plan consoleMerma
 			return consoleDiagram{}, fmt.Errorf(
 				"-mermaid-render image could not draw diagram %d as a %s image: %w",
 				idx, plan.transport.protocol, err)
+		}
+		// The image step is the only one that can be interrupted, so a context
+		// that expired during it means the failure is the cancellation itself.
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return consoleDiagram{}, fmt.Errorf("diagram %d: %w", idx, ctxErr)
 		}
 		c.logf("  diagram %d could not be drawn as an image (%v); trying text art", idx, err)
 	}
@@ -442,10 +456,10 @@ func (c *Converter) renderConsoleBlock(idx int, source string, plan consoleMerma
 	return consoleDiagram{content: art, kind: diagramTextArt}, nil
 }
 
-// renderConsoleDiagram rasterises one Mermaid block and encodes the PNG for the
+// renderConsoleDiagram rasterizes one Mermaid block and encodes the PNG for the
 // terminal.
-func (c *Converter) renderConsoleDiagram(idx int, source string, transport terminalImageTransport, width int, scale float64) (string, error) {
-	pngPath, err := c.rasterizeMermaid(idx, source)
+func (c *Converter) renderConsoleDiagram(ctx context.Context, idx int, source string, transport terminalImageTransport, width int, scale float64) (string, error) {
+	pngPath, err := c.rasterizeMermaid(ctx, idx, source)
 	if err != nil {
 		return "", err
 	}
@@ -456,15 +470,15 @@ func (c *Converter) renderConsoleDiagram(idx int, source string, transport termi
 	return encodeTerminalImage(transport, data, width, scale)
 }
 
-// consoleDiagramPNG rasterises a Mermaid block to a PNG and returns its
+// consoleDiagramPNG rasterizes a Mermaid block to a PNG and returns its
 // absolute path. It is the production implementation behind
 // Converter.rasterizeMermaid.
-func (c *Converter) consoleDiagramPNG(idx int, source string) (string, error) {
+func (c *Converter) consoleDiagramPNG(ctx context.Context, idx int, source string) (string, error) {
 	pcfg, err := c.ensurePuppeteerConfig()
 	if err != nil {
 		return "", fmt.Errorf("puppeteer config: %w", err)
 	}
-	rel, err := c.renderSingleDiagramPNG(idx, source, pcfg)
+	rel, err := c.renderSingleDiagramPNG(ctx, idx, source, pcfg)
 	if err != nil {
 		return "", err
 	}
@@ -608,7 +622,7 @@ func encodeImageSequence(protocol terminalImageProtocol, data []byte, maxColumns
 // Each destination pixel averages the source pixels it covers, which suits the
 // downscaling of an already-supersampled mmdc render better than picking a
 // single nearest sample; enlarging falls out of the same loop as a
-// nearest-neighbour sample, since each destination pixel then covers one source
+// nearest-neighbor sample, since each destination pixel then covers one source
 // pixel. It resizes in **both** directions on purpose: Sixel is the only
 // protocol md2pdf resizes for itself — kitty and iTerm2 are handed a column
 // count and scale on their side — so refusing to enlarge here left
