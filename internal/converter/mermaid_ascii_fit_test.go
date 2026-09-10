@@ -139,3 +139,30 @@ func TestFitMermaidLabels_RewritesEveryNodeOnALine(t *testing.T) {
 		t.Errorf("fitMermaidLabels()\n got: %q\nwant: %q", got, want)
 	}
 }
+
+// TestFitMermaidLabels_HandlesParsedShapes covers the node shapes
+// mermaid-ascii's own parseNode recognises. Rewriting only square brackets would
+// leave the other shapes over-wide.
+func TestFitMermaidLabels_HandlesParsedShapes(t *testing.T) {
+	tests := []struct {
+		name   string
+		source string
+		want   string
+	}{
+		{"square", "graph LR\n  A[Alpha Beta Gamma]\n", "graph LR\n  A[Alpha<br>Beta<br>Gamma]\n"},
+		{"rounded", "graph LR\n  A(Alpha Beta Gamma)\n", "graph LR\n  A(Alpha<br>Beta<br>Gamma)\n"},
+		{"stadium", "graph LR\n  A[(Alpha Beta Gamma)]\n", "graph LR\n  A[(Alpha<br>Beta<br>Gamma)]\n"},
+		{"hexagon", "graph LR\n  A{{Alpha Beta Gamma}}\n", "graph LR\n  A{{Alpha<br>Beta<br>Gamma}}\n"},
+		{"rhombus", "graph LR\n  A{Alpha Beta Gamma}\n", "graph LR\n  A{Alpha<br>Beta<br>Gamma}\n"},
+		// A shape the library cannot parse must be left alone rather than
+		// rewritten into something it parses differently.
+		{"nested brackets are left alone", "graph LR\n  A[Alpha Beta [Gamma]]\n", "graph LR\n  A[Alpha Beta [Gamma]]\n"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := fitMermaidLabels(tc.source, 8); got != tc.want {
+				t.Errorf("fitMermaidLabels()\n got: %q\nwant: %q", got, tc.want)
+			}
+		})
+	}
+}

@@ -18,6 +18,21 @@ const labelBreak = "<br>"
 // label exactly where the renderer will.
 var labelBreakRe = regexp.MustCompile(`(?i)<br\s*/?>`)
 
+// labelShapes lists the node shapes whose label text may be rewritten, in the
+// order they must be matched so that a two-character delimiter wins over the
+// one-character delimiter it starts with.
+//
+// The set mirrors mermaid-ascii's parseNode with one deliberate omission: its
+// ">...]" asymmetric shape is left out, because a ">" cannot be told apart from
+// the one ending an "-->" arrow.
+var labelShapes = []struct{ open, close string }{
+	{open: "[(", close: ")]"},
+	{open: "{{", close: "}}"},
+	{open: "{", close: "}"},
+	{open: "[", close: "]"},
+	{open: "(", close: ")"},
+}
+
 // labelToken is one piece of a label that wrapping never splits.
 //
 // A run of narrow characters is one token, because breaking a word or a path
@@ -114,6 +129,16 @@ func wrapLabelSegment(segment string, maxWidth int) string {
 	return strings.Join(lines, labelBreak)
 }
 
+// wrapLabelValue wraps the text between a shape's delimiters. Quotes the author
+// put around the label are kept outermost, so the renderer still strips them and
+// the columns they occupy are not charged against the label's width.
+func wrapLabelValue(value string, maxWidth int) string {
+	if len(value) >= 2 && strings.HasPrefix(value, `"`) && strings.HasSuffix(value, `"`) {
+		return `"` + wrapLabelText(value[1:len(value)-1], maxWidth) + `"`
+	}
+	return wrapLabelText(value, maxWidth)
+}
+
 // isNodeIDByte reports whether b can end a Mermaid node id, which is how a
 // shape delimiter is told apart from the same character used elsewhere on the
 // line. A hyphen is deliberately excluded: it is legal inside an id, but
@@ -135,6 +160,21 @@ func precededByNodeID(line string, i int) bool {
 	return j >= 0 && isNodeIDByte(line[j])
 }
 
+// containsUnquoted reports whether text contains substr outside double quotes.
+func containsUnquoted(text, substr string) bool {
+	inQuotes := false
+	for i := 0; i < len(text); i++ {
+		if text[i] == '"' {
+			inQuotes = !inQuotes
+			continue
+		}
+		if !inQuotes && strings.HasPrefix(text[i:], substr) {
+			return true
+		}
+	}
+	return false
+}
+
 // findLabelEnd returns the index of the closing delimiter for a label starting
 // at start, skipping delimiters inside double quotes. It reports ok=false when
 // the label is unterminated.
@@ -152,25 +192,46 @@ func findLabelEnd(line string, start int, closer string) (int, bool) {
 	return 0, false
 }
 
+// labelValueAt returns the label text of the node shape opening at index i.
+// It reports ok=false when no shape opens there, when the shape is unterminated,
+// or when the text between the delimiters holds another one of them: the
+// renderer parses such a label differently, and rewriting it would change the
+// diagram rather than narrow it.
+func labelValueAt(line string, i int) (open, close, value string, ok bool) {
+	if !precededByNodeID(line, i) {
+		return "", "", "", false
+	}
+	for _, shape := range labelShapes {
+		if !strings.HasPrefix(line[i:], shape.open) {
+			continue
+		}
+		end, found := findLabelEnd(line, i+len(shape.open), shape.close)
+		if !found {
+			return "", "", "", false
+		}
+		inner := line[i+len(shape.open) : end]
+		if containsUnquoted(inner, shape.open) || containsUnquoted(inner, shape.close) {
+			return "", "", "", false
+		}
+		return shape.open, shape.close, inner, true
+	}
+	return "", "", "", false
+}
+
 // fitLabelsInLine wraps every node label on one line of Mermaid source.
 func fitLabelsInLine(line string, maxWidth int) string {
 	var out strings.Builder
 	for i := 0; i < len(line); {
-		const opener, closer = "[", "]"
-		end := 0
-		ok := false
-		if strings.HasPrefix(line[i:], opener) && precededByNodeID(line, i) {
-			end, ok = findLabelEnd(line, i+len(opener), closer)
-		}
+		open, close, value, ok := labelValueAt(line, i)
 		if !ok {
 			out.WriteByte(line[i])
 			i++
 			continue
 		}
-		out.WriteString(opener)
-		out.WriteString(wrapLabelText(line[i+len(opener):end], maxWidth))
-		out.WriteString(closer)
-		i = end + len(closer)
+		out.WriteString(open)
+		out.WriteString(wrapLabelValue(value, maxWidth))
+		out.WriteString(close)
+		i += len(open) + len(value) + len(close)
 	}
 	return out.String()
 }
@@ -179,7 +240,7 @@ func fitLabelsInLine(line string, maxWidth int) string {
 // than maxWidth columns, by inserting the <br> breaks mermaid-ascii honours.
 // Narrowing the labels narrows the boxes, which is the only way to make an
 // over-wide text-art diagram fit: the library can compact its padding but never
-// reflows.
+// reflows a layout.
 func fitMermaidLabels(source string, maxWidth int) string {
 	lines := strings.Split(source, "\n")
 	for i, line := range lines {
