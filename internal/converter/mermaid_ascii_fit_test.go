@@ -507,3 +507,37 @@ func TestPrepareConsoleMermaid_FitsTheReportedDocument(t *testing.T) {
 		}
 	}
 }
+
+// TestClippedArtWarning covers the end of the silent loss. A diagram no label
+// cap could fit still loses its right edge to clipping, and the log has to say
+// so — naming the width it needed and the two ways out — instead of leaving a
+// missing branch with nothing in the output to show for it.
+func TestClippedArtWarning(t *testing.T) {
+	tests := []struct {
+		name     string
+		artWidth int
+		width    int
+		want     bool
+	}{
+		{"narrower than the width", 40, 80, false},
+		{"exactly the width", 80, 80, false},
+		{"no width limit set", 200, 0, false},
+		{"overruns the width", 152, 118, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := clippedArtWarning(0, tc.artWidth, tc.width)
+			if (got != "") != tc.want {
+				t.Errorf("clippedArtWarning(0, %d, %d) = %q, want warning=%t",
+					tc.artWidth, tc.width, got, tc.want)
+			}
+		})
+	}
+
+	msg := clippedArtWarning(2, 152, 118)
+	for _, want := range []string{"2", "152", "118", "-width", "-mermaid-render source"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("warning %q does not mention %q", msg, want)
+		}
+	}
+}

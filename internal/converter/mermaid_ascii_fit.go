@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"unicode"
@@ -197,7 +198,7 @@ func findLabelEnd(line string, start int, closer string) (int, bool) {
 // or when the text between the delimiters holds another one of them: the
 // renderer parses such a label differently, and rewriting it would change the
 // diagram rather than narrow it.
-func labelValueAt(line string, i int) (open, close, value string, ok bool) {
+func labelValueAt(line string, i int) (opener, closer, value string, ok bool) {
 	if !precededByNodeID(line, i) {
 		return "", "", "", false
 	}
@@ -246,16 +247,16 @@ func rewritableLine(line string) bool {
 func fitLabelsInLine(line string, maxWidth int) string {
 	var out strings.Builder
 	for i := 0; i < len(line); {
-		open, close, value, ok := labelValueAt(line, i)
+		opener, closer, value, ok := labelValueAt(line, i)
 		if !ok {
 			out.WriteByte(line[i])
 			i++
 			continue
 		}
-		out.WriteString(open)
+		out.WriteString(opener)
 		out.WriteString(wrapLabelValue(value, maxWidth))
-		out.WriteString(close)
-		i += len(open) + len(value) + len(close)
+		out.WriteString(closer)
+		i += len(opener) + len(value) + len(closer)
 	}
 	return out.String()
 }
@@ -392,4 +393,21 @@ func fitDiagramIndent(indent string, artWidth, width int) string {
 		return indent
 	}
 	return indent[:max(0, spare)]
+}
+
+// clippedArtWarning returns the message to log for text art that still overruns
+// the wrap width once fitting has done what it can, or "" when the art fits.
+//
+// Over-wide art loses its right edge to clipConsoleArt. Reporting it is what
+// keeps that loss from being silent: a diagram could otherwise drop a whole
+// branch with nothing in the output to show for it, which is how the clipping
+// this fitting replaces went unnoticed.
+func clippedArtWarning(idx, artWidth, width int) string {
+	if width <= 0 || artWidth <= width {
+		return ""
+	}
+	return fmt.Sprintf(
+		"  diagram %d needs %d columns but only %d are available, so its right edge is clipped; "+
+			"use -width for more room, or -mermaid-render source to see it in full",
+		idx, artWidth, width)
 }

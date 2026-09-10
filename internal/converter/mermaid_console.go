@@ -396,6 +396,9 @@ func (c *Converter) renderConsoleBlock(idx int, source string, plan consoleMerma
 		return consoleDiagram{}, errShowMermaidSource
 	}
 	c.logf("  diagram %d drawn as text art", idx)
+	if warning := clippedArtWarning(idx, mermaidArtWidth(art), width); warning != "" {
+		c.logf("%s", warning)
+	}
 	return consoleDiagram{content: art, kind: diagramTextArt}, nil
 }
 
