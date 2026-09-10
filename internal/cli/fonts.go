@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"os"
@@ -26,8 +26,9 @@ var cjkFontNames = []string{
 	"NotoSansCJKjp.ttc",
 }
 
-// fontSearchDirs are the directories searched for a CJK font, in order. home is
-// the user's home directory, taken as an argument so the list is testable.
+// fontSearchDirs are the directories searched for a CJK font, in order. The
+// home argument is the user's home directory, taken as a parameter so the list
+// is testable.
 //
 // ~/Library/Fonts comes first because that is where a Homebrew font cask
 // installs on macOS — the location whose absence made -doctor report an

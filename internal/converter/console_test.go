@@ -276,23 +276,23 @@ func TestWriteConsole_KeepsColorForTrueColor(t *testing.T) {
 }
 
 func TestRenderConsole_WritesRenderedDocument(t *testing.T) {
-	c, err := New(&Config{Format: FormatConsole, ConsoleWidth: 60})
-	if err != nil {
-		t.Fatalf("New: %v", err)
+	c, newErr := New(&Config{Format: FormatConsole, ConsoleWidth: 60})
+	if newErr != nil {
+		t.Fatalf("New: %v", newErr)
 	}
 	defer c.Close()
 
 	out := filepath.Join(t.TempDir(), "out.txt")
-	f, err := os.Create(out)
-	if err != nil {
-		t.Fatalf("create output: %v", err)
+	f, createErr := os.Create(out)
+	if createErr != nil {
+		t.Fatalf("create output: %v", createErr)
 	}
 	defer f.Close()
 
 	// A regular file is not a terminal, so this exercises the non-TTY path:
 	// notty style, no pager, color escapes stripped.
 	c.stdin = strings.NewReader("# Title\n\nBody text.\n")
-	if err := c.renderConsole([]string{StdinPath}, f); err != nil {
+	if err := c.renderConsole(t.Context(), []string{StdinPath}, f); err != nil {
 		t.Fatalf("renderConsole: %v", err)
 	}
 

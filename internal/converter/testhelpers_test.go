@@ -28,7 +28,7 @@ func writeShellScript(t *testing.T, path string, exitCode int, stderrText string
 		b.WriteString(stderrText)
 		b.WriteString("\nEOF\n")
 	}
-	b.WriteString(fmt.Sprintf("exit %d\n", exitCode))
+	fmt.Fprintf(&b, "exit %d\n", exitCode)
 	if err := os.WriteFile(path, []byte(b.String()), 0o755); err != nil { //nolint:gosec // an executable stub is the point
 		t.Fatalf("write shell script %q: %v", path, err)
 	}

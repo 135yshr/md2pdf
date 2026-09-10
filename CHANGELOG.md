@@ -1,3 +1,8 @@
+# [v0.15.0](https://github.com/135yshr/md2pdf/compare/v0.14.2...v0.15.0) (2026-09-10)
+
+## ✨ New Features
+- [`efedd17`](https://github.com/135yshr/md2pdf/commit/efedd17)  feat: fail a pull request whose title would release nothing (#71) (Issues: [`#71`](https://github.com/135yshr/md2pdf/issues/71) [`#65`](https://github.com/135yshr/md2pdf/issues/65) [`#69`](https://github.com/135yshr/md2pdf/issues/69) [`#63`](https://github.com/135yshr/md2pdf/issues/63) [`#65`](https://github.com/135yshr/md2pdf/issues/65) [`#69`](https://github.com/135yshr/md2pdf/issues/69) [`#63`](https://github.com/135yshr/md2pdf/issues/63) [`#65`](https://github.com/135yshr/md2pdf/issues/65) [`#70`](https://github.com/135yshr/md2pdf/issues/70) [`#69`](https://github.com/135yshr/md2pdf/issues/69) [`#65`](https://github.com/135yshr/md2pdf/issues/65) [`#65`](https://github.com/135yshr/md2pdf/issues/65) [`#69`](https://github.com/135yshr/md2pdf/issues/69) [`#52`](https://github.com/135yshr/md2pdf/issues/52))
+
 # [v0.14.2](https://github.com/135yshr/md2pdf/compare/v0.14.1...v0.14.2) (2026-09-09)
 
 ## 🐛 Bug Fixes

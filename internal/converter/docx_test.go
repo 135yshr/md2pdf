@@ -63,7 +63,7 @@ func TestConvertMarkdownDOCX_InvokesPandocWithExpectedArgs(t *testing.T) {
 	docxPath := filepath.Join(workDir, "out.docx")
 
 	c := &Converter{cfg: &Config{PandocPath: bin}, workDir: workDir}
-	if err := c.convertMarkdownDOCX([]byte("# hi\n"), srcDir, docxPath); err != nil {
+	if err := c.convertMarkdownDOCX(t.Context(), []byte("# hi\n"), srcDir, docxPath); err != nil {
 		t.Fatalf("convertMarkdownDOCX: %v", err)
 	}
 
@@ -92,7 +92,7 @@ func TestConvertMarkdownDOCX_PropagatesPandocFailure(t *testing.T) {
 	writeShellScript(t, bin, 1, "pandoc: boom")
 
 	c := &Converter{cfg: &Config{PandocPath: bin}, workDir: workDir}
-	err := c.convertMarkdownDOCX([]byte("# hi\n"), t.TempDir(), filepath.Join(workDir, "out.docx"))
+	err := c.convertMarkdownDOCX(t.Context(), []byte("# hi\n"), t.TempDir(), filepath.Join(workDir, "out.docx"))
 	if err == nil {
 		t.Fatal("expected error when pandoc exits non-zero")
 	}

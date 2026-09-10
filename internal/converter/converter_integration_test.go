@@ -126,13 +126,13 @@ Integration test complete.
 		Verbose:      true,
 	}
 
-	c, err := converter.New(cfg)
-	if err != nil {
-		t.Fatalf("New(): %v", err)
+	c, newErr := converter.New(cfg)
+	if newErr != nil {
+		t.Fatalf("New(): %v", newErr)
 	}
 	defer c.Close()
 
-	if err := c.Convert([]string{mdPath}, pdfPath); err != nil {
+	if err := c.Convert(t.Context(), []string{mdPath}, pdfPath); err != nil {
 		t.Fatalf("Convert(): %v", err)
 	}
 

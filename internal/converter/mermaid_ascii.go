@@ -102,9 +102,9 @@ func renderMermaidASCII(source string, width int, pureASCII bool) (string, error
 // attempt to make it fit. It is the single place the library is called, so the
 // fit loop can re-draw a rewritten source through the same path.
 //
-// mermaid-ascii's layout is guarded against panics here: it is a fallback path,
-// so a crash there must degrade to the Mermaid source rather than take down the
-// run.
+// The layout is guarded against panics here, because mermaid-ascii is a fallback
+// path: a crash there must degrade to the Mermaid source rather than take down
+// the run.
 func renderMermaidArt(source string, width int, pureASCII bool) (art string, err error) {
 	cfg := diagram.DefaultConfig()
 	cfg.UseAscii = pureASCII
