@@ -112,7 +112,7 @@ func TestPrintPDF_ProducesAPDF(t *testing.T) {
 		PageSize: "A4", MarginTop: "18mm", MarginBottom: "18mm",
 		MarginLeft: "14mm", MarginRight: "14mm",
 	})
-	if err := c.printPDF(htmlPath, pdfPath); err != nil {
+	if err := c.printPDF(t.Context(), htmlPath, pdfPath); err != nil {
 		t.Fatalf("printPDF: %v", err)
 	}
 
@@ -132,7 +132,7 @@ func TestPrintPDF_ProducesAPDF(t *testing.T) {
 // surface without paying to start a browser.
 func TestPrintPDF_ReportsABadPageSizeBeforeLaunching(t *testing.T) {
 	c := newTestConverter(t, &Config{PageSize: "B5"})
-	err := c.printPDF(filepath.Join(t.TempDir(), "none.html"), filepath.Join(t.TempDir(), "out.pdf"))
+	err := c.printPDF(t.Context(), filepath.Join(t.TempDir(), "none.html"), filepath.Join(t.TempDir(), "out.pdf"))
 	if err == nil {
 		t.Fatal("expected an error for an unsupported page size")
 	}
@@ -180,7 +180,7 @@ func TestPrintPDF_HandlesAwkwardFilenames(t *testing.T) {
 	}
 
 	c := newTestConverter(t, &Config{PageSize: "A4"})
-	if err := c.printPDF(htmlPath, pdfPath); err != nil {
+	if err := c.printPDF(t.Context(), htmlPath, pdfPath); err != nil {
 		t.Fatalf("printPDF with an awkward filename: %v", err)
 	}
 	data, err := os.ReadFile(pdfPath)

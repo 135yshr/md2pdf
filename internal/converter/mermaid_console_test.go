@@ -2,6 +2,8 @@ package converter
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -35,7 +37,7 @@ func stubPNG(t *testing.T, w, h int) []byte {
 func useStubRasterizer(t *testing.T, c *Converter, dir string, calls *int) {
 	t.Helper()
 	c.mermaidAvailable = func() bool { return true }
-	c.rasterizeMermaid = func(int, string) (string, error) {
+	c.rasterizeMermaid = func(context.Context, int, string) (string, error) {
 		*calls++
 		path := filepath.Join(dir, "diagram.png")
 		if err := os.WriteFile(path, stubPNG(t, 400, 200), 0o644); err != nil {
@@ -337,7 +339,7 @@ func TestPrepareConsoleMermaid_SourceModeLeavesMarkdownUntouched(t *testing.T) {
 	useStubRasterizer(t, c, t.TempDir(), &calls)
 
 	plan := consoleMermaidPlan{mode: MermaidRenderSource}
-	got, diagrams, err := c.prepareConsoleMermaid(md, plan, 80)
+	got, diagrams, err := c.prepareConsoleMermaid(t.Context(), md, plan, 80)
 	if err != nil {
 		t.Fatalf("prepareConsoleMermaid: %v", err)
 	}
@@ -361,7 +363,7 @@ func TestPrepareConsoleMermaid_NoBlocksSkipsRenderingEntirely(t *testing.T) {
 	useStubRasterizer(t, c, t.TempDir(), &calls)
 
 	plan := consoleMermaidPlan{mode: MermaidRenderImage, protocol: imageProtocolKitty}
-	got, diagrams, err := c.prepareConsoleMermaid(md, plan, 80)
+	got, diagrams, err := c.prepareConsoleMermaid(t.Context(), md, plan, 80)
 	if err != nil {
 		t.Fatalf("prepareConsoleMermaid: %v", err)
 	}
@@ -380,7 +382,7 @@ func TestPrepareConsoleMermaid_RendersEachBlockInOrder(t *testing.T) {
 	useStubRasterizer(t, c, t.TempDir(), &calls)
 
 	plan := consoleMermaidPlan{mode: MermaidRenderImage, protocol: imageProtocolKitty}
-	rewritten, diagrams, err := c.prepareConsoleMermaid(md, plan, 80)
+	rewritten, diagrams, err := c.prepareConsoleMermaid(t.Context(), md, plan, 80)
 	if err != nil {
 		t.Fatalf("prepareConsoleMermaid: %v", err)
 	}
@@ -410,7 +412,7 @@ func TestPrepareConsoleMermaid_FailedBlockFallsBackToItsSource(t *testing.T) {
 	c := newTestConverter(t, &Config{Format: FormatConsole})
 	dir := t.TempDir()
 	c.mermaidAvailable = func() bool { return true }
-	c.rasterizeMermaid = func(_ int, src string) (string, error) {
+	c.rasterizeMermaid = func(_ context.Context, _ int, src string) (string, error) {
 		if strings.Contains(src, "BROKEN") {
 			return "", os.ErrInvalid
 		}
@@ -422,7 +424,7 @@ func TestPrepareConsoleMermaid_FailedBlockFallsBackToItsSource(t *testing.T) {
 	}
 
 	plan := consoleMermaidPlan{mode: MermaidRenderImage, protocol: imageProtocolKitty}
-	rewritten, diagrams, err := c.prepareConsoleMermaid(md, plan, 80)
+	rewritten, diagrams, err := c.prepareConsoleMermaid(t.Context(), md, plan, 80)
 	if err != nil {
 		t.Fatalf("prepareConsoleMermaid returned an error for a single bad block: %v", err)
 	}
@@ -449,7 +451,7 @@ func TestPrepareConsoleMermaid_MissingMmdcFallsBackToSource(t *testing.T) {
 	// Leave rasterizeMermaid at its real implementation so the mmdc lookup runs.
 
 	plan := consoleMermaidPlan{mode: MermaidRenderImage, protocol: imageProtocolKitty}
-	rewritten, diagrams, err := c.prepareConsoleMermaid(md, plan, 80)
+	rewritten, diagrams, err := c.prepareConsoleMermaid(t.Context(), md, plan, 80)
 	if err != nil {
 		t.Fatalf("missing mmdc must not be an error: %v", err)
 	}
@@ -469,9 +471,9 @@ func TestRenderConsole_PipedOutputEmitsNoImageSequences(t *testing.T) {
 
 	dir := t.TempDir()
 	outPath := filepath.Join(dir, "out.txt")
-	f, err := os.Create(outPath)
-	if err != nil {
-		t.Fatalf("create: %v", err)
+	f, createErr := os.Create(outPath)
+	if createErr != nil {
+		t.Fatalf("create: %v", createErr)
 	}
 	defer f.Close()
 
@@ -481,7 +483,7 @@ func TestRenderConsole_PipedOutputEmitsNoImageSequences(t *testing.T) {
 
 	md := "# T\n\n```mermaid\ngraph TD\n A-->B\n```\n"
 	c.stdin = strings.NewReader(md)
-	if err := c.renderConsole([]string{StdinPath}, f); err != nil {
+	if err := c.renderConsole(t.Context(), []string{StdinPath}, f); err != nil {
 		t.Fatalf("renderConsole: %v", err)
 	}
 
@@ -531,22 +533,22 @@ func TestRenderConsole_ByteIdenticalToPreFeatureRendering(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			want, err := renderConsoleMarkdown(tc.md, "notty", consoleFallbackWidth)
-			if err != nil {
-				t.Fatalf("baseline render: %v", err)
+			want, renderErr := renderConsoleMarkdown(tc.md, "notty", consoleFallbackWidth)
+			if renderErr != nil {
+				t.Fatalf("baseline render: %v", renderErr)
 			}
 
 			t.Setenv("TERM", "dumb")
 			outPath := filepath.Join(t.TempDir(), "out.txt")
-			f, err := os.Create(outPath)
-			if err != nil {
-				t.Fatalf("create: %v", err)
+			f, createErr := os.Create(outPath)
+			if createErr != nil {
+				t.Fatalf("create: %v", createErr)
 			}
 			defer f.Close()
 
 			c := newTestConverter(t, tc.cfg)
 			c.stdin = bytes.NewReader(tc.md)
-			if err := c.renderConsole([]string{StdinPath}, f); err != nil {
+			if err := c.renderConsole(t.Context(), []string{StdinPath}, f); err != nil {
 				t.Fatalf("renderConsole: %v", err)
 			}
 			got, err := os.ReadFile(outPath)
@@ -577,7 +579,7 @@ func TestRenderConsole_ExplicitImageOnPlainTerminalFails(t *testing.T) {
 		MermaidRender: MermaidRenderImage,
 	})
 	c.stdin = strings.NewReader("```mermaid\ngraph TD\n A-->B\n```\n")
-	err = c.renderConsole([]string{StdinPath}, f)
+	err = c.renderConsole(t.Context(), []string{StdinPath}, f)
 	if err == nil {
 		t.Fatal("expected renderConsole to fail with -mermaid-render image on a plain terminal")
 	}
@@ -620,7 +622,7 @@ func TestPrepareConsoleMermaid_TokensSurviveNarrowGlamourWidths(t *testing.T) {
 			useStubRasterizer(t, c, t.TempDir(), &calls)
 
 			plan := consoleMermaidPlan{mode: MermaidRenderImage, protocol: imageProtocolKitty}
-			doc, diagrams, err := c.prepareConsoleMermaid(md, plan, width)
+			doc, diagrams, err := c.prepareConsoleMermaid(t.Context(), md, plan, width)
 			if err != nil {
 				t.Fatalf("prepareConsoleMermaid: %v", err)
 			}
@@ -656,7 +658,7 @@ func TestPrepareConsoleMermaid_TooNarrowFallsBackToSource(t *testing.T) {
 	useStubRasterizer(t, c, t.TempDir(), &calls)
 
 	plan := consoleMermaidPlan{mode: MermaidRenderImage, protocol: imageProtocolKitty}
-	doc, diagrams, err := c.prepareConsoleMermaid(md, plan, 6)
+	doc, diagrams, err := c.prepareConsoleMermaid(t.Context(), md, plan, 6)
 	if err != nil {
 		t.Fatalf("prepareConsoleMermaid: %v", err)
 	}
@@ -668,5 +670,65 @@ func TestPrepareConsoleMermaid_TooNarrowFallsBackToSource(t *testing.T) {
 	}
 	if calls != 0 {
 		t.Errorf("rasterizer ran %d times at an unusable width, want 0", calls)
+	}
+}
+
+// TestPrepareConsoleMermaid_CanceledRunDoesNotFallBack pins that an interrupted
+// run stops rather than quietly degrading. Text art is drawn in-process, so
+// without this the fallback chain would succeed after the reader asked to stop
+// and the command would exit 0 having printed a document anyway.
+func TestPrepareConsoleMermaid_CanceledRunDoesNotFallBack(t *testing.T) {
+	md := []byte("# T\n\n```mermaid\ngraph TD\n  A --> B\n```\n")
+
+	tests := []struct {
+		name string
+		plan consoleMermaidPlan
+	}{
+		{"image plan", consoleMermaidPlan{mode: MermaidRenderImage, protocol: imageProtocolKitty}},
+		{"text-art plan", consoleMermaidPlan{mode: MermaidRenderASCII}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			c := newTestConverter(t, &Config{Format: FormatConsole})
+			calls := 0
+			useStubRasterizer(t, c, t.TempDir(), &calls)
+
+			ctx, cancel := context.WithCancel(t.Context())
+			cancel()
+
+			_, _, err := c.prepareConsoleMermaid(ctx, md, tc.plan, 80)
+			if err == nil {
+				t.Fatal("prepareConsoleMermaid on a canceled context = nil, want an error")
+			}
+			if !errors.Is(err, context.Canceled) {
+				t.Errorf("error does not wrap context.Canceled: %v", err)
+			}
+		})
+	}
+}
+
+// TestRenderConsoleBlock_CancelDuringRasterizeIsNotADrawingFailure pins the
+// other half: when the interrupt lands while mmdc is running, the rasterizer's
+// error must be reported as the cancellation it is, not treated as a diagram
+// that could not be drawn.
+func TestRenderConsoleBlock_CancelDuringRasterizeIsNotADrawingFailure(t *testing.T) {
+	c := newTestConverter(t, &Config{Format: FormatConsole})
+	ctx, cancel := context.WithCancel(t.Context())
+
+	c.mermaidAvailable = func() bool { return true }
+	c.rasterizeMermaid = func(context.Context, int, string) (string, error) {
+		// Stand in for mmdc being killed by the interrupt.
+		cancel()
+		return "", errStubRasterFailure
+	}
+
+	plan := consoleMermaidPlan{mode: MermaidRenderImage, protocol: imageProtocolKitty}
+	_, err := c.renderConsoleBlock(ctx, 0, "graph TD\n  A --> B\n", plan, 80, true)
+	if err == nil {
+		t.Fatal("renderConsoleBlock = nil error, want the cancellation")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("error does not wrap context.Canceled: %v", err)
 	}
 }

@@ -76,7 +76,7 @@ func blockedReport() converter.Report {
 func TestRunReportsMissingInputAndExitsOne(t *testing.T) {
 	p, _, stderr := testProgram(defaultProgramName, converter.Report{})
 
-	if code := p.run(nil); code != 1 {
+	if code := p.run(t.Context(), nil); code != 1 {
 		t.Errorf("run(nil) = %d, want 1", code)
 	}
 	if got := stderr.String(); !strings.HasPrefix(got, "md2pdf: at least one input Markdown file is required") {

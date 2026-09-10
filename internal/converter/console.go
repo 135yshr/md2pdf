@@ -2,6 +2,7 @@ package converter
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -101,7 +102,7 @@ func detectConsoleEnv(out *os.File) consoleEnv {
 // kitty graphics sequences nor the iTerm2 inline-image sequences survive a trip
 // through less. Text art is plain text and pages normally, including when an
 // image plan fell back to it.
-func (c *Converter) renderConsole(inputs []string, out *os.File) error {
+func (c *Converter) renderConsole(ctx context.Context, inputs []string, out *os.File) error {
 	env := detectConsoleEnv(out)
 	width := resolveConsoleWidth(c.cfg.ConsoleWidth, env.isTTY, env.width)
 	style := resolveConsoleStyle(c.cfg.ConsoleStyle, env.envStyle, env.isTTY, env.noColor, env.darkBG)
@@ -112,9 +113,9 @@ func (c *Converter) renderConsole(inputs []string, out *os.File) error {
 	// once and shared. Whether an image was actually drawn is not: that is
 	// collected across documents, because a single image anywhere means the
 	// pager has to be skipped for all of them.
-	plan, err := resolveConsoleMermaidPlan(c.cfg.MermaidRender, env.isTTY, env.noColor, os.Getenv)
-	if err != nil {
-		return err
+	plan, planErr := resolveConsoleMermaidPlan(c.cfg.MermaidRender, env.isTTY, env.noColor, os.Getenv)
+	if planErr != nil {
+		return planErr
 	}
 	plan.pureASCII = consoleWantsPureASCII(c.cfg.ConsoleStyle, env.envStyle, style)
 
@@ -125,7 +126,7 @@ func (c *Converter) renderConsole(inputs []string, out *os.File) error {
 		if err != nil {
 			return err
 		}
-		rendered, hadImages, err := c.renderConsoleDocument(md, style, width, plan)
+		rendered, hadImages, err := c.renderConsoleDocument(ctx, md, style, width, plan)
 		if err != nil {
 			return err
 		}
@@ -160,8 +161,8 @@ func (c *Converter) renderConsole(inputs []string, out *os.File) error {
 // any diagram came out as an inline image, which decides whether the pager can
 // still be used. Documents are rendered independently so their Mermaid
 // placeholder tokens cannot collide.
-func (c *Converter) renderConsoleDocument(md []byte, style string, width int, plan consoleMermaidPlan) ([]byte, bool, error) {
-	doc, diagrams, err := c.prepareConsoleMermaid(md, plan, width)
+func (c *Converter) renderConsoleDocument(ctx context.Context, md []byte, style string, width int, plan consoleMermaidPlan) ([]byte, bool, error) {
+	doc, diagrams, err := c.prepareConsoleMermaid(ctx, md, plan, width)
 	if err != nil {
 		return nil, false, err
 	}
@@ -313,7 +314,10 @@ func runPager(argv []string, rendered []byte, profile colorprofile.Profile) erro
 		return err
 	}
 
-	cmd := exec.Command(argv[0], argv[1:]...) //nolint:gosec // G204: the pager comes from $PAGER or the less default
+	// Deliberately not the conversion's context. The pager owns the terminal and
+	// exits when the reader quits it; canceling the run out from under it would
+	// kill less mid-screen and leave the terminal in its alternate buffer.
+	cmd := exec.CommandContext(context.Background(), argv[0], argv[1:]...)
 	cmd.Stdin = &buf
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

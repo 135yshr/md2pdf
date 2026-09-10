@@ -13,7 +13,7 @@
 
 - [ ] Unit tests pass (`go test ./internal/converter/ -run 'Test[^C]'`)
 - [ ] Integration tests pass (`go test ./...`)
-- [ ] New tests added for changed behaviour
+- [ ] New tests added for changed behavior
 
 ## Checklist
 

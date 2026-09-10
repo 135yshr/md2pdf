@@ -29,6 +29,15 @@ linters:
 
     govet:
       enable-all: true
+      disable:
+        # Struct field order, off for the whole module rather than for tests
+        # alone. Two thirds of its findings were table-driven tests' anonymous
+        # structs; the rest were Config, Converter, the -doctor status structs
+        # and five local ones in pdf.go. Each of those is allocated once or a
+        # handful of times per conversion, so the padding saved is not
+        # measurable, while Config's field order deliberately follows its
+        # documentation.
+        - fieldalignment
 
     misspell:
       locale: US

@@ -6,6 +6,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -27,7 +28,7 @@ type BuildInfo struct {
 // Run executes one invocation of the command line and returns the process exit
 // code. It takes the whole argument vector, os.Args, because the name the
 // binary was invoked under selects the default output format.
-func Run(argv []string, build BuildInfo) int {
+func Run(ctx context.Context, argv []string, build BuildInfo) int {
 	var args []string
 	if len(argv) > 1 {
 		args = argv[1:]
@@ -42,7 +43,7 @@ func Run(argv []string, build BuildInfo) int {
 		defaultFormat:   defaultFormat(name),
 		stdinIsTerminal: term.IsTerminal(os.Stdin.Fd()),
 	}
-	return p.run(args)
+	return p.run(ctx, args)
 }
 
 // defaultProgramName is the name this command is known by.
@@ -70,7 +71,7 @@ func (e exitError) Error() string { return fmt.Sprintf("exit status %d", e.code)
 
 // run parses args, converts the documents they name and returns the process
 // exit code.
-func (p *program) run(args []string) int {
+func (p *program) run(ctx context.Context, args []string) int {
 	cfg, err := p.parseFlags(args)
 	var done exitError
 	switch {
@@ -96,7 +97,7 @@ func (p *program) run(args []string) int {
 	if !quiet {
 		fmt.Fprintf(p.stdout, "Converting %s ...\n", describeInputs(cfg.InputFiles))
 	}
-	if err := c.Convert(cfg.InputFiles, cfg.OutputFile); err != nil {
+	if err := c.Convert(ctx, cfg.InputFiles, cfg.OutputFile); err != nil {
 		fmt.Fprintf(p.stderr, "%s: conversion failed: %v\n", p.name, err)
 		return 1
 	}

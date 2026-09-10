@@ -71,7 +71,9 @@ func (p *program) parseFlags(args []string) (*converter.Config, error) {
 	doctor := fs.Bool("doctor", false, "Report which runtime dependencies are present and which formats can run, then exit")
 
 	if err := fs.Parse(args); err != nil {
-		return nil, err
+		// Wrapped rather than replaced: flag.ErrHelp has to stay recognizable
+		// to anything that later wants to treat -h as a success.
+		return nil, fmt.Errorf("parse arguments: %w", err)
 	}
 
 	if *showVersion {

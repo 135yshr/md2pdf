@@ -34,6 +34,35 @@ jobs:
       - name: Tests
         run: go test ./... -v
 
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: "1.26"
+
+      # Built from source rather than downloaded. golangci-lint refuses to load
+      # a config for a module targeting a newer Go than the one it was built
+      # with, and a released binary carries whatever Go was current when it was
+      # published — which is how this repo ended up with a config nothing could
+      # run. Building it here ties the linter to the toolchain go.mod asks for.
+      #
+      # The version is pinned so that a golangci-lint release cannot turn this
+      # job red on a branch that changed no Go code.
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
+
+      - name: Verify the lint configuration
+        run: "$(go env GOPATH)/bin/golangci-lint config verify"
+
+      - name: Lint
+        run: "$(go env GOPATH)/bin/golangci-lint run ./..."
+
   integration:
     name: Integration Test
     runs-on: ubuntu-latest
