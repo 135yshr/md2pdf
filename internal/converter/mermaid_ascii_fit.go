@@ -298,3 +298,19 @@ func fitMermaidLabels(source string, maxWidth int) string {
 	}
 	return strings.Join(lines, "\n")
 }
+
+// mermaidArtWidth returns the width of the widest line of text art in terminal
+// columns.
+//
+// It deliberately does not use the width mermaid-ascii reports alongside its
+// output: that goes through go-runewidth, which counts a box-drawing "─" as two
+// columns under an East Asian locale and so overstates the art by the number of
+// horizontal borders in it. Measuring here with the same function that clips the
+// art keeps the fit decision and the clip in agreement.
+func mermaidArtWidth(art string) int {
+	widest := 0
+	for _, line := range strings.Split(art, "\n") {
+		widest = max(widest, ansi.StringWidth(line))
+	}
+	return widest
+}

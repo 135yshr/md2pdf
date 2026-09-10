@@ -251,3 +251,29 @@ func TestFitMermaidLabels_LeavesEdgeLabelsAlone(t *testing.T) {
 		t.Errorf("fitMermaidLabels()\n got: %q\nwant: %q", got, want)
 	}
 }
+
+// TestMermaidArtWidth_MeasuresDisplayColumns pins that art is measured in
+// terminal columns. mermaid-ascii's own displayWidth goes through go-runewidth,
+// which counts a box-drawing "─" as two columns under an East Asian locale and
+// so reports an inflated width; the fit loop must not inherit that reading.
+func TestMermaidArtWidth_MeasuresDisplayColumns(t *testing.T) {
+	tests := []struct {
+		name string
+		art  string
+		want int
+	}{
+		{"empty", "", 0},
+		{"latin", "abcd", 4},
+		{"widest line wins", "ab\nabcdef\nabc", 6},
+		{"CJK counts two columns", "開始", 4},
+		{"box drawing counts one column", "┌────┐", 6},
+		{"colour escapes occupy no columns", "\x1b[31mred\x1b[0m", 3},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := mermaidArtWidth(tc.art); got != tc.want {
+				t.Errorf("mermaidArtWidth(%q) = %d, want %d", tc.art, got, tc.want)
+			}
+		})
+	}
+}
