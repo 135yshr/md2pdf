@@ -83,3 +83,36 @@ func TestStripQuitIfOneScreen(t *testing.T) {
 		})
 	}
 }
+
+// TestResolveConsolePan covers the decision that replaces clipping: whether the
+// rendered document reaches the reader through something that can show a line
+// wider than the screen.
+func TestResolveConsolePan(t *testing.T) {
+	less := []string{"/usr/bin/less", "-R", "-F"}
+	tests := []struct {
+		name           string
+		pagerEnabled   bool
+		isTTY          bool
+		argv           []string
+		pagerAvailable bool
+		want           bool
+	}{
+		// Redirected output has no terminal to fold the lines, so the whole
+		// diagram can be written and whatever consumes it decides what to do.
+		{"redirected", true, false, nil, false, true},
+		{"redirected with the pager off", false, false, nil, false, true},
+		{"terminal paged through less", true, true, less, true, true},
+		{"terminal with the pager off", false, true, less, true, false},
+		{"terminal paged through more", true, true, []string{"/usr/bin/more"}, true, false},
+		{"terminal with no pager installed", true, true, nil, false, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := resolveConsolePan(tc.pagerEnabled, tc.isTTY, tc.argv, tc.pagerAvailable)
+			if got != tc.want {
+				t.Errorf("resolveConsolePan(%t, %t, %v, %t) = %t, want %t",
+					tc.pagerEnabled, tc.isTTY, tc.argv, tc.pagerAvailable, got, tc.want)
+			}
+		})
+	}
+}

@@ -76,3 +76,18 @@ func stripQuitIfOneScreen(argv []string) []string {
 	}
 	return out
 }
+
+// resolveConsolePan reports whether an over-wide diagram may be written in full
+// rather than dropped to its Mermaid source.
+//
+// Redirected output always can: there is no terminal to fold the lines, and the
+// consumer of the stream is better placed than md2pdf to decide what to do with
+// a wide one. An interactive terminal can only pan through a pager that scrolls
+// sideways, so the answer there follows the pager that will actually be used —
+// which is why the pager has to be resolved before the diagrams are drawn.
+func resolveConsolePan(pagerEnabled, isTTY bool, pagerArgv []string, pagerAvailable bool) bool {
+	if !isTTY {
+		return true
+	}
+	return pagerEnabled && pagerAvailable && pagerCanPan(pagerArgv)
+}
