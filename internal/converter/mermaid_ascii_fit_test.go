@@ -117,3 +117,14 @@ func TestWrapLabelText_Degenerate(t *testing.T) {
 		})
 	}
 }
+
+// TestFitMermaidLabels_RewritesOnlyLabelText is the core of the source rewrite:
+// the text inside the brackets is wrapped, and everything structural — the node
+// id, the brackets, the arrow, the indent — comes out byte-for-byte as written.
+func TestFitMermaidLabels_RewritesOnlyLabelText(t *testing.T) {
+	const source = "graph TB\n    A[AI Enablement Index Summary] --> B[Done]\n"
+	const want = "graph TB\n    A[AI<br>Enablement<br>Index<br>Summary] --> B[Done]\n"
+	if got := fitMermaidLabels(source, 12); got != want {
+		t.Errorf("fitMermaidLabels()\n got: %q\nwant: %q", got, want)
+	}
+}

@@ -113,3 +113,77 @@ func wrapLabelSegment(segment string, maxWidth int) string {
 	}
 	return strings.Join(lines, labelBreak)
 }
+
+// isNodeIDByte reports whether b can end a Mermaid node id, which is how a
+// shape delimiter is told apart from the same character used elsewhere on the
+// line. A hyphen is deliberately excluded: it is legal inside an id, but
+// accepting it would let an arrow such as "--" open a label.
+func isNodeIDByte(b byte) bool {
+	return b == '_' ||
+		('a' <= b && b <= 'z') ||
+		('A' <= b && b <= 'Z') ||
+		('0' <= b && b <= '9')
+}
+
+// precededByNodeID reports whether the shape delimiter at index i follows a node
+// id, ignoring any spaces between the two.
+func precededByNodeID(line string, i int) bool {
+	j := i - 1
+	for j >= 0 && line[j] == ' ' {
+		j--
+	}
+	return j >= 0 && isNodeIDByte(line[j])
+}
+
+// findLabelEnd returns the index of the closing delimiter for a label starting
+// at start, skipping delimiters inside double quotes. It reports ok=false when
+// the label is unterminated.
+func findLabelEnd(line string, start int, closer string) (int, bool) {
+	inQuotes := false
+	for i := start; i < len(line); i++ {
+		if line[i] == '"' {
+			inQuotes = !inQuotes
+			continue
+		}
+		if !inQuotes && strings.HasPrefix(line[i:], closer) {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+// fitLabelsInLine wraps every node label on one line of Mermaid source.
+func fitLabelsInLine(line string, maxWidth int) string {
+	var out strings.Builder
+	for i := 0; i < len(line); {
+		const opener, closer = "[", "]"
+		end := 0
+		ok := false
+		if strings.HasPrefix(line[i:], opener) && precededByNodeID(line, i) {
+			end, ok = findLabelEnd(line, i+len(opener), closer)
+		}
+		if !ok {
+			out.WriteByte(line[i])
+			i++
+			continue
+		}
+		out.WriteString(opener)
+		out.WriteString(wrapLabelText(line[i+len(opener):end], maxWidth))
+		out.WriteString(closer)
+		i = end + len(closer)
+	}
+	return out.String()
+}
+
+// fitMermaidLabels rewrites Mermaid source so that no node label line is wider
+// than maxWidth columns, by inserting the <br> breaks mermaid-ascii honours.
+// Narrowing the labels narrows the boxes, which is the only way to make an
+// over-wide text-art diagram fit: the library can compact its padding but never
+// reflows.
+func fitMermaidLabels(source string, maxWidth int) string {
+	lines := strings.Split(source, "\n")
+	for i, line := range lines {
+		lines[i] = fitLabelsInLine(line, maxWidth)
+	}
+	return strings.Join(lines, "\n")
+}
