@@ -426,7 +426,7 @@ func clippedArtWarning(idx, artWidth, width int) string {
 		return ""
 	}
 	return fmt.Sprintf(
-		"  diagram %d needs %d columns but only %d are available, so its right edge is clipped; "+
+		"diagram %d needs %d columns but only %d are available, so its right edge is clipped; "+
 			"use -width for more room, or -mermaid-render source to see it in full",
 		idx, artWidth, width)
 }
