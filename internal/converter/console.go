@@ -128,7 +128,7 @@ func (c *Converter) renderConsole(ctx context.Context, inputs []string, out *os.
 	// once and shared. What the diagrams turned out to be is not: that is
 	// collected across documents, because the pager is started once for all of
 	// them.
-	plan, planErr := resolveConsoleMermaidPlan(c.cfg.MermaidRender, env.isTTY, env.noColor, os.Getenv)
+	plan, planErr := resolveConsoleMermaidPlan(ctx, c.cfg.MermaidRender, env.isTTY, env.noColor, os.Getenv, runTmux)
 	if planErr != nil {
 		return planErr
 	}

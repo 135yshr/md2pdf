@@ -121,9 +121,9 @@ func detectImageProtocol(getenv func(string) string) terminalImageProtocol {
 type consoleMermaidPlan struct {
 	// mode is the resolved rendering mode, never empty and never "auto".
 	mode string
-	// protocol is the image protocol to emit, set only when mode is
-	// MermaidRenderImage.
-	protocol terminalImageProtocol
+	// transport is how an image escape sequence reaches the terminal, set only
+	// when mode is MermaidRenderImage.
+	transport terminalImageTransport
 	// pureASCII asks for plain +, - and | instead of Unicode box-drawing
 	// characters when text art is produced.
 	pureASCII bool
@@ -139,14 +139,14 @@ type consoleMermaidPlan struct {
 
 // emitsImages reports whether the plan will write image escape sequences.
 func (p consoleMermaidPlan) emitsImages() bool {
-	return p.mode == MermaidRenderImage && p.protocol != imageProtocolNone
+	return p.mode == MermaidRenderImage && p.transport.protocol != imageProtocolNone
 }
 
 // resolveConsoleMermaidPlan decides how Mermaid blocks are rendered. Images
 // need an interactive terminal with a known image protocol and color enabled;
 // "auto" degrades to the Mermaid source whenever any of that is missing, while
 // an explicit "image" reports which capability was absent.
-func resolveConsoleMermaidPlan(mode string, isTTY, noColor bool, getenv func(string) string) (consoleMermaidPlan, error) {
+func resolveConsoleMermaidPlan(ctx context.Context, mode string, isTTY, noColor bool, getenv func(string) string, tmux tmuxQuery) (consoleMermaidPlan, error) {
 	if mode == "" {
 		mode = MermaidRenderAuto
 	}
@@ -170,12 +170,16 @@ func resolveConsoleMermaidPlan(mode string, isTTY, noColor bool, getenv func(str
 		return asciiPlan, nil
 	}
 
-	if getenv == nil {
-		getenv = os.Getenv
-	}
-	protocol := detectImageProtocol(getenv)
-	if protocol == imageProtocolNone {
+	transport := detectImageTransport(ctx, getenv, tmux)
+	if transport.protocol == imageProtocolNone {
 		if mode == MermaidRenderImage {
+			if transport.tmuxBlockedReason != "" {
+				return consoleMermaidPlan{}, fmt.Errorf(
+					"-mermaid-render image needs tmux to forward escape sequences to the "+
+						"terminal drawing them: %s, "+
+						"or use -mermaid-render ascii to draw diagrams as text art",
+					transport.tmuxBlockedReason)
+			}
 			return consoleMermaidPlan{}, errors.New(
 				"-mermaid-render image needs a terminal with an inline image protocol " +
 					"(kitty, iTerm2 or Sixel), but none was detected from TERM and TERM_PROGRAM")
@@ -184,9 +188,9 @@ func resolveConsoleMermaidPlan(mode string, isTTY, noColor bool, getenv func(str
 	}
 
 	return consoleMermaidPlan{
-		mode:     MermaidRenderImage,
-		protocol: protocol,
-		strict:   mode == MermaidRenderImage,
+		mode:      MermaidRenderImage,
+		transport: transport,
+		strict:    mode == MermaidRenderImage,
 	}, nil
 }
 
@@ -361,7 +365,7 @@ func (c *Converter) prepareConsoleMermaid(ctx context.Context, md []byte, plan c
 	}
 
 	if useImages {
-		c.logf("Drawing %d Mermaid diagram(s) as %s images...", len(blocks), plan.protocol)
+		c.logf("Drawing %d Mermaid diagram(s) as %s images...", len(blocks), plan.transport.protocol)
 	} else {
 		c.logf("Drawing %d Mermaid diagram(s) as text art...", len(blocks))
 	}
@@ -405,14 +409,16 @@ func (c *Converter) renderConsoleBlock(ctx context.Context, idx int, source stri
 	}
 
 	if useImages {
-		sequence, err := c.renderConsoleDiagram(ctx, idx, source, plan.protocol, width)
+		sequence, err := c.renderConsoleDiagram(ctx, idx, source, plan.transport, width)
 		if err == nil {
-			c.logf("  diagram %d drawn (%d bytes of %s escape sequence)", idx, len(sequence), plan.protocol)
+			c.logf("  diagram %d drawn (%d bytes of %s escape sequence)",
+				idx, len(sequence), plan.transport.protocol)
 			return consoleDiagram{content: sequence, kind: diagramImage}, nil
 		}
 		if plan.strict {
 			return consoleDiagram{}, fmt.Errorf(
-				"-mermaid-render image could not draw diagram %d as a %s image: %w", idx, plan.protocol, err)
+				"-mermaid-render image could not draw diagram %d as a %s image: %w",
+				idx, plan.transport.protocol, err)
 		}
 		// The image step is the only one that can be interrupted, so a context
 		// that expired during it means the failure is the cancellation itself.
@@ -448,7 +454,7 @@ func (c *Converter) renderConsoleBlock(ctx context.Context, idx int, source stri
 
 // renderConsoleDiagram rasterizes one Mermaid block and encodes the PNG for the
 // terminal.
-func (c *Converter) renderConsoleDiagram(ctx context.Context, idx int, source string, protocol terminalImageProtocol, width int) (string, error) {
+func (c *Converter) renderConsoleDiagram(ctx context.Context, idx int, source string, transport terminalImageTransport, width int) (string, error) {
 	pngPath, err := c.rasterizeMermaid(ctx, idx, source)
 	if err != nil {
 		return "", err
@@ -457,7 +463,7 @@ func (c *Converter) renderConsoleDiagram(ctx context.Context, idx int, source st
 	if err != nil {
 		return "", fmt.Errorf("read rendered diagram: %w", err)
 	}
-	return encodeTerminalImage(protocol, data, width)
+	return encodeTerminalImage(transport, data, width)
 }
 
 // consoleDiagramPNG rasterizes a Mermaid block to a PNG and returns its
@@ -526,7 +532,20 @@ func fitColumns(pixelWidth, maxColumns int) (cols int, clamped bool) {
 
 // encodeTerminalImage encodes a PNG diagram as an inline image escape sequence
 // for the given protocol, scaled down to at most maxColumns terminal columns.
-func encodeTerminalImage(protocol terminalImageProtocol, data []byte, maxColumns int) (string, error) {
+func encodeTerminalImage(transport terminalImageTransport, data []byte, maxColumns int) (string, error) {
+	sequence, err := encodeImageSequence(transport.protocol, data, maxColumns)
+	if err != nil {
+		return "", err
+	}
+	if transport.viaTmux {
+		return wrapTmuxPassthrough(sequence), nil
+	}
+	return sequence, nil
+}
+
+// encodeImageSequence encodes a PNG diagram as the protocol's own inline image
+// escape sequence, scaled down to at most maxColumns terminal columns.
+func encodeImageSequence(protocol terminalImageProtocol, data []byte, maxColumns int) (string, error) {
 	img, err := png.Decode(bytes.NewReader(data))
 	if err != nil {
 		return "", fmt.Errorf("decode diagram PNG: %w", err)
