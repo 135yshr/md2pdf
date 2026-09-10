@@ -37,73 +37,43 @@ func insideTmux(getenv func(string) string) bool {
 // that image detection depends on, in one invocation. The separator cannot occur
 // in a TERM name, and splitting on it keeps the field positions even when the
 // client name is empty because no client is attached.
-const tmuxPaneFormat = "#{session_name}|#{window_active}|#{session_attached}|" +
-	"#{window_zoomed_flag}|#{pane_active}"
+const tmuxClientFormat = "#{client_termname}|#{client_termtype}|#{window_active}|" +
+	"#{session_attached}|#{window_zoomed_flag}|#{pane_active}"
 
-// tmuxClientListFormat asks for the terminal identity of one attached client.
-const tmuxClientListFormat = "#{client_termname}|#{client_termtype}"
-
-// tmuxClient describes one terminal attached to the session.
+// tmuxClient describes the client and pane md2pdf is drawing into.
 type tmuxClient struct {
-	// termName is TERM as the client reports it.
+	// termName is TERM as the attached client reports it, empty when no client
+	// is attached.
 	termName string
 	// termType is what the client answered tmux's terminal version query with,
 	// such as "iTerm2 3.6.11" or "kitty(0.35.2)". It is empty for a terminal
 	// that does not answer, and on a tmux too old to report it.
 	termType string
-}
-
-// tmuxPane describes the pane md2pdf is drawing into.
-type tmuxPane struct {
-	// session names the session the pane belongs to, which is what the client
-	// list has to be asked about.
-	session string
 	// visible reports whether tmux is currently showing this pane, which is what
 	// allow-passthrough=on depends on.
 	visible bool
 }
 
-// tmuxPaneState reads the pane md2pdf is drawing into. It reports ok=false when
-// tmux cannot be asked or answers something unparseable.
+// tmuxClientState reads the client and pane md2pdf is drawing into. It reports
+// ok=false when tmux cannot be asked or answers something unparseable.
 //
 // A pane is visible when its session has a client attached, its window is the
 // current one, and it is not hidden behind another pane zoomed over it.
-func tmuxPaneState(ctx context.Context, query tmuxQuery) (tmuxPane, bool) {
-	out, err := query(ctx, "display-message", "-p", tmuxPaneFormat)
+func tmuxClientState(ctx context.Context, query tmuxQuery) (tmuxClient, bool) {
+	out, err := query(ctx, "display-message", "-p", tmuxClientFormat)
 	if err != nil {
-		return tmuxPane{}, false
+		return tmuxClient{}, false
 	}
 	fields := strings.Split(strings.TrimSpace(out), "|")
-	if len(fields) != 5 {
-		return tmuxPane{}, false
+	if len(fields) != 6 {
+		return tmuxClient{}, false
 	}
-	session, windowActive, attached, zoomed, paneActive :=
-		fields[0], fields[1], fields[2], fields[3], fields[4]
+	termName, termType, windowActive, attached, zoomed, paneActive :=
+		fields[0], fields[1], fields[2], fields[3], fields[4], fields[5]
 
 	visible := attached != "0" && attached != "" && windowActive == "1" &&
 		(zoomed != "1" || paneActive == "1")
-	return tmuxPane{session: session, visible: visible}, true
-}
-
-// tmuxSessionClients lists every terminal attached to the session.
-//
-// One client's answer is not the whole picture: a pane's passthrough output is
-// delivered to every client showing it, and session_attached is a count rather
-// than a flag. It reports ok=false when tmux cannot be asked.
-func tmuxSessionClients(ctx context.Context, query tmuxQuery, session string) ([]tmuxClient, bool) {
-	out, err := query(ctx, "list-clients", "-t", session, "-F", tmuxClientListFormat)
-	if err != nil {
-		return nil, false
-	}
-	var clients []tmuxClient
-	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		termName, termType, _ := strings.Cut(line, "|")
-		clients = append(clients, tmuxClient{termName: termName, termType: termType})
-	}
-	return clients, true
+	return tmuxClient{termName: termName, termType: termType, visible: visible}, true
 }
 
 // tmuxForwardsPassthrough reports whether tmux will forward DCS passthrough for
@@ -125,8 +95,8 @@ func tmuxForwardsPassthrough(ctx context.Context, query tmuxQuery) (blockedReaso
 	case "all":
 		return "", true
 	case "on":
-		pane, ok := tmuxPaneState(ctx, query)
-		if ok && pane.visible {
+		client, ok := tmuxClientState(ctx, query)
+		if ok && client.visible {
 			return "", true
 		}
 		return "allow-passthrough is on, but tmux only forwards escape sequences for a " +
@@ -152,30 +122,8 @@ var tmuxClientTermTypes = []struct {
 	{marker: "wezterm", protocol: imageProtocolITerm2},
 }
 
-// tmuxClientsProtocol reports the image protocol every attached client speaks,
-// and imageProtocolNone unless they all speak the same one.
-//
-// Agreement is required because passthrough is not addressed to a client: tmux
-// delivers it to every client showing the pane. Claiming kitty because one
-// viewer is kitty would emit kitty graphics to an iTerm2 viewer as well, which
-// shows nothing — and the Mermaid source it would have read has already been
-// replaced by then. Text art suits every client, so disagreement falls back to
-// it rather than picking a winner.
-func tmuxClientsProtocol(clients []tmuxClient) terminalImageProtocol {
-	if len(clients) == 0 {
-		return imageProtocolNone
-	}
-	agreed := tmuxClientProtocol(clients[0])
-	for _, client := range clients[1:] {
-		if tmuxClientProtocol(client) != agreed {
-			return imageProtocolNone
-		}
-	}
-	return agreed
-}
-
-// tmuxClientProtocol reports the image protocol one client speaks, deciding
-// entirely from what that client told tmux about itself.
+// tmuxClientProtocol reports the image protocol the attached client speaks,
+// deciding entirely from what that client told tmux about itself.
 //
 // Nothing here may come from tmux's global environment. That snapshot describes
 // whatever started the server, so a server started under iTerm2 and attached
@@ -185,8 +133,8 @@ func tmuxClientsProtocol(clients []tmuxClient) terminalImageProtocol {
 // terminal that started the server.
 //
 // The version query answer is tried first because it identifies terminals whose
-// TERM does not, with TERM second for the terminals that announce themselves
-// that way instead.
+// TERM does not, and TERM second for the terminals that announce themselves that
+// way instead.
 func tmuxClientProtocol(client tmuxClient) terminalImageProtocol {
 	termType := strings.ToLower(client.termType)
 	for _, candidate := range tmuxClientTermTypes {
@@ -269,15 +217,11 @@ func detectImageTransport(ctx context.Context, getenv func(string) string, query
 		return terminalImageTransport{tmuxBlockedReason: reason}
 	}
 
-	pane, ok := tmuxPaneState(ctx, query)
+	client, ok := tmuxClientState(ctx, query)
 	if !ok {
 		return terminalImageTransport{}
 	}
-	clients, ok := tmuxSessionClients(ctx, query, pane.session)
-	if !ok {
-		return terminalImageTransport{}
-	}
-	protocol := tmuxClientsProtocol(clients)
+	protocol := tmuxClientProtocol(client)
 	if !slices.Contains(tmuxTunnelledProtocols, protocol) {
 		return terminalImageTransport{}
 	}
