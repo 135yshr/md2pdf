@@ -1,3 +1,8 @@
+# [v0.16.0](https://github.com/135yshr/md2pdf/compare/v0.15.0...v0.16.0) (2026-09-10)
+
+## ✨ New Features
+- [`5a4c729`](https://github.com/135yshr/md2pdf/commit/5a4c729)  feat: fit over-wide console Mermaid diagrams instead of clipping them (#64) (Issues: [`#64`](https://github.com/135yshr/md2pdf/issues/64))
+
 # [v0.15.0](https://github.com/135yshr/md2pdf/compare/v0.14.2...v0.15.0) (2026-09-10)
 
 ## ✨ New Features
