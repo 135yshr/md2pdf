@@ -67,22 +67,99 @@ func tmuxGlobalEnv(query tmuxQuery, getenv func(string) string) func(string) str
 	}
 }
 
-// tmuxAllowsPassthrough reports whether the session forwards DCS passthrough to
-// the outer terminal.
+// tmuxClientFormat asks tmux for everything about the current client and pane
+// that image detection depends on, in one invocation. The separator cannot occur
+// in a TERM name, and splitting on it keeps the field positions even when the
+// client name is empty because no client is attached.
+const tmuxClientFormat = "#{client_termname}|#{window_active}|#{session_attached}|" +
+	"#{window_zoomed_flag}|#{pane_active}"
+
+// tmuxClient describes the client and pane md2pdf is drawing into.
+type tmuxClient struct {
+	// termName is TERM as the attached client reports it, empty when no client
+	// is attached.
+	termName string
+	// visible reports whether tmux is currently showing this pane, which is what
+	// allow-passthrough=on depends on.
+	visible bool
+}
+
+// tmuxClientState reads the client and pane md2pdf is drawing into. It reports
+// ok=false when tmux cannot be asked or answers something unparseable.
 //
-// tmux discards passthrough unless allow-passthrough is turned on, so an image
-// emitted without it vanishes with no error anywhere. A tmux too old to know the
+// A pane is visible when its session has a client attached, its window is the
+// current one, and it is not hidden behind another pane zoomed over it.
+func tmuxClientState(query tmuxQuery) (tmuxClient, bool) {
+	out, err := query("display-message", "-p", tmuxClientFormat)
+	if err != nil {
+		return tmuxClient{}, false
+	}
+	fields := strings.Split(strings.TrimSpace(out), "|")
+	if len(fields) != 5 {
+		return tmuxClient{}, false
+	}
+	termName, windowActive, attached, zoomed, paneActive :=
+		fields[0], fields[1], fields[2], fields[3], fields[4]
+
+	visible := attached != "0" && attached != "" && windowActive == "1" &&
+		!(zoomed == "1" && paneActive != "1")
+	return tmuxClient{termName: termName, visible: visible}, true
+}
+
+// tmuxForwardsPassthrough reports whether tmux will forward DCS passthrough for
+// this pane.
+//
+// tmux discards passthrough unless allow-passthrough is set, and the two
+// settings differ in a way that matters: tmux(1) defines "on" as forwarding only
+// while the pane is visible, and "all" as forwarding even when it is not. An
+// image written into a hidden pane under "on" is dropped with no error anywhere,
+// so the pane has to be checked rather than assumed. A tmux too old to know the
 // option reports a failure, which is also a no.
-func tmuxAllowsPassthrough(query tmuxQuery) bool {
+func tmuxForwardsPassthrough(query tmuxQuery) (blockedReason string, forwards bool) {
 	out, err := query("show", "-gv", "allow-passthrough")
 	if err != nil {
-		return false
+		return "tmux could not be asked whether it forwards escape sequences; " +
+			"a tmux older than 3.3 cannot", false
 	}
 	switch strings.TrimSpace(out) {
-	case "on", "all":
-		return true
+	case "all":
+		return "", true
+	case "on":
+		client, ok := tmuxClientState(query)
+		if ok && client.visible {
+			return "", true
+		}
+		return "allow-passthrough is on, but tmux only forwards escape sequences for a " +
+			"visible pane and this one is not; run `tmux set -g allow-passthrough all`", false
 	default:
-		return false
+		return "allow-passthrough is off; run `tmux set -g allow-passthrough on`", false
+	}
+}
+
+// tmuxDetectEnv returns the environment the outer terminal's protocol is read
+// from inside a session.
+//
+// The attached client's TERM is authoritative, because tmux's global snapshot
+// describes whatever started the server: attach the same server from a different
+// terminal and that snapshot names the wrong one. KITTY_WINDOW_ID is dropped
+// entirely for the same reason — it identifies a window of the terminal that
+// started the server, and letting it through would report kitty for a client
+// that is not kitty. Everything else comes from the snapshot, then the process
+// environment.
+func tmuxDetectEnv(query tmuxQuery, getenv func(string) string) func(string) string {
+	global := tmuxGlobalEnv(query, getenv)
+	client, ok := tmuxClientState(query)
+
+	return func(key string) string {
+		switch key {
+		case "KITTY_WINDOW_ID":
+			return ""
+		case "TERM":
+			if ok && client.termName != "" {
+				return client.termName
+			}
+		}
+		return global(key)
 	}
 }
 
@@ -118,10 +195,11 @@ func osGetenv(getenv func(string) string) func(string) string {
 type terminalImageTransport struct {
 	protocol terminalImageProtocol
 	viaTmux  bool
-	// tmuxBlocked records that no protocol was offered because tmux is not
-	// forwarding passthrough. It is worth telling apart from a terminal that
-	// simply cannot show images: this one is a single setting away from working.
-	tmuxBlocked bool
+	// tmuxBlockedReason records why no protocol was offered when tmux is the
+	// thing standing in the way, and is empty otherwise. It is worth telling
+	// apart from a terminal that simply cannot show images: this one is a
+	// setting away from working, and the setting depends on the reason.
+	tmuxBlockedReason string
 }
 
 // tmuxTunnelledProtocols lists the protocols worth sending through tmux's
@@ -148,11 +226,11 @@ func detectImageTransport(getenv func(string) string, query tmuxQuery) terminalI
 	}
 
 	query = resolveTmuxQuery(query)
-	if !tmuxAllowsPassthrough(query) {
-		return terminalImageTransport{tmuxBlocked: true}
+	if reason, forwards := tmuxForwardsPassthrough(query); !forwards {
+		return terminalImageTransport{tmuxBlockedReason: reason}
 	}
 
-	protocol := detectImageProtocol(tmuxGlobalEnv(query, getenv))
+	protocol := detectImageProtocol(tmuxDetectEnv(query, getenv))
 	if !slices.Contains(tmuxTunnelledProtocols, protocol) {
 		return terminalImageTransport{}
 	}

@@ -172,12 +172,12 @@ func resolveConsoleMermaidPlan(mode string, isTTY, noColor bool, getenv func(str
 	transport := detectImageTransport(getenv, tmux)
 	if transport.protocol == imageProtocolNone {
 		if mode == MermaidRenderImage {
-			if transport.tmuxBlocked {
-				return consoleMermaidPlan{}, errors.New(
-					"-mermaid-render image needs tmux to forward escape sequences to the " +
-						"terminal drawing them, but allow-passthrough is off; " +
-						"run `tmux set -g allow-passthrough on`, " +
-						"or use -mermaid-render ascii to draw diagrams as text art")
+			if transport.tmuxBlockedReason != "" {
+				return consoleMermaidPlan{}, fmt.Errorf(
+					"-mermaid-render image needs tmux to forward escape sequences to the "+
+						"terminal drawing them: %s, "+
+						"or use -mermaid-render ascii to draw diagrams as text art",
+					transport.tmuxBlockedReason)
 			}
 			return consoleMermaidPlan{}, errors.New(
 				"-mermaid-render image needs a terminal with an inline image protocol " +
