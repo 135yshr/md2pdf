@@ -2,6 +2,7 @@ package converter
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -308,7 +309,7 @@ func spliceConsoleDiagrams(rendered string, diagrams []consoleDiagram, width int
 // so output stays identical to the source-only rendering. Diagrams are rendered
 // independently: one that cannot be drawn falls back to its own source and
 // leaves the rest of the document alone.
-func (c *Converter) prepareConsoleMermaid(md []byte, plan consoleMermaidPlan, width int) ([]byte, []consoleDiagram, error) {
+func (c *Converter) prepareConsoleMermaid(ctx context.Context, md []byte, plan consoleMermaidPlan, width int) ([]byte, []consoleDiagram, error) {
 	if !plan.emitsImages() && plan.mode != MermaidRenderASCII {
 		return md, nil, nil
 	}
@@ -348,7 +349,7 @@ func (c *Converter) prepareConsoleMermaid(md []byte, plan consoleMermaidPlan, wi
 
 	diagrams := make([]consoleDiagram, 0, len(blocks))
 	for i, block := range blocks {
-		diagram, err := c.renderConsoleBlock(i, block.Source, plan, width, useImages)
+		diagram, err := c.renderConsoleBlock(ctx, i, block.Source, plan, width, useImages)
 		switch {
 		case errors.Is(err, errShowMermaidSource):
 			markdown = strings.Replace(markdown, block.Placeholder, fencedMermaid(block.Source), 1)
@@ -375,9 +376,9 @@ var errShowMermaidSource = errors.New("no renderer could draw this diagram")
 // A strict plan (-mermaid-render image) skips the text-art step entirely and
 // returns the rasterisation error, so asking for an image never quietly yields
 // something else.
-func (c *Converter) renderConsoleBlock(idx int, source string, plan consoleMermaidPlan, width int, useImages bool) (consoleDiagram, error) {
+func (c *Converter) renderConsoleBlock(ctx context.Context, idx int, source string, plan consoleMermaidPlan, width int, useImages bool) (consoleDiagram, error) {
 	if useImages {
-		sequence, err := c.renderConsoleDiagram(idx, source, plan.protocol, width)
+		sequence, err := c.renderConsoleDiagram(ctx, idx, source, plan.protocol, width)
 		if err == nil {
 			c.logf("  diagram %d drawn (%d bytes of %s escape sequence)", idx, len(sequence), plan.protocol)
 			return consoleDiagram{content: sequence, kind: diagramImage}, nil
@@ -400,8 +401,8 @@ func (c *Converter) renderConsoleBlock(idx int, source string, plan consoleMerma
 
 // renderConsoleDiagram rasterises one Mermaid block and encodes the PNG for the
 // terminal.
-func (c *Converter) renderConsoleDiagram(idx int, source string, protocol terminalImageProtocol, width int) (string, error) {
-	pngPath, err := c.rasterizeMermaid(idx, source)
+func (c *Converter) renderConsoleDiagram(ctx context.Context, idx int, source string, protocol terminalImageProtocol, width int) (string, error) {
+	pngPath, err := c.rasterizeMermaid(ctx, idx, source)
 	if err != nil {
 		return "", err
 	}
@@ -415,12 +416,12 @@ func (c *Converter) renderConsoleDiagram(idx int, source string, protocol termin
 // consoleDiagramPNG rasterises a Mermaid block to a PNG and returns its
 // absolute path. It is the production implementation behind
 // Converter.rasterizeMermaid.
-func (c *Converter) consoleDiagramPNG(idx int, source string) (string, error) {
+func (c *Converter) consoleDiagramPNG(ctx context.Context, idx int, source string) (string, error) {
 	pcfg, err := c.ensurePuppeteerConfig()
 	if err != nil {
 		return "", fmt.Errorf("puppeteer config: %w", err)
 	}
-	rel, err := c.renderSingleDiagramPNG(idx, source, pcfg)
+	rel, err := c.renderSingleDiagramPNG(ctx, idx, source, pcfg)
 	if err != nil {
 		return "", err
 	}

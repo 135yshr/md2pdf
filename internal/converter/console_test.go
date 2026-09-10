@@ -292,7 +292,7 @@ func TestRenderConsole_WritesRenderedDocument(t *testing.T) {
 	// A regular file is not a terminal, so this exercises the non-TTY path:
 	// notty style, no pager, color escapes stripped.
 	c.stdin = strings.NewReader("# Title\n\nBody text.\n")
-	if err := c.renderConsole([]string{StdinPath}, f); err != nil {
+	if err := c.renderConsole(t.Context(), []string{StdinPath}, f); err != nil {
 		t.Fatalf("renderConsole: %v", err)
 	}
 

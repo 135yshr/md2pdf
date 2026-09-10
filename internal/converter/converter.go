@@ -11,6 +11,7 @@
 package converter
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -113,7 +114,7 @@ type Converter struct {
 	// absolute path, and mermaidAvailable reports whether the renderer can run
 	// at all. Both are fields so tests can stand in for the external mmdc
 	// invocation without depending on what is installed on the machine.
-	rasterizeMermaid func(idx int, source string) (string, error)
+	rasterizeMermaid func(ctx context.Context, idx int, source string) (string, error)
 	mermaidAvailable func() bool
 	// stdin is where StdinPath reads from. Nil means os.Stdin; tests set it to
 	// supply a document without touching the process's standard input.
@@ -146,13 +147,13 @@ func (c *Converter) Close() {
 //
 // Console format renders every input in order; the other formats take exactly
 // one, which the CLI enforces before calling this.
-func (c *Converter) Convert(inputs []string, outputPath string) error {
+func (c *Converter) Convert(ctx context.Context, inputs []string, outputPath string) error {
 	if len(inputs) == 0 {
 		return errors.New("no input documents")
 	}
 
 	if strings.EqualFold(c.cfg.Format, FormatConsole) {
-		if err := c.renderConsole(inputs, os.Stdout); err != nil {
+		if err := c.renderConsole(ctx, inputs, os.Stdout); err != nil {
 			return fmt.Errorf("render console: %w", err)
 		}
 		return nil
@@ -180,7 +181,7 @@ func (c *Converter) Convert(inputs []string, outputPath string) error {
 
 	if strings.EqualFold(c.cfg.Format, FormatDOCX) {
 		c.logf("Converting Markdown to DOCX with pandoc...")
-		if err := c.convertMarkdownDOCX(mdBytes, srcDir, absOut); err != nil {
+		if err := c.convertMarkdownDOCX(ctx, mdBytes, srcDir, absOut); err != nil {
 			return fmt.Errorf("convert docx: %w", err)
 		}
 		return nil
@@ -193,7 +194,7 @@ func (c *Converter) Convert(inputs []string, outputPath string) error {
 	}
 
 	c.logf("Rendering %d Mermaid diagram(s)...", len(doc.mermaidBlocks))
-	if err := c.renderMermaid(doc); err != nil {
+	if err := c.renderMermaid(ctx, doc); err != nil {
 		return fmt.Errorf("render mermaid: %w", err)
 	}
 
@@ -221,7 +222,7 @@ func (c *Converter) Convert(inputs []string, outputPath string) error {
 	}
 
 	c.logf("Printing PDF with headless Chromium...")
-	if err := c.printPDF(htmlPath, absOut); err != nil {
+	if err := c.printPDF(ctx, htmlPath, absOut); err != nil {
 		return fmt.Errorf("print pdf: %w", err)
 	}
 

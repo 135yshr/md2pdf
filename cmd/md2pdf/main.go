@@ -21,7 +21,10 @@
 package main
 
 import (
+	"context"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/135yshr/md2pdf/internal/cli"
 )
@@ -33,5 +36,10 @@ var (
 )
 
 func main() {
-	os.Exit(cli.Run(os.Args, cli.BuildInfo{Version: version, Commit: commit, Date: date}))
+	// Interrupting the command cancels the external tools it started. Without
+	// this, Ctrl-C leaves mmdc, pandoc and the headless browser running.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	os.Exit(cli.Run(ctx, os.Args, cli.BuildInfo{Version: version, Commit: commit, Date: date}))
 }

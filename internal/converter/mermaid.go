@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -31,7 +32,7 @@ type puppeteerConfig struct {
 // a .mmd temp file, invokes mmdc to produce an SVG, and stores the SVG content
 // back into the block's SVGContent field. It is used for PDF output, which
 // inlines the crisp SVG; DOCX output renders rasterised PNGs separately.
-func (c *Converter) renderMermaid(doc *parsedDoc) error {
+func (c *Converter) renderMermaid(ctx context.Context, doc *parsedDoc) error {
 	if len(doc.mermaidBlocks) == 0 {
 		return nil
 	}
@@ -42,7 +43,7 @@ func (c *Converter) renderMermaid(doc *parsedDoc) error {
 	}
 
 	for i, block := range doc.mermaidBlocks {
-		svg, err := c.renderSingleDiagram(i, block.Source, pcfgPath)
+		svg, err := c.renderSingleDiagram(ctx, i, block.Source, pcfgPath)
 		if err != nil {
 			return fmt.Errorf("diagram %d: %w", i, err)
 		}
@@ -55,7 +56,7 @@ func (c *Converter) renderMermaid(doc *parsedDoc) error {
 // renderSingleDiagramPNG writes the Mermaid source to a temp file, runs mmdc to
 // produce a PNG inside the working directory, and returns the PNG's filename
 // (relative to the working directory) for embedding as an <img>.
-func (c *Converter) renderSingleDiagramPNG(idx int, source, puppeteerCfgPath string) (string, error) {
+func (c *Converter) renderSingleDiagramPNG(ctx context.Context, idx int, source, puppeteerCfgPath string) (string, error) {
 	// Isolate generated diagrams in a dedicated subdirectory so they cannot be
 	// overwritten by user-supplied images that copyImages later copies into the
 	// working directory (e.g. a Markdown <img> referencing "diagram_0.png").
@@ -68,7 +69,7 @@ func (c *Converter) renderSingleDiagramPNG(idx int, source, puppeteerCfgPath str
 	pngFile := filepath.Join(c.workDir, filepath.FromSlash(pngRel))
 
 	// Scale up so the raster diagram stays sharp in the document.
-	if err := c.runMmdc(mmdFile, pngFile, source, puppeteerCfgPath, "-s", mermaidPNGScale); err != nil {
+	if err := c.runMmdc(ctx, mmdFile, pngFile, source, puppeteerCfgPath, "-s", mermaidPNGScale); err != nil {
 		return "", err
 	}
 	if _, err := os.Stat(pngFile); err != nil {
@@ -79,11 +80,11 @@ func (c *Converter) renderSingleDiagramPNG(idx int, source, puppeteerCfgPath str
 
 // renderSingleDiagram writes the Mermaid source to a temp file, runs mmdc, and
 // returns the resulting SVG bytes as a string.
-func (c *Converter) renderSingleDiagram(idx int, source, puppeteerCfgPath string) (string, error) {
+func (c *Converter) renderSingleDiagram(ctx context.Context, idx int, source, puppeteerCfgPath string) (string, error) {
 	mmdFile := filepath.Join(c.workDir, fmt.Sprintf("diagram_%d.mmd", idx))
 	svgFile := filepath.Join(c.workDir, fmt.Sprintf("diagram_%d.svg", idx))
 
-	if err := c.runMmdc(mmdFile, svgFile, source, puppeteerCfgPath); err != nil {
+	if err := c.runMmdc(ctx, mmdFile, svgFile, source, puppeteerCfgPath); err != nil {
 		return "", err
 	}
 
@@ -97,7 +98,7 @@ func (c *Converter) renderSingleDiagram(idx int, source, puppeteerCfgPath string
 // runMmdc writes the Mermaid source to mmdFile and invokes mmdc to render it to
 // outFile. extraArgs are appended after the standard flags (e.g. PNG scaling),
 // and the Puppeteer config is passed when non-empty.
-func (c *Converter) runMmdc(mmdFile, outFile, source, puppeteerCfgPath string, extraArgs ...string) error {
+func (c *Converter) runMmdc(ctx context.Context, mmdFile, outFile, source, puppeteerCfgPath string, extraArgs ...string) error {
 	if err := os.WriteFile(mmdFile, []byte(source), 0o644); err != nil {
 		return fmt.Errorf("write .mmd file: %w", err)
 	}
@@ -108,7 +109,7 @@ func (c *Converter) runMmdc(mmdFile, outFile, source, puppeteerCfgPath string, e
 		args = append(args, "-p", puppeteerCfgPath)
 	}
 
-	cmd := exec.Command(c.resolveMmdc(), args...) //nolint:gosec
+	cmd := exec.CommandContext(ctx, c.resolveMmdc(), args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("mmdc failed: %w\noutput: %s", err, out)

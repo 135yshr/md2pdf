@@ -132,7 +132,7 @@ Integration test complete.
 	}
 	defer c.Close()
 
-	if err := c.Convert([]string{mdPath}, pdfPath); err != nil {
+	if err := c.Convert(t.Context(), []string{mdPath}, pdfPath); err != nil {
 		t.Fatalf("Convert(): %v", err)
 	}
 
