@@ -177,3 +177,29 @@ func TestFitMermaidLabels_QuotedLabelKeepsItsBracket(t *testing.T) {
 		t.Errorf("fitMermaidLabels()\n got: %q\nwant: %q", got, want)
 	}
 }
+
+// TestFitMermaidLabels_LeavesNonNodeLinesAlone covers the statements that are
+// not node definitions. A comment or a styling directive that happens to
+// contain brackets must come out untouched, and subgraph labels are out of
+// scope for this rewrite.
+func TestFitMermaidLabels_LeavesNonNodeLinesAlone(t *testing.T) {
+	tests := []struct {
+		name string
+		line string
+	}{
+		{"comment", "%% A[Alpha Beta Gamma] is only a note"},
+		{"subgraph header", "  subgraph S[Alpha Beta Gamma]"},
+		{"classDef", "  classDef primary fill:#f9f,stroke:#333"},
+		{"style", "  style A fill:#f9f,stroke:#333"},
+		{"click", `  click A "https://example.com/a/very/long/path"`},
+		{"blank", "   "},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			source := "graph LR\n" + tc.line + "\n"
+			if got := fitMermaidLabels(source, 8); got != source {
+				t.Errorf("fitMermaidLabels()\n got: %q\nwant: %q", got, source)
+			}
+		})
+	}
+}

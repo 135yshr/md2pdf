@@ -218,6 +218,30 @@ func labelValueAt(line string, i int) (open, close, value string, ok bool) {
 	return "", "", "", false
 }
 
+// nonNodeStatements lists the statement keywords that introduce a line carrying
+// no node definition. Their lines are passed through untouched: a comment or a
+// styling directive may contain brackets that are not a label at all, and
+// subgraph labels are out of scope for this rewrite.
+var nonNodeStatements = []string{
+	"subgraph", "end", "classDef", "class", "style", "linkStyle",
+	"click", "direction", "accTitle", "accDescr",
+}
+
+// rewritableLine reports whether a line of Mermaid source may hold a node label
+// this rewrite is allowed to wrap.
+func rewritableLine(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" || strings.HasPrefix(trimmed, "%%") {
+		return false
+	}
+	for _, statement := range nonNodeStatements {
+		if trimmed == statement || strings.HasPrefix(trimmed, statement+" ") {
+			return false
+		}
+	}
+	return true
+}
+
 // fitLabelsInLine wraps every node label on one line of Mermaid source.
 func fitLabelsInLine(line string, maxWidth int) string {
 	var out strings.Builder
@@ -244,6 +268,9 @@ func fitLabelsInLine(line string, maxWidth int) string {
 func fitMermaidLabels(source string, maxWidth int) string {
 	lines := strings.Split(source, "\n")
 	for i, line := range lines {
+		if !rewritableLine(line) {
+			continue
+		}
 		lines[i] = fitLabelsInLine(line, maxWidth)
 	}
 	return strings.Join(lines, "\n")
