@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -60,5 +61,17 @@ func TestWrapLabelText_BreaksCJKAnywhere(t *testing.T) {
 	}
 	if joined := strings.Join(lines, ""); joined != text {
 		t.Errorf("characters were altered: %q reassembles to %q", got, joined)
+	}
+}
+
+// TestWrapLabelText_KeepsUnbreakableTokenWhole covers a path longer than the cap.
+// Breaking it would make it unreadable, so its line is allowed to overflow: the
+// diagram comes out wider than asked for rather than corrupted.
+func TestWrapLabelText_KeepsUnbreakableTokenWhole(t *testing.T) {
+	const path = "/dashboard/priority-process"
+	got := wrapLabelText("Priority "+path, 12)
+	lines := strings.Split(got, "<br>")
+	if !slices.Contains(lines, path) {
+		t.Errorf("wrapLabelText broke the unbreakable token: %q, lines %q", got, lines)
 	}
 }
