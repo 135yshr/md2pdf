@@ -1,0 +1,75 @@
+package converter
+
+import (
+	"path/filepath"
+	"strings"
+)
+
+// lessBinary is the only pager md2pdf knows how to make scroll sideways.
+const lessBinary = "less"
+
+// isLess reports whether argv invokes less. resolvePager rewrites argv[0] to an
+// absolute path, so the base name is what has to be compared.
+func isLess(argv []string) bool {
+	return len(argv) > 0 && filepath.Base(argv[0]) == lessBinary
+}
+
+// pagerCanPan reports whether the pager can show a line wider than the screen
+// and let the reader scroll right to the rest of it.
+//
+// Only less qualifies. more folds long lines and cannot scroll horizontally at
+// all, and a pager md2pdf does not recognise gets no benefit of the doubt: a
+// diagram is only shown over-wide when there is a way to reach its right edge.
+func pagerCanPan(argv []string) bool {
+	return isLess(argv)
+}
+
+// ensureLessNoWrap appends -S when the configured pager is less without a
+// chop-long-lines flag. Without it less folds an over-wide diagram into
+// fragments instead of letting the reader scroll right.
+//
+// The check is case sensitive: less spells blank-line squeezing -s, and
+// treating that as -S would leave the diagram folded.
+func ensureLessNoWrap(argv []string) []string {
+	if !isLess(argv) {
+		return argv
+	}
+	for _, arg := range argv[1:] {
+		switch {
+		case strings.HasPrefix(arg, "--chop"):
+			return argv
+		case strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "--") &&
+			strings.Contains(arg, "S"):
+			return argv
+		}
+	}
+	return append(argv, "-S")
+}
+
+// stripQuitIfOneScreen removes less's -F from the pager command line.
+//
+// -F prints the file and exits when it fits on one screen, which hands the wide
+// lines to the terminal to fold with no chance to scroll. Panning is worth more
+// than the convenience of not entering the pager for a short document, so the
+// flag is dropped — including out of a cluster such as -RF — whenever a diagram
+// is being shown over-wide.
+func stripQuitIfOneScreen(argv []string) []string {
+	if !isLess(argv) {
+		return argv
+	}
+	out := argv[:1]
+	for _, arg := range argv[1:] {
+		switch {
+		case arg == "--quit-if-one-screen":
+			continue
+		case strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "--") &&
+			strings.Contains(arg, "F"):
+			if kept := "-" + strings.ReplaceAll(arg[1:], "F", ""); kept != "-" {
+				out = append(out, kept)
+			}
+			continue
+		}
+		out = append(out, arg)
+	}
+	return out
+}
