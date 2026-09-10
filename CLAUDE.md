@@ -30,7 +30,7 @@ go test ./internal/converter/ -run TestSpecificName -v
 
 ## Linting
 
-Uses golangci-lint with config in `.golangci.yml`. Key enabled linters: errcheck, gosimple, govet, staticcheck, unused, gofmt, goimports, misspell, godot, gosec, noctx, wrapcheck, exhaustive. G204 (subprocess with variable) is excluded since the mmdc and pandoc invocations are intentional. Test files have relaxed rules (no wrapcheck, gosec, errcheck).
+Uses golangci-lint with config in `.golangci.yml`, in **v2 format** — the config and the binary must both be v2, and the binary must be built with the Go version `go.mod` targets (`go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest`), or it refuses to load the config. Key enabled linters: errcheck, govet, ineffassign, staticcheck, unused, gofmt, goimports, misspell, godot, gosec, noctx, wrapcheck, exhaustive. gosimple is not among them: v2 folded its checks into staticcheck, and gofmt/goimports live in the separate `formatters` section. `govet` runs with `enable-all`, minus **fieldalignment** — every finding it had was a table-driven test's anonymous struct, where readable field order beats saving a word of padding. G204 (subprocess with variable) is excluded since the mmdc and pandoc invocations are intentional. Test files have relaxed rules (no wrapcheck, gosec, errcheck). The exclusion presets v1 applied by default are named explicitly, because v2 applies none unless asked.
 
 ## Architecture
 
