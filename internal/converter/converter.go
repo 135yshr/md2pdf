@@ -263,8 +263,12 @@ func (c *Converter) Convert(ctx context.Context, inputs []string, outputPath str
 	}
 
 	c.logf("Printing PDF with headless Chromium...")
-	if err := c.printPDF(ctx, htmlPath, absOut, deck); err != nil {
-		return fmt.Errorf("print pdf: %w", err)
+	overflows, printErr := c.printPDF(ctx, htmlPath, absOut, deck)
+	if printErr != nil {
+		return fmt.Errorf("print pdf: %w", printErr)
+	}
+	for _, line := range overflowWarnings(describeInput(inputPath), overflows) {
+		fmt.Fprintln(c.errOut(), line)
 	}
 
 	return nil
