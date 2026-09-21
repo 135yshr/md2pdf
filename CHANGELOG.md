@@ -1,3 +1,5 @@
+# [v0.20.1](https://github.com/135yshr/md2pdf/compare/v0.20.0...v0.20.1) (2026-09-21)
+
 # [v0.20.0](https://github.com/135yshr/md2pdf/compare/v0.19.0...v0.20.0) (2026-09-21)
 
 ## ✨ New Features
