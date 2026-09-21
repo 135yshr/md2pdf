@@ -114,6 +114,10 @@ type Config struct {
 	// MermaidRender selects how Mermaid blocks are drawn in console output:
 	// "auto" (default), "image" or "source".
 	MermaidRender string
+	// Slides renders pdf and html output as a deck: one page per slide, split
+	// at top-level thematic breaks. Front-matter marp: true has the same effect
+	// without the flag.
+	Slides bool
 	// Verbose enables detailed progress logging.
 	Verbose bool
 }
@@ -204,7 +208,12 @@ func (c *Converter) Convert(ctx context.Context, inputs []string, outputPath str
 	}
 
 	c.logf("Parsing Markdown and extracting Mermaid blocks...")
-	doc, err := parseMarkdown(mdBytes)
+	parseFn := parseMarkdown
+	if c.slideMode(input.meta) {
+		c.logf("Slide mode: splitting the document at top-level thematic breaks")
+		parseFn = parseSlides
+	}
+	doc, err := parseFn(mdBytes)
 	if err != nil {
 		return fmt.Errorf("parse markdown: %w", err)
 	}
@@ -244,6 +253,13 @@ func (c *Converter) Convert(ctx context.Context, inputs []string, outputPath str
 	}
 
 	return nil
+}
+
+// slideMode reports whether a document is rendered as a deck: when -slides
+// was given, or when its front-matter says marp: true, which is how a Marp deck
+// declares itself and lets one convert unchanged.
+func (c *Converter) slideMode(meta frontMatter) bool {
+	return c.cfg.Slides || meta.Bool("marp")
 }
 
 // errOut returns the writer diagnostics go to, defaulting to standard error.

@@ -236,6 +236,31 @@ md2pdf -page-size Letter -margin-left 20mm -margin-right 20mm document.md
 md2pdf -v document.md
 ```
 
+### Slides
+
+`-slides`, or `marp: true` in the front-matter, turns pdf and html output into
+a deck: the document is split at every top-level `---`, `***` or `___`, and each
+slide starts a new page.
+
+```markdown
+---
+marp: true
+---
+
+# Title slide
+
+---
+
+## Second slide
+```
+
+- Only separators at the top level split. A `---` inside a code block, a list or
+  a blockquote stays where it is, and a setext underline (`Title` over `---`) is
+  still a heading.
+- Two separators in a row, or one at either end, make an empty slide, as in Marp.
+- `-slides` is rejected with `docx` and `console`, which have no pages. A
+  `marp: true` document converted to those formats renders as a document.
+
 ## Who is this for?
 
 - Engineers writing design docs, runbooks, or technical specs in Markdown

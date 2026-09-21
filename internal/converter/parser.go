@@ -39,12 +39,35 @@ type parsedDoc struct {
 	mermaidBlocks []*mermaidBlock
 	// meta is the document's front-matter, nil when it has none.
 	meta frontMatter
+	// slides holds the document split into slides, in order, when it was
+	// parsed in slide mode, and is nil in document mode. HTML then holds the
+	// slides' HTML concatenated, for the consumers that scan the whole body.
+	slides []slide
+}
+
+// slide is one page of a deck parsed in slide mode.
+type slide struct {
+	// html is the slide's content rendered to HTML, with Mermaid code blocks
+	// replaced by their placeholder comments like parsedDoc.HTML.
+	html string
 }
 
 // parseMarkdown converts raw Markdown bytes into a parsedDoc.
 // Fenced code blocks with the language tag "mermaid" are extracted and
 // replaced with placeholder comments so they can be swapped with SVG later.
 func parseMarkdown(src []byte) (*parsedDoc, error) {
+	return parse(src, false)
+}
+
+// parseSlides is parseMarkdown in slide mode: the document is split into
+// slides at every top-level thematic break (---, *** or ___), and the breaks
+// themselves are not rendered.
+func parseSlides(src []byte) (*parsedDoc, error) {
+	return parse(src, true)
+}
+
+// parse implements parseMarkdown and parseSlides.
+func parse(src []byte, slideMode bool) (*parsedDoc, error) {
 	md := goldmark.New(
 		goldmark.WithExtensions(
 			extension.GFM,
@@ -111,6 +134,10 @@ func parseMarkdown(src []byte) (*parsedDoc, error) {
 		return nil, fmt.Errorf("walk markdown AST: %w", walkErr)
 	}
 
+	if slideMode {
+		return renderSlides(md, src, doc, blocks)
+	}
+
 	// Render the full document to HTML.
 	var htmlBuf bytes.Buffer
 	if err := md.Renderer().Render(&htmlBuf, src, doc); err != nil {
@@ -128,6 +155,52 @@ func parseMarkdown(src []byte) (*parsedDoc, error) {
 	return &parsedDoc{
 		HTML:          rendered,
 		mermaidBlocks: blocks,
+	}, nil
+}
+
+// renderSlides renders doc one top-level node at a time, starting a new slide
+// at each top-level thematic break. Working on the AST rather than on the
+// rendered HTML is what keeps a "---" inside a code block, a list item or a
+// blockquote from splitting anything: only the document's direct children are
+// candidates. A setext heading underline is a heading, not a break, so it never
+// splits either. Consecutive breaks, and a break at either end, produce empty
+// slides, as they do in Marp.
+func renderSlides(md goldmark.Markdown, src []byte, doc ast.Node, blocks []*mermaidBlock) (*parsedDoc, error) {
+	var slides []slide
+	var cur bytes.Buffer
+	for n := doc.FirstChild(); n != nil; n = n.NextSibling() {
+		if n.Kind() == ast.KindThematicBreak {
+			slides = append(slides, slide{html: cur.String()})
+			cur.Reset()
+			continue
+		}
+		if err := md.Renderer().Render(&cur, src, n); err != nil {
+			return nil, fmt.Errorf("goldmark render: %w", err)
+		}
+	}
+	slides = append(slides, slide{html: cur.String()})
+
+	// Blocks are in document order and each replacement consumes the first
+	// match, so trying the slides in order puts every placeholder where its
+	// diagram was, even when two slides hold the same diagram source.
+	for _, b := range blocks {
+		for i := range slides {
+			replaced := replaceMermaidBlock(slides[i].html, b.Source, b.Placeholder)
+			if replaced != slides[i].html {
+				slides[i].html = replaced
+				break
+			}
+		}
+	}
+
+	var all strings.Builder
+	for _, s := range slides {
+		all.WriteString(s.html)
+	}
+	return &parsedDoc{
+		HTML:          all.String(),
+		mermaidBlocks: blocks,
+		slides:        slides,
 	}, nil
 }
 

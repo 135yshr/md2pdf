@@ -38,8 +38,11 @@ func (c *Converter) buildHTML(doc *parsedDoc, destPath string) error {
 	if err != nil {
 		return err
 	}
+	if doc.slides != nil {
+		css = slideModeCSS(css)
+	}
 
-	body := doc.HTML
+	body := doc.body()
 	for _, block := range doc.mermaidBlocks {
 		var inner string
 		if block.ImagePath != "" {
@@ -311,6 +314,39 @@ const baseCSS = `
     margin: 0 auto;
   }
 `
+
+// body returns the HTML placed inside <body>: the rendered document, or in
+// slide mode one <section class="slide"> per slide.
+func (d *parsedDoc) body() string {
+	if d.slides == nil {
+		return d.HTML
+	}
+	var sb strings.Builder
+	for i, s := range d.slides {
+		fmt.Fprintf(&sb, "<section class=\"slide\" id=\"slide-%d\">\n%s</section>\n", i+1, s.html)
+	}
+	return sb.String()
+}
+
+// slidePageBreakCSS makes every slide after the first start a new page. It is
+// break-before on the following slide rather than break-after on each, which
+// would leave a blank page after the last one; the min-height gives an empty
+// slide a box, without which Chromium collapses it and its page disappears.
+const slidePageBreakCSS = `
+section.slide + section.slide { break-before: page; }
+section.slide { min-height: 1px; }
+`
+
+// slideModeCSS inserts the slide rules into a stylesheet built by buildCSS,
+// ahead of any -css rules so those still win the cascade.
+func slideModeCSS(css string) string {
+	i := strings.Index(css, baseCSS)
+	if i < 0 {
+		return css + slidePageBreakCSS
+	}
+	end := i + len(baseCSS)
+	return css[:end] + slidePageBreakCSS + css[end:]
+}
 
 // title returns the text for the page's <title>: the front-matter title when
 // there is one, else the first heading, else "Document". The front-matter value

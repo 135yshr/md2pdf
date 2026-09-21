@@ -67,6 +67,7 @@ func (p *program) parseFlags(args []string) (*converter.Config, error) {
 	marginBottom := fs.String("margin-bottom", "18mm", "Bottom margin")
 	marginLeft := fs.String("margin-left", "14mm", "Left margin")
 	marginRight := fs.String("margin-right", "14mm", "Right margin")
+	slides := fs.Bool("slides", false, "Render pdf or html as a slide deck, one page per slide split at ---")
 	verbose := fs.Bool("v", false, "Verbose output")
 	showVersion := fs.Bool("version", false, "Print version and exit")
 	doctor := fs.Bool("doctor", false, "Report which runtime dependencies are present and which formats can run, then exit")
@@ -157,6 +158,12 @@ func (p *program) parseFlags(args []string) (*converter.Config, error) {
 		return nil, fmt.Errorf("-mermaid-scale only applies to console output, not %s", outFormat)
 	}
 
+	// A deck is a sequence of pages, which only the printed formats have.
+	// Accepting the flag for docx or console would silently do nothing.
+	if *slides && outFormat != converter.FormatPDF && outFormat != converter.FormatHTML {
+		return nil, fmt.Errorf("-slides applies to pdf and html output, not %s", outFormat)
+	}
+
 	// Resolve font paths.
 	regular := resolveFontRegular(*fontRegular)
 	bold := *fontBold
@@ -196,6 +203,7 @@ func (p *program) parseFlags(args []string) (*converter.Config, error) {
 		ConsoleStyle:     *consoleStyle,
 		ConsolePager:     *consolePager,
 		MermaidRender:    *mermaidRender,
+		Slides:           *slides,
 		Verbose:          *verbose,
 	}, nil
 }

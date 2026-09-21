@@ -46,6 +46,10 @@ Options:
   -margin-bottom <m>      Bottom margin (default: 18mm)
   -margin-left <m>        Left margin   (default: 14mm)
   -margin-right <m>       Right margin  (default: 14mm)
+  -slides                 Render pdf or html as a slide deck: one page per
+                          slide, split at each top-level ---, *** or ___.
+                          Front-matter "marp: true" does the same, so a Marp
+                          deck converts unchanged.
   -width <cols>           Console word-wrap width (default: terminal width,
                           capped at 120 columns)
   -style <name|path>      Console color theme: auto (default), dark, light,
