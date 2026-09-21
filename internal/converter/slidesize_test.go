@@ -57,7 +57,7 @@ func TestSlidePrintOptions_AreTheSlideWithNoMargins(t *testing.T) {
 
 func TestHTMLOutput_SlideSectionsHaveTheSlideSize(t *testing.T) {
 	page := convertHTML(t, &Config{}, "---\nmarp: true\nsize: 4:3\n---\n\n"+threeSlides)
-	for _, want := range []string{"width: 960px", "height: 720px"} {
+	for _, want := range []string{"width: 960px", "height: 720px", "@page { size: 960px 720px; margin: 0; }"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("slide CSS lacks %q", want)
 		}
@@ -148,4 +148,30 @@ func TestPDFOutput_SlidePagesHaveTheSlideSize(t *testing.T) {
 func closeToPt(a, b float64) bool {
 	d := a - b
 	return d < 0.5 && d > -0.5
+}
+
+// TestPDFOutput_AnOverfullSlideStaysOnePage pins the one-page-per-slide
+// contract: a slide too full for its page is clipped, never continued onto a
+// second page, so page N is always slide N.
+func TestPDFOutput_AnOverfullSlideStaysOnePage(t *testing.T) {
+	if _, err := chromiumPath(); err != nil {
+		t.Skipf("no Chromium available: %v", err)
+	}
+	var long strings.Builder
+	for range 80 {
+		long.WriteString("- an item that does not fit\n")
+	}
+	input := writeDoc(t, "---\nmarp: true\n---\n\n# One\n\n---\n\n"+long.String()+"\n---\n\n# Three\n")
+	out := filepath.Join(t.TempDir(), "out.pdf")
+	c := newTestConverter(t, &Config{Format: FormatPDF})
+	if err := c.Convert(t.Context(), []string{input}, out); err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("read pdf: %v", err)
+	}
+	if got := len(mediaBoxRE.FindAll(data, -1)); got != 3 {
+		t.Errorf("PDF has %d pages for 3 slides", got)
+	}
 }

@@ -63,10 +63,13 @@ func slidePrintOptions(s slideSize) printOptions {
 // slideSizeCSS sizes each slide to the page and removes the document layout's
 // body padding and centered column, which would otherwise shift every slide
 // inward and push its bottom onto a second page. Hiding overflow keeps a slide
-// that is too full from spilling onto an extra page.
+// that is too full from spilling onto an extra page. The size is declared in
+// @page too, so the HTML output printed straight from a browser gets
+// slide-sized pages rather than the printer's paper; printPDF passes the same
+// size through CDP.
 func slideSizeCSS(s slideSize) string {
 	return fmt.Sprintf(`
-@page { margin: 0; }
+@page { size: %[1]dpx %[2]dpx; margin: 0; }
 html, body { margin: 0; padding: 0; max-width: none; }
 section.slide {
   width: %[1]dpx;
