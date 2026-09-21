@@ -7,7 +7,9 @@
 //  3. Build a self-contained GitHub-styled HTML file and print it to PDF
 //     with a headless Chromium driven over the DevTools Protocol.
 //
-// HTML output stops after the third stage's HTML file. PPTX output renders the
+// HTML output stops after building that HTML file and writes it to the output
+// path. It is self-contained except for local images, which keep the relative
+// paths the Markdown gave them rather than being copied. PPTX output renders the
 // same HTML as a slide deck and captures each slide with that Chromium instead
 // of printing it. DOCX output is produced directly from Markdown by pandoc, and
 // console output is rendered to ANSI text by glamour; both bypass the HTML
