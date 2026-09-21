@@ -278,6 +278,9 @@ marp: true
   one after it, and `class:` in the front-matter to every slide. Other Marp
   directives (`paginate`, `header`, `theme`, ...) are recognized and ignored for
   now, rather than showing up as text.
+- Any other HTML comment on its own line is a **presenter note** for its slide,
+  as in Marp. It is left off the slide; PPTX output puts it on the slide's
+  notes page.
 - `-slides` is rejected with `docx` and `console`, which have no pages. A
   `marp: true` document converted to those formats renders as a document.
 

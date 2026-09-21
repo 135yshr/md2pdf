@@ -54,6 +54,9 @@ type slide struct {
 	html string
 	// classes are added to the slide's <section> by the class directive.
 	classes []string
+	// notes is the slide's presenter notes: its HTML comments that are not
+	// directives, in source order, separated by a blank line.
+	notes string
 }
 
 // parseMarkdown converts raw Markdown bytes into a parsedDoc.
@@ -171,15 +174,24 @@ func parse(src []byte, slideMode bool, meta frontMatter) (*parsedDoc, error) {
 // splits either. Consecutive breaks, and a break at either end, produce empty
 // slides, as they do in Marp.
 //
-// A top-level HTML block that is a directive comment is consumed rather than
-// rendered, and applies to the slide it sits in wherever it appears there.
+// A top-level HTML block that is a single comment is consumed rather than
+// rendered: a directive applies to the slide it sits in wherever it appears
+// there, and any other comment becomes one of the slide's presenter notes.
+// Comments inside other blocks (a list item, a paragraph) are left alone, so
+// they stay invisible in the HTML as they were.
 func renderSlides(md goldmark.Markdown, src []byte, doc ast.Node, blocks []*mermaidBlock, meta frontMatter) (*parsedDoc, error) {
 	var slides []slide
 	var cur bytes.Buffer
+	var notes []string
 	dirs := newSlideDirectives(meta)
 	endSlide := func() {
-		slides = append(slides, slide{html: cur.String(), classes: dirs.finish()})
+		slides = append(slides, slide{
+			html:    cur.String(),
+			classes: dirs.finish(),
+			notes:   strings.Join(notes, "\n\n"),
+		})
 		cur.Reset()
+		notes = nil
 	}
 	for n := doc.FirstChild(); n != nil; n = n.NextSibling() {
 		if n.Kind() == ast.KindThematicBreak {
@@ -187,8 +199,17 @@ func renderSlides(md goldmark.Markdown, src []byte, doc ast.Node, blocks []*merm
 			continue
 		}
 		if block, ok := n.(*ast.HTMLBlock); ok {
-			if found, isDirective := parseDirectiveComment(htmlBlockText(block, src)); isDirective {
+			text := htmlBlockText(block, src)
+			if found, isDirective := parseDirectiveComment(text); isDirective {
 				dirs.apply(found)
+				continue
+			}
+			// Any other comment is a presenter note: kept off the slide, as
+			// Marp does, and collected for the PPTX notes page.
+			if body, isComment := commentBody(text); isComment {
+				if note := strings.TrimSpace(body); note != "" {
+					notes = append(notes, note)
+				}
 				continue
 			}
 		}
