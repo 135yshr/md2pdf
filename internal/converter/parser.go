@@ -37,6 +37,8 @@ type parsedDoc struct {
 	HTML string
 	// mermaidBlocks is the ordered list of extracted Mermaid diagrams.
 	mermaidBlocks []*mermaidBlock
+	// meta is the document's front-matter, nil when it has none.
+	meta frontMatter
 }
 
 // parseMarkdown converts raw Markdown bytes into a parsedDoc.

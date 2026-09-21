@@ -139,11 +139,11 @@ func (c *Converter) renderConsole(ctx context.Context, inputs []string, out *os.
 	docs := make([][]byte, 0, len(inputs))
 	var drawn consoleDrawn
 	for _, input := range inputs {
-		md, err := c.readInput(input)
+		doc, err := c.readDocument(input)
 		if err != nil {
 			return err
 		}
-		rendered, documentDrawn, err := c.renderConsoleDocument(ctx, md, style, width, plan)
+		rendered, documentDrawn, err := c.renderConsoleDocument(ctx, doc.body, style, width, plan)
 		if err != nil {
 			return err
 		}

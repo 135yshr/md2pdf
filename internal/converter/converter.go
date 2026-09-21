@@ -179,10 +179,11 @@ func (c *Converter) Convert(ctx context.Context, inputs []string, outputPath str
 	}
 	inputPath := inputs[0]
 
-	mdBytes, readErr := c.readInput(inputPath)
+	input, readErr := c.readDocument(inputPath)
 	if readErr != nil {
 		return readErr
 	}
+	mdBytes := input.body
 
 	srcDir, dirErr := inputDir(inputPath)
 	if dirErr != nil {
@@ -207,6 +208,7 @@ func (c *Converter) Convert(ctx context.Context, inputs []string, outputPath str
 	if err != nil {
 		return fmt.Errorf("parse markdown: %w", err)
 	}
+	doc.meta = input.meta
 
 	c.logf("Rendering %d Mermaid diagram(s)...", len(doc.mermaidBlocks))
 	if err := c.renderMermaid(ctx, doc); err != nil {
