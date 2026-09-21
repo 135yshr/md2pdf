@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
@@ -95,32 +96,35 @@ func resolvePrintOptions(cfg *Config) (printOptions, error) {
 // A non-nil deck prints each page at the slide size with no margin, ignoring
 // -page-size and -margin-*; Convert has already refused those flags when they
 // were given explicitly.
-func (c *Converter) printPDF(ctx context.Context, htmlPath, pdfPath string, deck *slideSize) error {
+//
+// For a deck it also returns the slides whose content does not fit, measured in
+// the same page load the PDF is printed from, so the report matches the output.
+func (c *Converter) printPDF(ctx context.Context, htmlPath, pdfPath string, deck *slideSize) ([]slideOverflow, error) {
 	var opts printOptions
 	if deck != nil {
 		opts = slidePrintOptions(*deck)
 	} else {
 		var err error
 		if opts, err = resolvePrintOptions(c.cfg); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	browser, err := chromiumPath()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	c.logf("  driving %s over the DevTools Protocol", browser)
 
-	pdf, err := renderPDF(ctx, browser, htmlPath, opts, printTimeout)
+	pdf, overflows, err := renderPDF(ctx, browser, htmlPath, opts, deck != nil, printTimeout)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := os.WriteFile(pdfPath, pdf, 0o644); err != nil { //nolint:gosec // G306: a document the caller asked to be written
-		return fmt.Errorf("write pdf: %w", err)
+		return nil, fmt.Errorf("write pdf: %w", err)
 	}
 	c.logf("  printed %d bytes of PDF", len(pdf))
-	return nil
+	return overflows, nil
 }
 
 // renderPDF opens htmlPath in a headless browser and returns the printed PDF.
@@ -128,7 +132,11 @@ func (c *Converter) printPDF(ctx context.Context, htmlPath, pdfPath string, deck
 // Fonts are waited on explicitly: the page declares CJK faces with @font-face,
 // and printing before document.fonts settles produces a PDF laid out with
 // fallback metrics.
-func renderPDF(ctx context.Context, browser, htmlPath string, opts printOptions, timeout time.Duration) ([]byte, error) {
+//
+// With measure set, the page is laid out as print media and every slide is
+// checked for overflow before printing, after the fonts have settled so the
+// measurements use the final metrics.
+func renderPDF(ctx context.Context, browser, htmlPath string, opts printOptions, measure bool, timeout time.Duration) ([]byte, []slideOverflow, error) {
 	allocOpts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.ExecPath(browser),
 		// The sandbox cannot be used as root, which is the normal case in CI
@@ -149,8 +157,10 @@ func renderPDF(ctx context.Context, browser, htmlPath string, opts printOptions,
 	var (
 		pdf         []byte
 		fontsLoaded bool
+		overflows   []slideOverflow
 	)
 	err := chromedp.Run(ctx,
+		emulation.SetEmulatedMedia().WithMedia("print"),
 		chromedp.Navigate(fileURL(htmlPath)),
 		// document.fonts.ready resolves to a Promise, so it has to be awaited
 		// rather than merely evaluated. It resolves *to the FontFaceSet*, which
@@ -160,6 +170,12 @@ func renderPDF(ctx context.Context, browser, htmlPath string, opts printOptions,
 			func(p *runtime.EvaluateParams) *runtime.EvaluateParams {
 				return p.WithAwaitPromise(true)
 			}),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			if !measure {
+				return nil
+			}
+			return chromedp.Evaluate(measureSlidesJS, &overflows).Do(ctx)
+		}),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			var err error
 			pdf, _, err = page.PrintToPDF().
@@ -178,9 +194,9 @@ func renderPDF(ctx context.Context, browser, htmlPath string, opts printOptions,
 		}),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("drive headless browser: %w", err)
+		return nil, nil, fmt.Errorf("drive headless browser: %w", err)
 	}
-	return pdf, nil
+	return pdf, overflows, nil
 }
 
 // fileURL turns a local path into a file:// URL.

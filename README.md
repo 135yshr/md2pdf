@@ -262,7 +262,12 @@ marp: true
   or 4:3 (960×720 px) with `size: 4:3` in the front-matter. `-page-size` and
   `-margin-*` are for documents, and passing them for a deck is an error rather
   than silently ignored. Content that does not fit a slide is cut off at its
-  edge instead of spilling onto another page.
+  edge instead of spilling onto another page — and md2pdf says so, on stderr and
+  without needing `-v`:
+
+  ```
+  warning: deck.md: slide 2 overflows the slide (height); the rest is cut off
+  ```
 - Decks get their own stylesheet (30px text, slide-sized headings, padded
   slides); `-css` files still apply after it.
 - The Marp `class` directive adds classes to a slide. `lead` is built in and
