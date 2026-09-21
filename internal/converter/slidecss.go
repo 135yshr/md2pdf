@@ -35,7 +35,7 @@ const slideBaseCSS = `
     justify-content: flex-start;
     overflow: hidden;
     min-height: 1px;
-    padding: 64px 76px;
+    padding: 64px 76px; /* the 64px is slidePaddingYPx */
     font-size: 30px;
     line-height: 1.5;
     background: #ffffff;

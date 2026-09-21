@@ -119,3 +119,22 @@ func TestSlideDiagram_TextAfterTheDiagramStaysOnTheSlide(t *testing.T) {
 		t.Errorf("slide overflows: %+v", overflows)
 	}
 }
+
+// TestSlideDiagram_NestedDiagramIsCappedAtTheSlideHeight covers a diagram in a
+// list item or blockquote. It is not a flex item of the slide, so it cannot be
+// given exactly the space left; it is held to the slide's content height
+// instead, which keeps a tall one from running far past the edge.
+func TestSlideDiagram_NestedDiagramIsCappedAtTheSlideHeight(t *testing.T) {
+	for name, src := range map[string]string{
+		"list item":  "- Steps\n\n  ```mermaid\n  graph TD\n    A --> B\n  ```\n",
+		"blockquote": "> ```mermaid\n> graph TD\n>   A --> B\n> ```\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, h, _ := diagramBox(t, slideDiagramPage(t, src, 400, 1500))
+			// 720px slide less 64px of padding top and bottom.
+			if h > 592.5 {
+				t.Errorf("nested diagram drawn %.0fpx tall, want at most the 592px content height", h)
+			}
+		})
+	}
+}
