@@ -35,7 +35,7 @@ const slideBaseCSS = `
     justify-content: flex-start;
     overflow: hidden;
     min-height: 1px;
-    padding: 64px 76px;
+    padding: 64px 76px; /* the 64px is slidePaddingYPx */
     font-size: 30px;
     line-height: 1.5;
     background: #ffffff;
@@ -95,8 +95,27 @@ const slideBaseCSS = `
 
   img { max-width: 100%; max-height: 100%; }
 
-  .diagram-wrapper { margin: 0 0 0.6em; text-align: center; }
-  .diagram-wrapper svg { max-width: 100%; height: auto; }
+  /*
+   * A Mermaid diagram shrinks to the space the slide has left for it. The
+   * wrapper is a flex item that may shrink (min-height: 0 lets it go below its
+   * content), and a flex item's size is definite once flexed inside a
+   * container of fixed height, so the SVG's percentage max-height resolves
+   * against it. mmdc writes width="100%" with the natural width as an inline
+   * max-width, so a small diagram is never enlarged; the viewBox keeps the
+   * aspect ratio when either limit applies.
+   */
+  .diagram-wrapper {
+    flex: 0 1 auto;
+    min-height: 0;
+    display: flex;
+    justify-content: center;
+    margin: 0 0 0.6em;
+  }
+  .diagram-wrapper svg {
+    max-width: 100%;
+    max-height: 100%;
+    height: auto;
+  }
 
   /* lead: a title slide, centered both ways. */
   section.slide.lead {

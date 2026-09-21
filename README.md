@@ -283,6 +283,11 @@ marp: true
   one after it, and `class:` in the front-matter to every slide. Other Marp
   directives (`paginate`, `header`, `theme`, ...) are recognized and ignored for
   now, rather than showing up as text.
+- A Mermaid diagram is scaled down to the space its slide has left for it,
+  keeping its aspect ratio, so a large flowchart fits under its heading instead
+  of being cut off. A small diagram keeps its natural size. A diagram inside a
+  list or blockquote is held to the slide's height rather than fitted exactly,
+  so it may still need a slide of its own.
 - Any other HTML comment on its own line is a **presenter note** for its slide,
   as in Marp, and is left off the slide.
 - `-slides` is rejected with `docx` and `console`, which have no pages. A

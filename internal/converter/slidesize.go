@@ -60,11 +60,23 @@ func slidePrintOptions(s slideSize) printOptions {
 	}
 }
 
+// slidePaddingYPx is the vertical padding slideBaseCSS gives a slide, which
+// is what is left of its height for content.
+const slidePaddingYPx = 64
+
 // slideSizeCSS fixes each slide to the page it prints on. Hiding overflow keeps
 // a slide that is too full from spilling onto an extra page. The size is
 // declared in @page too, so the HTML output printed straight from a browser
 // gets slide-sized pages rather than the printer's paper; printPDF passes the
 // same size through CDP.
+//
+// A Mermaid diagram that is a direct child of the slide is fitted to the space
+// left by slideBaseCSS's flex rules. One nested in a list item or blockquote
+// is not a flex item of the slide and has no definite height to fit, so it is
+// held to the slide's content height instead: it may still collide with what
+// is above it, which the overflow warning then reports, but it can no longer
+// run hundreds of pixels past the edge. The top-level rule comes second so it
+// wins for direct children.
 func slideSizeCSS(s slideSize) string {
 	return fmt.Sprintf(`
 @page { size: %[1]dpx %[2]dpx; margin: 0; }
@@ -72,7 +84,9 @@ section.slide {
   width: %[1]dpx;
   height: %[2]dpx;
 }
-`, s.widthPx, s.heightPx)
+section.slide .diagram-wrapper svg { max-height: %[3]dpx; }
+section.slide > .diagram-wrapper svg { max-height: 100%%; }
+`, s.widthPx, s.heightPx, s.heightPx-2*slidePaddingYPx)
 }
 
 // paperFlagsError reports document-only print flags given for a deck. They are
