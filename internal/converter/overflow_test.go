@@ -85,3 +85,15 @@ func TestPDFOutput_DocumentModeIsNotMeasured(t *testing.T) {
 		t.Errorf("document mode reported an overflow: %q", stderr)
 	}
 }
+
+// TestPDFOutput_WarnsAboutOverflowInsideAClippingBlock covers content cut off
+// by an element inside the slide rather than by the slide itself: a code block
+// clips its own overflow, so a long line leaves the slide's scroll size
+// unchanged and has to be found on the block.
+func TestPDFOutput_WarnsAboutOverflowInsideAClippingBlock(t *testing.T) {
+	line := strings.Repeat("x", 300)
+	_, stderr := convertPDFStderr(t, "---\nmarp: true\n---\n\n```\n"+line+"\n```\n")
+	if !strings.Contains(stderr, "slide 1 overflows the slide (width)") {
+		t.Errorf("stderr = %q, want a width overflow for the clipped code line", stderr)
+	}
+}
