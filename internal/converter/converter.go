@@ -1,13 +1,19 @@
-// Package converter turns Markdown into PDF, DOCX, or styled terminal output.
+// Package converter turns Markdown into PDF, HTML, PPTX, DOCX, or styled
+// terminal output.
 //
 // The PDF pipeline consists of three stages:
 //  1. Parse Markdown and extract fenced Mermaid code blocks.
 //  2. Render each Mermaid block to an SVG file using the mmdc CLI.
 //  3. Build a self-contained GitHub-styled HTML file and print it to PDF
-//     using a headless Chromium browser (via the Playwright Python driver).
+//     with a headless Chromium driven over the DevTools Protocol.
 //
-// DOCX output is produced directly from Markdown by pandoc, and console output
-// is rendered to ANSI text by glamour; both bypass the HTML stage.
+// HTML output stops after building that HTML file and writes it to the output
+// path. It is self-contained except for local images, which keep the relative
+// paths the Markdown gave them rather than being copied. PPTX output renders the
+// same HTML as a slide deck and captures each slide with that Chromium instead
+// of printing it. DOCX output is produced directly from Markdown by pandoc, and
+// console output is rendered to ANSI text by glamour; both bypass the HTML
+// stage.
 package converter
 
 import (
