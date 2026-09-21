@@ -12,6 +12,7 @@ require (
 	github.com/chromedp/cdproto v0.0.0-20260714215040-dc233986426f
 	github.com/chromedp/chromedp v0.16.0
 	github.com/yuin/goldmark v1.8.6
+	go.yaml.in/yaml/v3 v3.0.5
 )
 
 require (

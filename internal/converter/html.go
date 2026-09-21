@@ -2,6 +2,7 @@ package converter
 
 import (
 	"fmt"
+	"html"
 	"os"
 	"strings"
 	"text/template"
@@ -56,10 +57,7 @@ func (c *Converter) buildHTML(doc *parsedDoc, destPath string) error {
 		return fmt.Errorf("parse html template: %w", err)
 	}
 
-	title := strings.TrimSuffix(doc.firstHeading(), "")
-	if title == "" {
-		title = "Document"
-	}
+	title := doc.title()
 
 	var sb strings.Builder
 	if err := tmpl.Execute(&sb, htmlData{
@@ -313,6 +311,20 @@ const baseCSS = `
     margin: 0 auto;
   }
 `
+
+// title returns the text for the page's <title>: the front-matter title when
+// there is one, else the first heading, else "Document". The front-matter value
+// is escaped here because the template does no escaping; firstHeading is taken
+// from rendered HTML, where goldmark has already escaped it.
+func (d *parsedDoc) title() string {
+	if t := strings.TrimSpace(d.meta.String("title")); t != "" {
+		return html.EscapeString(t)
+	}
+	if t := d.firstHeading(); t != "" {
+		return t
+	}
+	return "Document"
+}
 
 // firstHeading extracts the text content of the first <h1> element from the
 // rendered HTML, used as the document title.

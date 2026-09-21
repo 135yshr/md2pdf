@@ -354,6 +354,26 @@ The separator is glamour's own horizontal rule, so it follows the theme — dimm
 under a dark style, plain ASCII under `-style ascii`, colorless under
 `NO_COLOR` — and looks like a `---` written in the document itself.
 
+**Front-matter.** A YAML block at the very top of a document is read as
+metadata rather than rendered, in every format:
+
+```markdown
+---
+title: Quarterly report
+---
+
+# Q3
+```
+
+- `title` becomes the HTML/PDF `<title>`; without it the first heading is used,
+  as before. Other keys are ignored for now.
+- The block must start on the first line with `---` and close with `---` or
+  `...`. A `---` anywhere else is an ordinary thematic break, and an unclosed
+  block or one holding plain text rather than `key: value` pairs renders as
+  Markdown, exactly as it did before front-matter was recognized.
+- Invalid YAML is an error naming the file, since the block was clearly meant
+  as metadata.
+
 ### Reading in the terminal with `mdview`
 
 `md2pdf -format console document.md` is a lot to type for something you do all
