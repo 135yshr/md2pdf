@@ -18,6 +18,13 @@ func (m frontMatter) String(key string) string {
 	return s
 }
 
+// Bool reports whether key is the YAML boolean true. A string such as "yes"
+// or "true" is not, since YAML already has a boolean for that.
+func (m frontMatter) Bool(key string) bool {
+	b, _ := m[key].(bool)
+	return b
+}
+
 // document is one input read and split into its metadata and its Markdown.
 type document struct {
 	// meta is the parsed front-matter, nil when the document has none.

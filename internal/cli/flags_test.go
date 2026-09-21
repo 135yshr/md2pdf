@@ -390,3 +390,47 @@ func TestParseFlags_MermaidScale(t *testing.T) {
 		})
 	}
 }
+
+// TestParseFlags_Slides covers -slides: it sets Config.Slides for the formats
+// that print pages, and is rejected where a deck cannot exist rather than being
+// accepted and silently ignored.
+func TestParseFlags_Slides(t *testing.T) {
+	dir := t.TempDir()
+	input := filepath.Join(dir, "doc.md")
+	if err := os.WriteFile(input, []byte("# T\n"), 0o644); err != nil {
+		t.Fatalf("write input: %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		args    []string
+		want    bool
+		wantErr bool
+	}{
+		{"off by default", []string{input}, false, false},
+		{"pdf", []string{"-slides", input}, true, false},
+		{"html", []string{"-slides", "-format", "html", input}, true, false},
+		{"rejected with docx", []string{"-slides", "-format", "docx", input}, false, true},
+		{"rejected with console", []string{"-slides", "-format", "console", input}, false, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := parseFlags(tc.args)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("parseFlags(%v) = %+v, want an error", tc.args, cfg)
+				}
+				if !strings.Contains(err.Error(), "-slides") {
+					t.Errorf("error %q does not name the flag", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseFlags(%v) error = %v", tc.args, err)
+			}
+			if cfg.Slides != tc.want {
+				t.Errorf("Slides = %v, want %v", cfg.Slides, tc.want)
+			}
+		})
+	}
+}
