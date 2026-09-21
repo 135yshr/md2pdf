@@ -1,9 +1,14 @@
 package converter_test
 
 import (
+	"archive/zip"
+	"bytes"
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/135yshr/md2pdf/internal/converter"
@@ -143,6 +148,94 @@ Integration test complete.
 	if info.Size() < 1024 {
 		t.Errorf("PDF seems too small: %d bytes", info.Size())
 	}
+}
+
+// TestConvert_IntegrationDeck converts a Mermaid deck with the real mmdc, to
+// both PDF and PPTX. A tall flowchart under a heading is the case slide mode
+// has to shrink to fit; the tests beside the slide CSS stand in for mmdc with
+// an SVG of its shape, and this is where the real output is checked.
+func TestConvert_IntegrationDeck(t *testing.T) {
+	requireTool(t, "mmdc")
+	requireBrowser(t)
+
+	dir := t.TempDir()
+	mdPath := filepath.Join(dir, "deck.md")
+	var chain strings.Builder
+	for i := range 12 {
+		fmt.Fprintf(&chain, "    N%d[Step %d] --> N%d[Step %d]\n", i, i, i+1, i+1)
+	}
+	deck := "---\nmarp: true\n---\n\n<!-- _class: lead -->\n\n# Deck\n\n---\n\n## Flow\n\n" +
+		"```mermaid\nflowchart TD\n" + chain.String() + "```\n\nA caption.\n\n<!-- speaker note -->\n"
+	if err := os.WriteFile(mdPath, []byte(deck), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	for _, format := range []string{converter.FormatPDF, converter.FormatPPTX} {
+		t.Run(format, func(t *testing.T) {
+			out := filepath.Join(dir, "deck."+format)
+			c, err := converter.New(&converter.Config{InputFiles: []string{mdPath}, OutputFile: out, Format: format})
+			if err != nil {
+				t.Fatalf("New(): %v", err)
+			}
+			defer c.Close()
+
+			stderr := captureStderr(t, func() {
+				if convErr := c.Convert(t.Context(), []string{mdPath}, out); convErr != nil {
+					t.Fatalf("Convert(): %v", convErr)
+				}
+			})
+			if strings.Contains(stderr, "overflows") {
+				t.Errorf("the diagram slide overflowed: %s", stderr)
+			}
+
+			data, err := os.ReadFile(out)
+			if err != nil {
+				t.Fatalf("read output: %v", err)
+			}
+			if format == converter.FormatPPTX {
+				zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+				if err != nil {
+					t.Fatalf("pptx is not a zip: %v", err)
+				}
+				slides := 0
+				for _, f := range zr.File {
+					if strings.HasPrefix(f.Name, "ppt/slides/slide") {
+						slides++
+					}
+				}
+				if slides != 2 {
+					t.Errorf("pptx has %d slides, want 2", slides)
+				}
+				return
+			}
+			if !bytes.HasPrefix(data, []byte("%PDF-")) {
+				t.Error("output is not a PDF")
+			}
+		})
+	}
+}
+
+// captureStderr runs fn with os.Stderr redirected and returns what was written.
+// The converter writes warnings to os.Stderr when no writer is injected, and
+// this package cannot inject one.
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	orig := os.Stderr
+	os.Stderr = w
+	done := make(chan string)
+	go func() {
+		b, _ := io.ReadAll(r)
+		done <- string(b)
+	}()
+	defer func() { os.Stderr = orig }()
+	fn()
+	w.Close()
+	os.Stderr = orig
+	return <-done
 }
 
 // TestIntegrationRequired covers the switch that decides whether a missing tool

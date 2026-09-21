@@ -137,39 +137,17 @@ func (c *Converter) printPDF(ctx context.Context, htmlPath, pdfPath string, deck
 // checked for overflow before printing, after the fonts have settled so the
 // measurements use the final metrics.
 func renderPDF(ctx context.Context, browser, htmlPath string, opts printOptions, measure bool, timeout time.Duration) ([]byte, []slideOverflow, error) {
-	allocOpts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(browser),
-		// The sandbox cannot be used as root, which is the normal case in CI
-		// containers, and this browser only ever opens a local file md2pdf
-		// generated itself.
-		chromedp.NoSandbox,
-		chromedp.DisableGPU,
-		chromedp.WSURLReadTimeout(browserStartTimeout),
-	)
-
-	allocCtx, cancelAlloc := chromedp.NewExecAllocator(ctx, allocOpts...)
-	defer cancelAlloc()
-	browserCtx, cancelBrowser := chromedp.NewContext(allocCtx)
-	defer cancelBrowser()
-	ctx, cancelTimeout := context.WithTimeout(browserCtx, timeout)
-	defer cancelTimeout()
+	ctx, cancel := startBrowser(ctx, browser, timeout)
+	defer cancel()
 
 	var (
-		pdf         []byte
-		fontsLoaded bool
-		overflows   []slideOverflow
+		pdf       []byte
+		overflows []slideOverflow
 	)
 	err := chromedp.Run(ctx,
 		emulation.SetEmulatedMedia().WithMedia("print"),
 		chromedp.Navigate(fileURL(htmlPath)),
-		// document.fonts.ready resolves to a Promise, so it has to be awaited
-		// rather than merely evaluated. It resolves *to the FontFaceSet*, which
-		// CDP cannot reliably serialize by value, so the promise is mapped to a
-		// primitive before it comes back.
-		chromedp.Evaluate("document.fonts.ready.then(() => true)", &fontsLoaded,
-			func(p *runtime.EvaluateParams) *runtime.EvaluateParams {
-				return p.WithAwaitPromise(true)
-			}),
+		awaitFonts(),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			if !measure {
 				return nil
@@ -197,6 +175,40 @@ func renderPDF(ctx context.Context, browser, htmlPath string, opts printOptions,
 		return nil, nil, fmt.Errorf("drive headless browser: %w", err)
 	}
 	return pdf, overflows, nil
+}
+
+// startBrowser launches browser headless and returns a context bound to a new
+// tab in it, limited to timeout. The returned function shuts everything down.
+func startBrowser(ctx context.Context, browser string, timeout time.Duration) (context.Context, context.CancelFunc) {
+	allocOpts := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.ExecPath(browser),
+		// The sandbox cannot be used as root, which is the normal case in CI
+		// containers, and this browser only ever opens a local file md2pdf
+		// generated itself.
+		chromedp.NoSandbox,
+		chromedp.DisableGPU,
+		chromedp.WSURLReadTimeout(browserStartTimeout),
+	)
+	allocCtx, cancelAlloc := chromedp.NewExecAllocator(ctx, allocOpts...)
+	browserCtx, cancelBrowser := chromedp.NewContext(allocCtx)
+	tabCtx, cancelTimeout := context.WithTimeout(browserCtx, timeout)
+	return tabCtx, func() {
+		cancelTimeout()
+		cancelBrowser()
+		cancelAlloc()
+	}
+}
+
+// awaitFonts waits for document.fonts.ready. It resolves to a Promise, so it
+// has to be awaited rather than merely evaluated, and it resolves *to the
+// FontFaceSet*, which CDP cannot reliably serialize by value, so the promise
+// is mapped to a primitive before it comes back.
+func awaitFonts() chromedp.Action {
+	var loaded bool
+	return chromedp.Evaluate("document.fonts.ready.then(() => true)", &loaded,
+		func(p *runtime.EvaluateParams) *runtime.EvaluateParams {
+			return p.WithAwaitPromise(true)
+		})
 }
 
 // fileURL turns a local path into a file:// URL.
