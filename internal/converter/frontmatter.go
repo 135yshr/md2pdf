@@ -54,8 +54,12 @@ func (c *Converter) readDocument(path string) (document, error) {
 // only a mapping is metadata, and treating prose as metadata would silently
 // delete it from the document. YAML that fails to parse is an error, since the
 // author evidently meant it as metadata.
+//
+// A leading UTF-8 byte order mark, which Windows editors commonly write, is
+// skipped when looking for the opening delimiter and removed along with the
+// block; a document without front-matter keeps it, since nothing is changed.
 func splitFrontMatter(src []byte) (frontMatter, []byte, error) {
-	first, rest, ok := cutLine(src)
+	first, rest, ok := cutLine(bytes.TrimPrefix(src, []byte("\ufeff")))
 	if !ok || !isDelimiter(first, "---") {
 		return nil, src, nil
 	}

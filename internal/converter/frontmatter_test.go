@@ -81,6 +81,18 @@ func TestSplitFrontMatter(t *testing.T) {
 			wantBody: "---\nSome text\n---\n# A\n",
 		},
 		{
+			name:     "a UTF-8 BOM before the block",
+			src:      "\ufeff---\ntitle: Report\n---\n# A\n",
+			wantMeta: map[string]any{"title": "Report"},
+			wantBody: "# A\n",
+		},
+		{
+			name:     "a UTF-8 BOM without front-matter is kept",
+			src:      "\ufeff# A\n",
+			wantMeta: nil,
+			wantBody: "\ufeff# A\n",
+		},
+		{
 			name:     "a sequence is not metadata",
 			src:      "---\n- a\n- b\n---\n# A\n",
 			wantMeta: nil,
