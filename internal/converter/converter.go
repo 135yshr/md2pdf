@@ -225,7 +225,7 @@ func (c *Converter) Convert(ctx context.Context, inputs []string, outputPath str
 		}
 		deck = &size
 		c.logf("Slide mode: %s slides, split at top-level thematic breaks", size.name)
-		parseFn = parseSlides
+		parseFn = func(src []byte) (*parsedDoc, error) { return parseSlides(src, input.meta) }
 	}
 	doc, err := parseFn(mdBytes)
 	if err != nil {

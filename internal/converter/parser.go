@@ -52,24 +52,27 @@ type slide struct {
 	// html is the slide's content rendered to HTML, with Mermaid code blocks
 	// replaced by their placeholder comments like parsedDoc.HTML.
 	html string
+	// classes are added to the slide's <section> by the class directive.
+	classes []string
 }
 
 // parseMarkdown converts raw Markdown bytes into a parsedDoc.
 // Fenced code blocks with the language tag "mermaid" are extracted and
 // replaced with placeholder comments so they can be swapped with SVG later.
 func parseMarkdown(src []byte) (*parsedDoc, error) {
-	return parse(src, false)
+	return parse(src, false, nil)
 }
 
 // parseSlides is parseMarkdown in slide mode: the document is split into
 // slides at every top-level thematic break (---, *** or ___), and the breaks
-// themselves are not rendered.
-func parseSlides(src []byte) (*parsedDoc, error) {
-	return parse(src, true)
+// themselves are not rendered. The front-matter in meta sets the directives
+// the first slide starts with.
+func parseSlides(src []byte, meta frontMatter) (*parsedDoc, error) {
+	return parse(src, true, meta)
 }
 
 // parse implements parseMarkdown and parseSlides.
-func parse(src []byte, slideMode bool) (*parsedDoc, error) {
+func parse(src []byte, slideMode bool, meta frontMatter) (*parsedDoc, error) {
 	md := goldmark.New(
 		goldmark.WithExtensions(
 			extension.GFM,
@@ -137,7 +140,7 @@ func parse(src []byte, slideMode bool) (*parsedDoc, error) {
 	}
 
 	if slideMode {
-		return renderSlides(md, src, doc, blocks)
+		return renderSlides(md, src, doc, blocks, meta)
 	}
 
 	// Render the full document to HTML.
@@ -167,20 +170,33 @@ func parse(src []byte, slideMode bool) (*parsedDoc, error) {
 // candidates. A setext heading underline is a heading, not a break, so it never
 // splits either. Consecutive breaks, and a break at either end, produce empty
 // slides, as they do in Marp.
-func renderSlides(md goldmark.Markdown, src []byte, doc ast.Node, blocks []*mermaidBlock) (*parsedDoc, error) {
+//
+// A top-level HTML block that is a directive comment is consumed rather than
+// rendered, and applies to the slide it sits in wherever it appears there.
+func renderSlides(md goldmark.Markdown, src []byte, doc ast.Node, blocks []*mermaidBlock, meta frontMatter) (*parsedDoc, error) {
 	var slides []slide
 	var cur bytes.Buffer
+	dirs := newSlideDirectives(meta)
+	endSlide := func() {
+		slides = append(slides, slide{html: cur.String(), classes: dirs.finish()})
+		cur.Reset()
+	}
 	for n := doc.FirstChild(); n != nil; n = n.NextSibling() {
 		if n.Kind() == ast.KindThematicBreak {
-			slides = append(slides, slide{html: cur.String()})
-			cur.Reset()
+			endSlide()
 			continue
+		}
+		if block, ok := n.(*ast.HTMLBlock); ok {
+			if found, isDirective := parseDirectiveComment(htmlBlockText(block, src)); isDirective {
+				dirs.apply(found)
+				continue
+			}
 		}
 		if err := md.Renderer().Render(&cur, src, n); err != nil {
 			return nil, fmt.Errorf("goldmark render: %w", err)
 		}
 	}
-	slides = append(slides, slide{html: cur.String()})
+	endSlide()
 
 	// Blocks are in document order and each replacement consumes the first
 	// match, so trying the slides in order puts every placeholder where its

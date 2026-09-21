@@ -24,7 +24,7 @@ func TestParseSlides_SplitsAtTopLevelThematicBreaks(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			doc, err := parseSlides([]byte(tt.src))
+			doc, err := parseSlides([]byte(tt.src), nil)
 			if err != nil {
 				t.Fatalf("parseSlides: %v", err)
 			}
@@ -61,7 +61,7 @@ func TestParseSlides_NestedBreaksDoNotSplit(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			doc, err := parseSlides([]byte(tt.src))
+			doc, err := parseSlides([]byte(tt.src), nil)
 			if err != nil {
 				t.Fatalf("parseSlides: %v", err)
 			}
@@ -73,7 +73,7 @@ func TestParseSlides_NestedBreaksDoNotSplit(t *testing.T) {
 }
 
 func TestParseSlides_SetextHeadingIsNotASeparator(t *testing.T) {
-	doc, err := parseSlides([]byte("Title\n---\n\nbody\n"))
+	doc, err := parseSlides([]byte("Title\n---\n\nbody\n"), nil)
 	if err != nil {
 		t.Fatalf("parseSlides: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestParseSlides_SetextHeadingIsNotASeparator(t *testing.T) {
 
 func TestParseSlides_MermaidPlaceholdersSurviveTheSplit(t *testing.T) {
 	src := "# One\n\n```mermaid\ngraph TD\n  A --> B\n```\n\n---\n\n```mermaid\ngraph TD\n  C --> D\n```\n"
-	doc, err := parseSlides([]byte(src))
+	doc, err := parseSlides([]byte(src), nil)
 	if err != nil {
 		t.Fatalf("parseSlides: %v", err)
 	}
