@@ -263,6 +263,21 @@ marp: true
   `-margin-*` are for documents, and passing them for a deck is an error rather
   than silently ignored. Content that does not fit a slide is cut off at its
   edge instead of spilling onto another page.
+- Decks get their own stylesheet (30px text, slide-sized headings, padded
+  slides); `-css` files still apply after it.
+- The Marp `class` directive adds classes to a slide. `lead` is built in and
+  centers a title slide:
+
+  ```markdown
+  <!-- _class: lead -->
+
+  # Title
+  ```
+
+  `_class` applies to its own slide, `<!-- class: x -->` to its slide and every
+  one after it, and `class:` in the front-matter to every slide. Other Marp
+  directives (`paginate`, `header`, `theme`, ...) are recognized and ignored for
+  now, rather than showing up as text.
 - `-slides` is rejected with `docx` and `console`, which have no pages. A
   `marp: true` document converted to those formats renders as a document.
 

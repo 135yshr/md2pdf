@@ -34,12 +34,15 @@ type htmlData struct {
 // buildHTML assembles the final HTML file at destPath from the parsed document.
 // Each Mermaid placeholder comment is replaced with its rendered SVG.
 func (c *Converter) buildHTML(doc *parsedDoc, destPath string) error {
-	css, err := c.buildCSS()
+	var css string
+	var err error
+	if doc.slides != nil {
+		css, err = c.buildSlideCSS(doc.deck)
+	} else {
+		css, err = c.buildCSS()
+	}
 	if err != nil {
 		return err
-	}
-	if doc.slides != nil {
-		css = slideModeCSS(css, doc.deck)
 	}
 
 	body := doc.body()
@@ -82,6 +85,23 @@ func (c *Converter) buildHTML(doc *parsedDoc, destPath string) error {
 // from -css. User CSS comes last on purpose: it is embedded in the same <style>
 // block, so later rules override the built-in ones.
 func (c *Converter) buildCSS() (string, error) {
+	return c.assembleCSS(baseCSS)
+}
+
+// buildSlideCSS is buildCSS for a deck: the slide stylesheet takes the place
+// of the document one, sized for deck, with the -css files still last. A nil
+// deck, as a test may build, uses the default slide size.
+func (c *Converter) buildSlideCSS(deck *slideSize) (string, error) {
+	size := slideSizes[0]
+	if deck != nil {
+		size = *deck
+	}
+	return c.assembleCSS(slideBaseCSS + slideSizeCSS(size))
+}
+
+// assembleCSS puts the @font-face rules, the built-in stylesheet base and the
+// -css files together, in that order, so user rules win the cascade.
+func (c *Converter) assembleCSS(base string) (string, error) {
 	var fontFaces string
 	if c.cfg.FontRegular != "" {
 		fontFaces += fontFace("Noto Sans JP", 400, c.cfg.FontRegular, c.cfg.FontLocalRegular)
@@ -97,7 +117,7 @@ func (c *Converter) buildCSS() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return fontFaces + baseCSS + custom, nil
+	return fontFaces + base + custom, nil
 }
 
 // styleEndTag is the byte sequence that closes a <style> element. An HTML parser
@@ -323,35 +343,11 @@ func (d *parsedDoc) body() string {
 	}
 	var sb strings.Builder
 	for i, s := range d.slides {
-		fmt.Fprintf(&sb, "<section class=\"slide\" id=\"slide-%d\">\n%s</section>\n", i+1, s.html)
+		class := strings.Join(append([]string{"slide"}, s.classes...), " ")
+		fmt.Fprintf(&sb, "<section class=\"%s\" id=\"slide-%d\">\n%s</section>\n",
+			html.EscapeString(class), i+1, s.html)
 	}
 	return sb.String()
-}
-
-// slidePageBreakCSS makes every slide after the first start a new page. It is
-// break-before on the following slide rather than break-after on each, which
-// would leave a blank page after the last one; the min-height gives an empty
-// slide a box, without which Chromium collapses it and its page disappears.
-const slidePageBreakCSS = `
-section.slide + section.slide { break-before: page; }
-section.slide { min-height: 1px; }
-`
-
-// slideModeCSS inserts the slide rules into a stylesheet built by buildCSS,
-// ahead of any -css rules so those still win the cascade. A nil deck, as a
-// test may build, keeps the default slide size.
-func slideModeCSS(css string, deck *slideSize) string {
-	size := slideSizes[0]
-	if deck != nil {
-		size = *deck
-	}
-	rules := slidePageBreakCSS + slideSizeCSS(size)
-	i := strings.Index(css, baseCSS)
-	if i < 0 {
-		return css + rules
-	}
-	end := i + len(baseCSS)
-	return css[:end] + rules + css[end:]
 }
 
 // title returns the text for the page's <title>: the front-matter title when
