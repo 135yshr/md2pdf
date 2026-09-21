@@ -43,6 +43,8 @@ type parsedDoc struct {
 	// parsed in slide mode, and is nil in document mode. HTML then holds the
 	// slides' HTML concatenated, for the consumers that scan the whole body.
 	slides []slide
+	// deck is the slide size in slide mode, nil in document mode.
+	deck *slideSize
 }
 
 // slide is one page of a deck parsed in slide mode.

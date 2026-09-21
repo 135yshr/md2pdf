@@ -39,7 +39,7 @@ func (c *Converter) buildHTML(doc *parsedDoc, destPath string) error {
 		return err
 	}
 	if doc.slides != nil {
-		css = slideModeCSS(css)
+		css = slideModeCSS(css, doc.deck)
 	}
 
 	body := doc.body()
@@ -338,14 +338,20 @@ section.slide { min-height: 1px; }
 `
 
 // slideModeCSS inserts the slide rules into a stylesheet built by buildCSS,
-// ahead of any -css rules so those still win the cascade.
-func slideModeCSS(css string) string {
+// ahead of any -css rules so those still win the cascade. A nil deck, as a
+// test may build, keeps the default slide size.
+func slideModeCSS(css string, deck *slideSize) string {
+	size := slideSizes[0]
+	if deck != nil {
+		size = *deck
+	}
+	rules := slidePageBreakCSS + slideSizeCSS(size)
 	i := strings.Index(css, baseCSS)
 	if i < 0 {
-		return css + slidePageBreakCSS
+		return css + rules
 	}
 	end := i + len(baseCSS)
-	return css[:end] + slidePageBreakCSS + css[end:]
+	return css[:end] + rules + css[end:]
 }
 
 // title returns the text for the page's <title>: the front-matter title when

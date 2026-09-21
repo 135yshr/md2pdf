@@ -91,10 +91,19 @@ func resolvePrintOptions(cfg *Config) (printOptions, error) {
 // The browser is the one chromiumPath finds, which is also the browser handed to
 // mmdc through the generated Puppeteer config — so a single Chromium serves both
 // the diagram and the print stage, and CHROME_PATH overrides both.
-func (c *Converter) printPDF(ctx context.Context, htmlPath, pdfPath string) error {
-	opts, err := resolvePrintOptions(c.cfg)
-	if err != nil {
-		return err
+//
+// A non-nil deck prints each page at the slide size with no margin, ignoring
+// -page-size and -margin-*; Convert has already refused those flags when they
+// were given explicitly.
+func (c *Converter) printPDF(ctx context.Context, htmlPath, pdfPath string, deck *slideSize) error {
+	var opts printOptions
+	if deck != nil {
+		opts = slidePrintOptions(*deck)
+	} else {
+		var err error
+		if opts, err = resolvePrintOptions(c.cfg); err != nil {
+			return err
+		}
 	}
 
 	browser, err := chromiumPath()

@@ -203,9 +203,28 @@ func (p *program) parseFlags(args []string) (*converter.Config, error) {
 		ConsoleStyle:     *consoleStyle,
 		ConsolePager:     *consolePager,
 		MermaidRender:    *mermaidRender,
+		PaperFlagsSet:    paperFlagsSet(fs),
 		Slides:           *slides,
 		Verbose:          *verbose,
 	}, nil
+}
+
+// paperFlags are the document print flags, in the order messages list them.
+var paperFlags = []string{"page-size", "margin-top", "margin-bottom", "margin-left", "margin-right"}
+
+// paperFlagsSet returns the paper flags given explicitly, dash-prefixed as the
+// user typed them. The flag set is walked with Visit, which sees only the flags
+// that were set: that is what tells "-page-size A4" apart from the A4 default.
+func paperFlagsSet(fs *flag.FlagSet) []string {
+	set := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
+	var names []string
+	for _, name := range paperFlags {
+		if set[name] {
+			names = append(names, "-"+name)
+		}
+	}
+	return names
 }
 
 // resolveFormat determines the output format from the explicit -format flag,
