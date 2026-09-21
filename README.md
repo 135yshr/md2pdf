@@ -291,7 +291,8 @@ marp: true
   list or blockquote is held to the slide's height rather than fitted exactly,
   so it may still need a slide of its own.
 - Any other HTML comment on its own line is a **presenter note** for its slide,
-  as in Marp, and is left off the slide.
+  as in Marp. It is left off the slide; PPTX output puts it on the slide's
+  notes page.
 - `-slides` is rejected with `docx` and `console`, which have no pages. A
   `marp: true` document converted to those formats renders as a document.
 

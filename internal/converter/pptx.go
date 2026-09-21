@@ -6,7 +6,9 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -23,11 +25,12 @@ type pptxDeck struct {
 	slides []pptxSlide
 }
 
-// pptxSlide is one slide: its rendered PNG and its presenter notes, empty when
-// it has none.
+// pptxSlide is one slide: the path of its rendered PNG and its presenter
+// notes, empty when it has none. The image stays on disk until it is copied
+// into the package, so a deck is never held in memory whole.
 type pptxSlide struct {
-	png   []byte
-	notes string
+	pngPath string
+	notes   string
 }
 
 // Namespaces and relationship types used across the package.
@@ -48,21 +51,42 @@ const (
 // Notes parts — a notes master with its own theme, and a notes slide per slide
 // that has notes — are written only when some slide has notes, because a
 // presentation that references a notes master it does not contain is invalid.
-func writePPTX(path string, deck pptxDeck) error {
+func writePPTX(path string, deck pptxDeck) (err error) {
 	if len(deck.slides) == 0 {
 		return errors.New("a presentation needs at least one slide")
 	}
-	var buf bytes.Buffer
-	zw := zip.NewWriter(&buf)
+
+	// The package is streamed into a temporary file beside the destination and
+	// renamed into place only once complete: images are copied in one at a
+	// time rather than buffered, and a failure part way through leaves no
+	// truncated .pptx where the caller expects a presentation.
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".md2pdf-*.pptx")
+	if err != nil {
+		return fmt.Errorf("create pptx: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = tmp.Close()
+			_ = os.Remove(tmp.Name())
+		}
+	}()
+
+	zw := zip.NewWriter(tmp)
 	w := &pptxWriter{zw: zw, deck: deck}
 	w.writeAll()
 	if w.err != nil {
 		return w.err
 	}
-	if err := zw.Close(); err != nil {
+	if err = zw.Close(); err != nil {
 		return fmt.Errorf("finish pptx: %w", err)
 	}
-	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil { //nolint:gosec // G306: a document the caller asked to be written
+	if err = tmp.Close(); err != nil {
+		return fmt.Errorf("write pptx: %w", err)
+	}
+	if err = os.Chmod(tmp.Name(), 0o644); err != nil { //nolint:gosec // G302: a document the caller asked to be written
+		return fmt.Errorf("write pptx: %w", err)
+	}
+	if err = os.Rename(tmp.Name(), path); err != nil {
 		return fmt.Errorf("write pptx: %w", err)
 	}
 	return nil
@@ -81,6 +105,24 @@ func (w *pptxWriter) part(name, content string) {
 }
 
 func (w *pptxWriter) bytesPart(name string, content []byte) {
+	w.copyPart(name, bytes.NewReader(content))
+}
+
+// filePart copies the file at src into the package as name.
+func (w *pptxWriter) filePart(name, src string) {
+	if w.err != nil {
+		return
+	}
+	f, err := os.Open(src) //nolint:gosec // G304: a slide image this run captured into its working directory
+	if err != nil {
+		w.err = fmt.Errorf("read slide image: %w", err)
+		return
+	}
+	defer f.Close()
+	w.copyPart(name, f)
+}
+
+func (w *pptxWriter) copyPart(name string, content io.Reader) {
 	if w.err != nil {
 		return
 	}
@@ -89,7 +131,7 @@ func (w *pptxWriter) bytesPart(name string, content []byte) {
 		w.err = fmt.Errorf("add %s to pptx: %w", name, err)
 		return
 	}
-	if _, err := f.Write(content); err != nil {
+	if _, err := io.Copy(f, content); err != nil {
 		w.err = fmt.Errorf("write %s to pptx: %w", name, err)
 	}
 }
@@ -174,7 +216,7 @@ func (w *pptxWriter) writeAll() {
 
 	for i, s := range w.deck.slides {
 		n := i + 1
-		w.bytesPart(fmt.Sprintf("ppt/media/image%d.png", n), s.png)
+		w.filePart(fmt.Sprintf("ppt/media/image%d.png", n), s.pngPath)
 		w.part(fmt.Sprintf("ppt/slides/slide%d.xml", n), slideXML(n, cx, cy))
 		slideRels := []rel{
 			{"rId1", "slideLayout", "../slideLayouts/slideLayout1.xml"},

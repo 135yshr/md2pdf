@@ -292,7 +292,7 @@ func (c *Converter) writeDeckPPTX(ctx context.Context, doc *parsedDoc, htmlPath,
 		return err
 	}
 	c.logf("Capturing %d slide(s) with %s...", len(doc.slides), browser)
-	images, overflows, err := renderSlidePNGs(ctx, browser, htmlPath, *doc.deck, pptxImageScale, printTimeout)
+	images, overflows, err := renderSlidePNGs(ctx, browser, htmlPath, c.workDir, *doc.deck, pptxImageScale, printTimeout)
 	if err != nil {
 		return fmt.Errorf("capture slides: %w", err)
 	}
@@ -305,7 +305,7 @@ func (c *Converter) writeDeckPPTX(ctx context.Context, doc *parsedDoc, htmlPath,
 
 	deck := pptxDeck{size: *doc.deck, title: html.UnescapeString(doc.title())}
 	for i, img := range images {
-		deck.slides = append(deck.slides, pptxSlide{png: img, notes: doc.slides[i].notes})
+		deck.slides = append(deck.slides, pptxSlide{pngPath: img, notes: doc.slides[i].notes})
 	}
 	c.logf("Writing PowerPoint file...")
 	return writePPTX(outPath, deck)

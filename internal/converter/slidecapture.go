@@ -3,6 +3,8 @@ package converter
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/chromedp/cdproto/emulation"
@@ -31,20 +33,23 @@ const slideRectsJS = `Array.from(document.querySelectorAll('section.slide')).map
 })`
 
 // renderSlidePNGs opens a deck's HTML in a headless browser and captures each
-// slide as a PNG at scale times its CSS size, measuring overflow on the way.
+// slide as a PNG at scale times its CSS size into outDir, returning the files'
+// paths in slide order, and measures overflow on the way. Each image is
+// written out as soon as it is captured, so memory holds one slide at a time
+// however long or image-heavy the deck is.
 //
 // The page is laid out exactly as printPDF lays it out — print media, fonts
 // settled — so each image matches the corresponding page of the PDF. The
 // viewport is the slide size, and each capture is clipped to one slide's box
 // with captureBeyondViewport, so slides below the first are captured too.
-func renderSlidePNGs(ctx context.Context, browser, htmlPath string, size slideSize, scale float64, timeout time.Duration) ([][]byte, []slideOverflow, error) {
+func renderSlidePNGs(ctx context.Context, browser, htmlPath, outDir string, size slideSize, scale float64, timeout time.Duration) ([]string, []slideOverflow, error) {
 	ctx, cancel := startBrowser(ctx, browser, timeout)
 	defer cancel()
 
 	var (
 		rects     []slideRect
 		overflows []slideOverflow
-		images    [][]byte
+		images    []string
 	)
 	err := chromedp.Run(ctx,
 		emulation.SetDeviceMetricsOverride(int64(size.widthPx), int64(size.heightPx), scale, false),
@@ -64,7 +69,11 @@ func renderSlidePNGs(ctx context.Context, browser, htmlPath string, size slideSi
 				if err != nil {
 					return fmt.Errorf("capture slide %d: %w", i+1, err)
 				}
-				images = append(images, img)
+				path := filepath.Join(outDir, fmt.Sprintf("slide-%03d.png", i+1))
+				if err := os.WriteFile(path, img, 0o600); err != nil {
+					return fmt.Errorf("save slide %d: %w", i+1, err)
+				}
+				images = append(images, path)
 			}
 			return nil
 		}),

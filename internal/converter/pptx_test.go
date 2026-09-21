@@ -9,6 +9,7 @@ import (
 	"image/color"
 	"image/png"
 	"io"
+	"os"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -16,8 +17,9 @@ import (
 	"testing"
 )
 
-// fakeSlidePNG returns a PNG of the given size.
-func fakeSlidePNG(t *testing.T, w, h int) []byte {
+// fakeSlidePNG writes a PNG of the given size to a temporary file and returns
+// its path, which is how captured slides reach writePPTX.
+func fakeSlidePNG(t *testing.T, w, h int) string {
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	img.Set(0, 0, color.RGBA{R: 255, A: 255})
@@ -25,7 +27,11 @@ func fakeSlidePNG(t *testing.T, w, h int) []byte {
 	if err := png.Encode(&buf, img); err != nil {
 		t.Fatalf("encode png: %v", err)
 	}
-	return buf.Bytes()
+	path := filepath.Join(t.TempDir(), "slide.png")
+	if err := os.WriteFile(path, buf.Bytes(), 0o600); err != nil {
+		t.Fatalf("write png: %v", err)
+	}
+	return path
 }
 
 // readPPTX opens a written .pptx and returns every part by name.
@@ -68,9 +74,9 @@ func threeSlideDeck(t *testing.T) pptxDeck {
 		size:  slideSizes[0],
 		title: "Deck <&> title",
 		slides: []pptxSlide{
-			{png: img},
-			{png: img, notes: "Mention the benchmark\n\nand <escape> & this"},
-			{png: img},
+			{pngPath: img},
+			{pngPath: img, notes: "Mention the benchmark\n\nand <escape> & this"},
+			{pngPath: img},
 		},
 	}
 }
@@ -169,7 +175,7 @@ func TestWritePPTX_TitleInCoreProperties(t *testing.T) {
 func TestWritePPTX_PackageIsConsistent(t *testing.T) {
 	for name, deck := range map[string]pptxDeck{
 		"with notes":    threeSlideDeck(t),
-		"without notes": {size: slideSizes[0], slides: []pptxSlide{{png: fakeSlidePNG(t, 4, 4)}}},
+		"without notes": {size: slideSizes[0], slides: []pptxSlide{{pngPath: fakeSlidePNG(t, 4, 4)}}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			parts := writeTestDeck(t, deck)
@@ -231,5 +237,39 @@ func wellFormed(data []byte) error {
 func TestWritePPTX_RejectsAnEmptyDeck(t *testing.T) {
 	if err := writePPTX(filepath.Join(t.TempDir(), "x.pptx"), pptxDeck{size: slideSizes[0]}); err == nil {
 		t.Error("writePPTX accepted a deck with no slides")
+	}
+}
+
+// TestWritePPTX_FailureLeavesNoFile checks the package is assembled beside
+// the destination and only renamed into place once complete, so a failure
+// part way through never leaves a truncated .pptx behind.
+func TestWritePPTX_FailureLeavesNoFile(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "deck.pptx")
+	deck := pptxDeck{size: slideSizes[0], slides: []pptxSlide{
+		{pngPath: fakeSlidePNG(t, 4, 4)},
+		{pngPath: filepath.Join(dir, "missing.png")},
+	}}
+	if err := writePPTX(out, deck); err == nil {
+		t.Fatal("writePPTX succeeded with a missing slide image")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read dir: %v", err)
+	}
+	for _, e := range entries {
+		t.Errorf("left behind %s", e.Name())
+	}
+}
+
+func TestWritePPTX_CopiesTheImageBytes(t *testing.T) {
+	img := fakeSlidePNG(t, 8, 8)
+	want, err := os.ReadFile(img)
+	if err != nil {
+		t.Fatalf("read png: %v", err)
+	}
+	parts := writeTestDeck(t, pptxDeck{size: slideSizes[0], slides: []pptxSlide{{pngPath: img}}})
+	if !bytes.Equal(parts["ppt/media/image1.png"], want) {
+		t.Error("the embedded image differs from the captured file")
 	}
 }
