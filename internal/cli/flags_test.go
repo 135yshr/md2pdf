@@ -34,6 +34,9 @@ func TestResolveFormat(t *testing.T) {
 		{"terminal is an alias for console", "terminal", "", "console", false},
 		{"console rejects an output path", "console", "out.txt", "", true},
 		{"console rejects a pdf output path", "console", "out.pdf", "", true},
+		{"infer pptx from extension", "", "deck.pptx", "pptx", false},
+		{"explicit pptx", "pptx", "", "pptx", false},
+		{"pptx conflicts with a pdf path", "pptx", "deck.pdf", "", true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -459,5 +462,28 @@ func TestParseFlags_PaperFlagsSet(t *testing.T) {
 	want := []string{"-page-size", "-margin-left"}
 	if strings.Join(cfg.PaperFlagsSet, ",") != strings.Join(want, ",") {
 		t.Errorf("PaperFlagsSet = %v, want %v", cfg.PaperFlagsSet, want)
+	}
+}
+
+// TestParseFlags_PPTX covers the pptx format end to end through the flags: the
+// output name, -slides being accepted (a deck already), and stdin needing -o.
+func TestParseFlags_PPTX(t *testing.T) {
+	dir := t.TempDir()
+	input := filepath.Join(dir, "deck.md")
+	if err := os.WriteFile(input, []byte("# T\n"), 0o644); err != nil {
+		t.Fatalf("write input: %v", err)
+	}
+	cfg, err := parseFlags([]string{"-format", "pptx", input})
+	if err != nil {
+		t.Fatalf("parseFlags: %v", err)
+	}
+	if cfg.Format != "pptx" || cfg.OutputFile != filepath.Join(dir, "deck.pptx") {
+		t.Errorf("Format %q, OutputFile %q; want pptx and deck.pptx beside the input", cfg.Format, cfg.OutputFile)
+	}
+	if _, err := parseFlags([]string{"-slides", "-format", "pptx", input}); err != nil {
+		t.Errorf("-slides with pptx: %v", err)
+	}
+	if _, err := parseFlags([]string{"-o", filepath.Join(dir, "a.pptx"), input, input}); err == nil {
+		t.Error("pptx accepted two inputs")
 	}
 }

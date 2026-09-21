@@ -107,7 +107,7 @@ func diagnose(cfg *Config, deps diagnoseDeps) Report {
 			Name:    toolChromium,
 			Path:    browser,
 			Found:   browserErr == nil,
-			Purpose: "printing PDFs, and rendering Mermaid diagrams via mmdc",
+			Purpose: "printing PDFs, capturing PPTX slides, and rendering Mermaid diagrams via mmdc",
 			Hint:    "brew install --cask chromium (Google Chrome also works), or set CHROME_PATH",
 		},
 		{
@@ -148,16 +148,17 @@ func diagnose(cfg *Config, deps diagnoseDeps) Report {
 //
 // HTML requires nothing: it stops before the browser, and only touches one
 // through mmdc when there are diagrams to rasterize. PDF needs the browser
-// because that is what prints it.
+// because that is what prints it, and PPTX needs it to capture each slide.
 var formatRequirements = map[string][]string{
 	FormatConsole: {},
 	FormatHTML:    {},
 	FormatPDF:     {toolChromium},
+	FormatPPTX:    {toolChromium},
 	FormatDOCX:    {toolPandoc},
 }
 
 // formatOrder is the order formats appear in the report.
-var formatOrder = []string{FormatPDF, FormatHTML, FormatDOCX, FormatConsole}
+var formatOrder = []string{FormatPDF, FormatHTML, FormatDOCX, FormatPPTX, FormatConsole}
 
 // formatStatuses works out which formats can run given the tools found.
 func formatStatuses(tools []ToolStatus) []FormatStatus {

@@ -14,6 +14,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"net/url"
 	"os"
@@ -42,6 +43,10 @@ const (
 	// FormatHTML writes the self-contained HTML that PDF output is built from,
 	// stopping before headless Chromium runs.
 	FormatHTML = "html"
+	// FormatPPTX writes a PowerPoint deck: each slide is rendered by headless
+	// Chromium and placed on its own slide as a picture, with its presenter
+	// notes. The document is always a deck in this format.
+	FormatPPTX = "pptx"
 )
 
 // Config holds all runtime options for the converter.
@@ -262,6 +267,10 @@ func (c *Converter) Convert(ctx context.Context, inputs []string, outputPath str
 		return fmt.Errorf("copy images: %w", err)
 	}
 
+	if strings.EqualFold(c.cfg.Format, FormatPPTX) {
+		return c.writeDeckPPTX(ctx, doc, htmlPath, absOut, describeInput(inputPath))
+	}
+
 	c.logf("Printing PDF with headless Chromium...")
 	overflows, printErr := c.printPDF(ctx, htmlPath, absOut, deck)
 	if printErr != nil {
@@ -274,11 +283,39 @@ func (c *Converter) Convert(ctx context.Context, inputs []string, outputPath str
 	return nil
 }
 
+// writeDeckPPTX captures every slide of the deck at htmlPath and writes them,
+// with their presenter notes, as a PowerPoint file at outPath. Overflow is
+// reported exactly as for PDF, since the images clip the same way.
+func (c *Converter) writeDeckPPTX(ctx context.Context, doc *parsedDoc, htmlPath, outPath, input string) error {
+	browser, err := chromiumPath()
+	if err != nil {
+		return err
+	}
+	c.logf("Capturing %d slide(s) with %s...", len(doc.slides), browser)
+	images, overflows, err := renderSlidePNGs(ctx, browser, htmlPath, *doc.deck, pptxImageScale, printTimeout)
+	if err != nil {
+		return fmt.Errorf("capture slides: %w", err)
+	}
+	for _, line := range overflowWarnings(input, overflows) {
+		fmt.Fprintln(c.errOut(), line)
+	}
+	if len(images) != len(doc.slides) {
+		return fmt.Errorf("captured %d slide images for %d slides", len(images), len(doc.slides))
+	}
+
+	deck := pptxDeck{size: *doc.deck, title: html.UnescapeString(doc.title())}
+	for i, img := range images {
+		deck.slides = append(deck.slides, pptxSlide{png: img, notes: doc.slides[i].notes})
+	}
+	c.logf("Writing PowerPoint file...")
+	return writePPTX(outPath, deck)
+}
+
 // slideMode reports whether a document is rendered as a deck: when -slides
 // was given, or when its front-matter says marp: true, which is how a Marp deck
 // declares itself and lets one convert unchanged.
 func (c *Converter) slideMode(meta frontMatter) bool {
-	return c.cfg.Slides || meta.Bool("marp")
+	return c.cfg.Slides || meta.Bool("marp") || strings.EqualFold(c.cfg.Format, FormatPPTX)
 }
 
 // errOut returns the writer diagnostics go to, defaulting to standard error.

@@ -46,7 +46,7 @@ func (p *program) parseFlags(args []string) (*converter.Config, error) {
 
 	output := fs.String("o", "", "Output file path (default: <input>.pdf, or .docx with -format docx)")
 	format := fs.String("format", "", fmt.Sprintf(
-		"Output format: pdf, html, docx or console (default: %s; inferred from -o extension when omitted)",
+		"Output format: pdf, html, docx, pptx or console (default: %s; inferred from -o extension when omitted)",
 		p.defaultFormat))
 	fontRegular := fs.String("font", "", "Path to Noto Sans CJK JP Regular .ttc/.ttf font file")
 	fontBold := fs.String("font-bold", "", "Path to Noto Sans CJK JP Bold .ttc/.ttf font file")
@@ -160,8 +160,8 @@ func (p *program) parseFlags(args []string) (*converter.Config, error) {
 
 	// A deck is a sequence of pages, which only the printed formats have.
 	// Accepting the flag for docx or console would silently do nothing.
-	if *slides && outFormat != converter.FormatPDF && outFormat != converter.FormatHTML {
-		return nil, fmt.Errorf("-slides applies to pdf and html output, not %s", outFormat)
+	if *slides && outFormat != converter.FormatPDF && outFormat != converter.FormatHTML && outFormat != converter.FormatPPTX {
+		return nil, fmt.Errorf("-slides applies to pdf, html and pptx output, not %s", outFormat)
 	}
 
 	// Resolve font paths.
@@ -242,6 +242,8 @@ func resolveFormat(format, output, defaultFormat string) (string, error) {
 		fromExt = converter.FormatDOCX
 	case ".html", ".htm":
 		fromExt = converter.FormatHTML
+	case ".pptx":
+		fromExt = converter.FormatPPTX
 	}
 
 	if format == "" {
@@ -253,7 +255,7 @@ func resolveFormat(format, output, defaultFormat string) (string, error) {
 		if defaultFormat == converter.FormatConsole && output != "" {
 			return "", fmt.Errorf(
 				"this program renders to the terminal by default, so -o %s names no format to write: "+
-					"end the path in .pdf, .html or .docx, or choose one with -format",
+					"end the path in .pdf, .html, .docx or .pptx, or choose one with -format",
 				output)
 		}
 		return defaultFormat, nil
@@ -261,14 +263,14 @@ func resolveFormat(format, output, defaultFormat string) (string, error) {
 
 	normalized := normalizeFormat(format)
 	switch normalized {
-	case converter.FormatPDF, converter.FormatDOCX, converter.FormatHTML:
+	case converter.FormatPDF, converter.FormatDOCX, converter.FormatHTML, converter.FormatPPTX:
 	case converter.FormatConsole:
 		if output != "" {
 			return "", errors.New("-format console renders to the terminal; remove -o")
 		}
 		return converter.FormatConsole, nil
 	default:
-		return "", fmt.Errorf("unsupported output format %q: must be pdf, html, docx or console", format)
+		return "", fmt.Errorf("unsupported output format %q: must be pdf, html, docx, pptx or console", format)
 	}
 
 	if fromExt != "" && fromExt != normalized {

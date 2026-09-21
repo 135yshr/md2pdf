@@ -27,10 +27,12 @@ const usageOptions = `
 Options:
   -o <path>               Output path (default: <input>.<format>, e.g.
                           <input>.html with -format html)
-  -format <fmt>           Output format: pdf, html, docx or console
+  -format <fmt>           Output format: pdf, html, docx, pptx or console
                           (default: %[1]s; console has the aliases term and
                           terminal; inferred from -o extension when omitted,
-                          including .html and .htm)
+                          including .html, .htm and .pptx). pptx is always
+                          a slide deck: each slide becomes a picture on its
+                          own PowerPoint slide, with HTML comments as notes
   -css <path>             Custom CSS applied after the built-in stylesheet,
                           so its rules win. Repeatable; later files win over
                           earlier ones. Used by pdf and html output.

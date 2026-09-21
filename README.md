@@ -21,6 +21,7 @@ without font breakage. Single Go binary, drop-in for CI.
 - 🇯🇵 **Japanese / CJK text out of the box** — Noto Sans CJK JP preconfigured
 - 📝 **GitHub-flavored Markdown** — tables, fenced code blocks, strikethrough
 - 📃 **PDF or DOCX output** — `-format docx` exports editable Word documents (via pandoc)
+- 🎞️ **Slides and PowerPoint** — `-slides` (or Marp's `marp: true`) prints one page per slide, and `-format pptx` writes a PowerPoint deck with presenter notes
 - 👀 **Read it in the terminal** — `-format console`, or the `mdview` name the same binary also answers to, renders the document as styled, wrapped ANSI text and pages it through `less` (no conversion tools needed), drawing Mermaid flowcharts and sequence diagrams as inline images on kitty, iTerm2 and Sixel terminals and as box-drawing text art everywhere else
 - 🤖 **CI-friendly single binary** — `go install` and you're done
 - 📄 **Configurable** — page size, margins, fonts
@@ -120,7 +121,7 @@ Installed for you by `brew install 135yshr/tap/md2pdf`:
 | Dependency | Purpose | Install |
 |---|---|---|
 | [mmdc](https://github.com/mermaid-js/mermaid-cli) | Mermaid → SVG/PNG | `brew install mermaid-cli`, or `npm install -g @mermaid-js/mermaid-cli` |
-| A Chromium browser | HTML → PDF | `brew install --cask chromium` / `apt install chromium` (Google Chrome also works; override with `CHROME_PATH`) |
+| A Chromium browser | HTML → PDF, and slide images for PPTX | `brew install --cask chromium` / `apt install chromium` (Google Chrome also works; override with `CHROME_PATH`) |
 | [pandoc](https://pandoc.org/) | Markdown → DOCX (only for `-format docx`) | `brew install pandoc` / `apt install pandoc` |
 | Noto Sans CJK | Japanese font (optional) | `brew install --cask font-noto-sans-cjk` / `apt install fonts-noto-cjk` |
 | Go 1.26+ | Build from source only | https://go.dev |
@@ -133,7 +134,7 @@ formats can run, without converting anything:
 ```
 $ md2pdf -doctor
 Chromium       ok       /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
-                        printing PDFs, and rendering Mermaid diagrams via mmdc
+                        printing PDFs, capturing PPTX slides, and rendering Mermaid diagrams via mmdc
 mmdc           missing  brew install mermaid-cli, or npm install -g @mermaid-js/mermaid-cli
                         Mermaid diagrams in pdf, html and docx output — only needed for documents containing Mermaid diagrams
 pandoc         missing  brew install pandoc, or apt install pandoc
@@ -144,6 +145,7 @@ Noto CJK font  missing  brew install --cask font-noto-sans-cjk, or apt install f
 pdf      ready
 html     ready
 docx     not ready (needs pandoc)
+pptx     ready
 console  ready
 ```
 
@@ -292,6 +294,26 @@ marp: true
   as in Marp, and is left off the slide.
 - `-slides` is rejected with `docx` and `console`, which have no pages. A
   `marp: true` document converted to those formats renders as a document.
+
+### PowerPoint output
+
+`-format pptx`, or an `-o` path ending in `.pptx`, writes a PowerPoint deck. The
+document is always treated as slides — `marp: true` is not needed — so everything
+under [Slides](#slides) applies.
+
+```sh
+md2pdf -format pptx deck.md          # writes deck.pptx
+md2pdf deck.md -o talk.pptx
+```
+
+- Each slide is rendered by the same Chromium that prints the PDF and placed on
+  its own PowerPoint slide as a picture at twice its size (2560×1440 for 16:9),
+  so the deck looks exactly like the PDF — fonts, `-css`, Mermaid diagrams and
+  all. The trade-off is that slide contents are **not editable** in PowerPoint.
+- Presenter notes (HTML comments) go to each slide's notes page, and the
+  front-matter `title` becomes the presentation's title.
+- It opens in PowerPoint, Keynote, Google Slides and LibreOffice Impress. It needs
+  a Chromium, like PDF output, and no other tool.
 
 ## Who is this for?
 

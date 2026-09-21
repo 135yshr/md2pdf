@@ -34,7 +34,7 @@ Uses golangci-lint with config in `.golangci.yml`, in **v2 format** — the conf
 
 ## Architecture
 
-`converter.go`'s `Convert` branches on `Config.Format` (`FormatPDF` / `FormatHTML` / `FormatDOCX` / `FormatConsole`): each format takes a **different pipeline** because each reads best from a different source.
+`converter.go`'s `Convert` branches on `Config.Format` (`FormatPDF` / `FormatHTML` / `FormatPPTX` / `FormatDOCX` / `FormatConsole`): each format takes a **different pipeline** because each reads best from a different source.
 
 ### PDF pipeline (Markdown → HTML → Chromium), and HTML output
 
@@ -48,6 +48,10 @@ Uses golangci-lint with config in `.golangci.yml`, in **v2 format** — the conf
 `FormatHTML` is the same pipeline stopping after step 3: `Convert` points `buildHTML` at the caller's output path instead of the working directory and returns, so Chromium never runs. Image paths are deliberately **not** rewritten or copied — the default output sits beside the input, where the Markdown's own relative paths already resolve.
 
 `-css` stylesheets are read by `buildCSS`/`readCustomCSS` (`html.go`) and appended **after** `baseCSS` in the same inline `<style>` block, so user rules win the cascade; multiple `-css` files concatenate in argument order. A stylesheet containing `</style` is **rejected** rather than escaped: the page is assembled with `text/template`, which does no escaping, so the sequence would otherwise close the block and inject markup.
+
+### PPTX pipeline (slide-mode HTML → Chromium screenshots → OOXML)
+
+`FormatPPTX` is the PDF pipeline in **slide mode, always** (`slideMode` returns true for it, so `marp: true` is not needed), diverging after the HTML is built: `writeDeckPPTX` has **slidecapture.go**'s `renderSlidePNGs` open the page with the viewport set to the slide size at `pptxImageScale` (2, as Marp CLI uses) and print media emulated, await the fonts, measure overflow exactly as the PDF path does, and capture each `section.slide` with `Page.captureScreenshot` clipped to its box (`captureBeyondViewport`, so slides below the first are reachable). Because the layout is the PDF's, each image matches its PDF page — checked by hand at under 0.6% of pixels differing, which is antialiasing between poppler and Skia. **pptx.go**'s `writePPTX` then writes the OOXML package by hand with `archive/zip` — no dependency: one slide master, one blank layout, a theme, and per slide one full-bleed picture. Notes parts (a notes master with a **second** theme, and a notes slide per slide that has notes) are written **only** when some slide has notes, because a presentation that names a notes master it does not contain is invalid. `TestWritePPTX_PackageIsConsistent` guards the package's integrity in place of a real consumer: every XML part well-formed, every part covered by `[Content_Types].xml`, every override naming a real part, every relationship target existing. The browser setup is shared with `renderPDF` through `startBrowser` and `awaitFonts`, and `-doctor` lists pptx as needing a Chromium.
 
 ### DOCX pipeline (Markdown → pandoc, no HTML)
 

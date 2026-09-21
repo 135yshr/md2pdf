@@ -94,7 +94,7 @@ func TestDiagnose_MissingToolsBlockTheRightFormats(t *testing.T) {
 	}{
 		{
 			name:         "nothing installed",
-			wantNotReady: []string{FormatPDF, FormatDOCX},
+			wantNotReady: []string{FormatPDF, FormatPPTX, FormatDOCX},
 			// html stops before the browser, and console needs nothing.
 			wantStillOK: []string{FormatConsole, FormatHTML},
 		},
@@ -103,12 +103,12 @@ func TestDiagnose_MissingToolsBlockTheRightFormats(t *testing.T) {
 			available:    map[string]string{"mmdc": "/bin/mmdc"},
 			chromium:     "/bin/chrome",
 			wantNotReady: []string{FormatDOCX},
-			wantStillOK:  []string{FormatConsole, FormatPDF, FormatHTML},
+			wantStillOK:  []string{FormatConsole, FormatPDF, FormatPPTX, FormatHTML},
 		},
 		{
 			name:         "only the browser missing",
 			available:    map[string]string{"mmdc": "/bin/mmdc", "pandoc": "/bin/pandoc"},
-			wantNotReady: []string{FormatPDF},
+			wantNotReady: []string{FormatPDF, FormatPPTX},
 			wantStillOK:  []string{FormatConsole, FormatHTML, FormatDOCX},
 		},
 		{
