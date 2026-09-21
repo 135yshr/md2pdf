@@ -258,6 +258,11 @@ marp: true
   a blockquote stays where it is, and a setext underline (`Title` over `---`) is
   still a heading.
 - Two separators in a row, or one at either end, make an empty slide, as in Marp.
+- Each page is exactly one slide with no margin: 16:9 (1280×720 px) by default,
+  or 4:3 (960×720 px) with `size: 4:3` in the front-matter. `-page-size` and
+  `-margin-*` are for documents, and passing them for a deck is an error rather
+  than silently ignored. Content that does not fit a slide is cut off at its
+  edge instead of spilling onto another page.
 - `-slides` is rejected with `docx` and `console`, which have no pages. A
   `marp: true` document converted to those formats renders as a document.
 

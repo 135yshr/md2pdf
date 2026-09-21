@@ -434,3 +434,30 @@ func TestParseFlags_Slides(t *testing.T) {
 		})
 	}
 }
+
+// TestParseFlags_PaperFlagsSet records only the print flags given on the
+// command line, since their defaults are not empty and slide mode must tell a
+// deliberate value from the default.
+func TestParseFlags_PaperFlagsSet(t *testing.T) {
+	dir := t.TempDir()
+	input := filepath.Join(dir, "doc.md")
+	if err := os.WriteFile(input, []byte("# T\n"), 0o644); err != nil {
+		t.Fatalf("write input: %v", err)
+	}
+	cfg, err := parseFlags([]string{input})
+	if err != nil {
+		t.Fatalf("parseFlags: %v", err)
+	}
+	if len(cfg.PaperFlagsSet) != 0 {
+		t.Errorf("PaperFlagsSet = %v with no flags given, want empty", cfg.PaperFlagsSet)
+	}
+
+	cfg, err = parseFlags([]string{"-page-size", "A4", "-margin-left", "10mm", "-v", input})
+	if err != nil {
+		t.Fatalf("parseFlags: %v", err)
+	}
+	want := []string{"-page-size", "-margin-left"}
+	if strings.Join(cfg.PaperFlagsSet, ",") != strings.Join(want, ",") {
+		t.Errorf("PaperFlagsSet = %v, want %v", cfg.PaperFlagsSet, want)
+	}
+}

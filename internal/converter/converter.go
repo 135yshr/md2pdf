@@ -114,6 +114,11 @@ type Config struct {
 	// MermaidRender selects how Mermaid blocks are drawn in console output:
 	// "auto" (default), "image" or "source".
 	MermaidRender string
+	// PaperFlagsSet names the document print flags given explicitly on the
+	// command line (-page-size, -margin-*). Their defaults are not empty, so
+	// the converter cannot otherwise tell a deliberate value from the default,
+	// and a deliberate one in slide mode is an error rather than ignored.
+	PaperFlagsSet []string
 	// Slides renders pdf and html output as a deck: one page per slide, split
 	// at top-level thematic breaks. Front-matter marp: true has the same effect
 	// without the flag.
@@ -209,8 +214,17 @@ func (c *Converter) Convert(ctx context.Context, inputs []string, outputPath str
 
 	c.logf("Parsing Markdown and extracting Mermaid blocks...")
 	parseFn := parseMarkdown
+	var deck *slideSize
 	if c.slideMode(input.meta) {
-		c.logf("Slide mode: splitting the document at top-level thematic breaks")
+		if len(c.cfg.PaperFlagsSet) > 0 {
+			return paperFlagsError(c.cfg.PaperFlagsSet)
+		}
+		size, sizeErr := resolveSlideSize(input.meta)
+		if sizeErr != nil {
+			return fmt.Errorf("%s: %w", describeInput(inputPath), sizeErr)
+		}
+		deck = &size
+		c.logf("Slide mode: %s slides, split at top-level thematic breaks", size.name)
 		parseFn = parseSlides
 	}
 	doc, err := parseFn(mdBytes)
@@ -218,6 +232,7 @@ func (c *Converter) Convert(ctx context.Context, inputs []string, outputPath str
 		return fmt.Errorf("parse markdown: %w", err)
 	}
 	doc.meta = input.meta
+	doc.deck = deck
 
 	c.logf("Rendering %d Mermaid diagram(s)...", len(doc.mermaidBlocks))
 	if err := c.renderMermaid(ctx, doc); err != nil {
@@ -248,7 +263,7 @@ func (c *Converter) Convert(ctx context.Context, inputs []string, outputPath str
 	}
 
 	c.logf("Printing PDF with headless Chromium...")
-	if err := c.printPDF(ctx, htmlPath, absOut); err != nil {
+	if err := c.printPDF(ctx, htmlPath, absOut, deck); err != nil {
 		return fmt.Errorf("print pdf: %w", err)
 	}
 
